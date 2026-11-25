@@ -1,0 +1,85 @@
+{
+  "about": [
+    "Hand-written mutants for the integration and end-to-end layers, run by scripts/ci/layer-mutation.mjs (npm run test:mutation:layers).",
+    "Stryker (workers/oursharedevents/stryker.conf.mjs) mutates the guards for the node-project specs. It cannot switch a mutant on inside workerd, where the integration specs run (vitest.workers.config.mts), or inside the `wrangler dev` the journeys drive (playwright.mobile.config.ts). So each mutant here is one small fault in a rule the product promises, written by hand, and the specs in `kill` at its `layer` must fail on it.",
+    "Each `find` must occur exactly once in its `file` (the runner refuses the catalog otherwise, so a mutant cannot go stale silently). Integration kill specs must run in the Workers runtime, not the node project (vitest.node-specs.mjs).",
+    "The gate is every mutant killed. A mutant that survives is a rule that layer would let ship: add the case that catches it, never drop the mutant."
+  ],
+  "mutants": [
+    {
+      "id": "count-floor-gate-off",
+      "layer": "integration",
+      "rule": "Never who, only how many: a count under 5 is withheld, for a brand's own admin too.",
+      "file": "workers/oursharedevents/src/lib/count-floor.ts",
+      "find": "if (n < floor) return { count: null, suppressed: true, floor };",
+      "replace": "if (false) return { count: null, suppressed: true, floor };",
+      "kill": [
+        "workers/oursharedevents/tests/admin-count-honesty.spec.ts",
+        "workers/oursharedevents/tests/shared-report-class-floor.spec.ts"
+      ]
+    },
+    {
+      "id": "sponsor-shown-without-its-consent",
+      "layer": "integration",
+      "rule": "A sponsor shows only when it accepted and the organizer accepted.",
+      "file": "workers/oursharedevents/src/lib/sponsor-card.ts",
+      "find": "     AND sp_show.sponsor_accepted = 1",
+      "replace": "     AND 1 = 1",
+      "kill": ["workers/oursharedevents/tests/sponsor-opt-in-gate.spec.ts"]
+    },
+    {
+      "id": "admin-write-from-another-site",
+      "layer": "integration",
+      "rule": "An admin write that is not GET, HEAD or OPTIONS must come from the same site.",
+      "file": "workers/oursharedevents/src/lib/admin-write-guard.ts",
+      "find": "if (site.trim().toLowerCase() !== 'same-origin') {",
+      "replace": "if (false) {",
+      "kill": ["workers/oursharedevents/tests/admin-write-guard.spec.ts"]
+    },
+    {
+      "id": "public-event-is-the-whole-row",
+      "layer": "integration",
+      "rule": "A public event response is an allowlist of fields, never a spread of the row.",
+      "file": "workers/oursharedevents/src/lib/public-event-projection.ts",
+      "find": "return projectEvent(row, PUBLIC_EVENT_FIELDS, PUBLIC_EVENT_COUNT_SOURCES);",
+      "replace": "return { ...row };",
+      "kill": ["workers/oursharedevents/tests/public-event-projection.spec.ts"]
+    },
+    {
+      "id": "vote-winner-below-voter-floor",
+      "layer": "integration",
+      "rule": "A vote names a winner only once enough different people have voted (the secret floor, 10 to 14); below it the set reads too close.",
+      "file": "workers/oursharedevents/src/lib/vote-results.ts",
+      "find": "          AND (SELECT COUNT(*) FROM vote_participants p WHERE p.set_id = vote_sets.id) >= secret_floor",
+      "replace": "          AND 1 = 1",
+      "kill": ["workers/oursharedevents/tests/vote-results.spec.ts"]
+    },
+    {
+      "id": "vote-winner-without-a-lead",
+      "layer": "integration",
+      "rule": "A vote names a winner only when the first leads the second by the secret margin; a near tie reads too close.",
+      "file": "workers/oursharedevents/src/lib/vote-results.ts",
+      "find": "               END) >= secret_margin",
+      "replace": "               END) >= 0",
+      "kill": ["workers/oursharedevents/tests/vote-results.spec.ts"]
+    },
+    {
+      "id": "e2e-count-floor-gate-off",
+      "layer": "e2e",
+      "rule": "The SharedReport says nothing while a sponsor's display count is under 5.",
+      "file": "workers/oursharedevents/src/lib/count-floor.ts",
+      "find": "if (n < floor) return { count: null, suppressed: true, floor };",
+      "replace": "if (false) return { count: null, suppressed: true, floor };",
+      "kill": ["tests/playwright/report-counts-journey.spec.ts"]
+    },
+    {
+      "id": "e2e-sponsor-shown-without-its-consent",
+      "layer": "e2e",
+      "rule": "A sponsor placed on an event but not yet answered is on none of the event's surfaces (event page, lists, landing, TV).",
+      "file": "workers/oursharedevents/src/lib/sponsor-card.ts",
+      "find": "  AND sp.sponsor_accepted = 1",
+      "replace": "  AND 1 = 1",
+      "kill": ["tests/playwright/sponsor-surfaces-journey.spec.ts"]
+    }
+  ]
+}

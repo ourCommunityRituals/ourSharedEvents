@@ -161,6 +161,23 @@ describe('claude-review.yml reviewer switch', () => {
 // The describes below build throwaway git repos; give them room on a busy runner.
 vi.setConfig({ testTimeout: 30_000 });
 
+describe('claude-review.yml @claude respond loads no in-repo settings (OSE-2231)', () => {
+  // Tag mode checks out the PR branch by itself, so a restore step cannot hold
+  // there; only --setting-sources user keeps a PR-branch hook from running.
+  const args = () => String(actionSteps(respond)[0].with.claude_args || '');
+
+  it('passes --setting-sources user and nothing wider', () => {
+    expect(actionSteps(respond)).toHaveLength(1);
+    expect(args()).toMatch(/--setting-sources user\s*$/m);
+    expect(args()).not.toMatch(/--setting-sources [^\n]*project/);
+  });
+
+  it('the check would fail on the old arguments (born red)', () => {
+    const old = '--model claude-sonnet-5-5\n--max-turns 20\n';
+    expect(old).not.toMatch(/--setting-sources user\s*$/m);
+  });
+});
+
 describe('claude-review.yml reviewer instructions come from the base branch', () => {
   const NAME = 'Reviewer instructions from base branch';
   const idx = (pred) => review.steps.findIndex(pred);

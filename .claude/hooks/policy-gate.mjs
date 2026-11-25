@@ -474,6 +474,19 @@ const WRAPPERS = new Set([
   'runuser',
   'pkexec',
   'fakeroot',
+  // Secret runners start another program with credentials in its environment
+  // (OSE-2230, security sweep 2026-11-25 H3): `doppler run -- git push --tags`
+  // is read as the git push it starts.
+  'doppler',
+  'op',
+  'infisical',
+  'dotenv',
+  'dotenvx',
+  'aws-vault',
+  'chamber',
+  'envchain',
+  'teller',
+  'sops',
   'start',
   'foreach-object',
   '%',

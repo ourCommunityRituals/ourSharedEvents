@@ -641,6 +641,31 @@ const MUST_BLOCK = [
   ['git-tag-push', ps('g`i`t push origin v1.2.3')],
   ['git-tag-push', bash("node -e \"require('child_process').execSync('git push origin v1.2.3')\"")],
   ['git-tag-push', bash('python -c "import os; os.system(\'git push origin v1.2.3\')"')],
+  // Secret runners (OSE-2230, sweep 2026-11-25 H3): the command they start is read like a bare one.
+  ['wrangler-deploy', bash('doppler run -- npx wrangler deploy --env production')],
+  [
+    'wrangler-deploy',
+    bash('doppler run --project ourwkrp-deploy --config prd -- npx wrangler deploy'),
+  ],
+  ['wrangler-deploy', bash('doppler run --command "npx wrangler deploy --env production"')],
+  [
+    'wrangler-production',
+    bash(
+      'doppler run -- npx wrangler d1 execute DB --env production --remote --command "SELECT 1"'
+    ),
+  ],
+  [
+    'd1-remote-write',
+    bash('doppler run -- npx wrangler d1 execute DB --env staging --remote --file ./x.sql'),
+  ],
+  ['wrangler-secret', bash('infisical run -- npx wrangler secret put X')],
+  ['git-tag-push', bash('op run -- git push origin v1.2.3')],
+  ['git-tag-push', bash('doppler run -- git push --tags')],
+  ['gh-admin-merge', bash('doppler run -- gh pr merge 12 --admin')],
+  ['git-force-push', bash('dotenvx run -- git push --force')],
+  ['wrangler-deploy', bash('aws-vault exec prod -- npx wrangler deploy')],
+  ['wrangler-deploy', bash('envchain cf npx wrangler deploy')],
+  ['wrangler-deploy', bash('chamber exec ow -- npx wrangler deploy')],
 ];
 
 const MUST_ALLOW = [
@@ -658,6 +683,10 @@ const MUST_ALLOW = [
   bash('git tag v1.0.0'),
   bash('git remote -v'),
   bash('git fetch origin main'),
+  bash('doppler run -- npm test'),
+  bash('doppler run -- npx wrangler dev'),
+  bash('doppler secrets --only-names'),
+  bash('op run -- git push origin ci/exact-wrangler-pin'),
   bash('gh pr merge 885 --squash'),
   bash('gh release list'),
   bash('gh workflow run overnight-fuzz.yml'),
