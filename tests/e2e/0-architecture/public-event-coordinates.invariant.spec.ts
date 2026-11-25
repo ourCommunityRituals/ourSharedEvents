@@ -33,7 +33,7 @@
  *      dot at its block's centre). The landing's own row stays on the server.
  *   5. THE PUBLIC TEMPLATES. No public page template (src/templates/*.html but
  *      the admin ones) and no script a public page carries (lib/map-pan-script.ts,
- *      lib/area-tabs-script.ts) reads a coordinate field: no `.lat`, `.lon`,
+ *      lib/map-tip-script.ts, lib/area-tabs-script.ts) reads a coordinate field: no `.lat`, `.lon`,
  *      `.lng`, `.latitude` or `.longitude`, no quoted coordinate key, no
  *      `data-lat`. The visitor's own position from the Geolocation API
  *      (`coords.latitude`, `coords.longitude`) is not an event's; it is taken
@@ -273,7 +273,7 @@ const FUNCTION_BUILDERS: [file: string, signature: string][] = [
   ['lib/sponsor-discovery.ts', 'export function toDiscoverable('],
 ];
 
-const PAGE_SCRIPTS = ['lib/map-pan-script.ts', 'lib/area-tabs-script.ts'];
+const PAGE_SCRIPTS = ['lib/map-pan-script.ts', 'lib/map-tip-script.ts', 'lib/area-tabs-script.ts'];
 
 function publicTemplates(): string[] {
   return readdirSync(join(SRC, 'templates'))

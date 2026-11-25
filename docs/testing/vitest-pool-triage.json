@@ -2137,6 +2137,13 @@
       "testCount": 17
     },
     {
+      "file": "workers/oursharedevents/tests/map-tip.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 17
+    },
+    {
       "file": "workers/oursharedevents/tests/map-zoom.spec.ts",
       "bucket": "node",
       "needsReview": false,

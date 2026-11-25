@@ -366,11 +366,135 @@
         <div class="area" data-testid="area">
           <div class="view-map" data-testid="area-map">
             <figure class="amap" data-testid="amap" data-tall>
-              <style>.amap svg{display:block;width:100%;height:auto}.amap-cell{fill:var(--accent);stroke:var(--accent)}.amap-num{fill:var(--text);font:700 26px system-ui;paint-order:stroke;stroke:var(--bg);stroke-width:4px}.amap-legend{margin:.75rem 0 0;padding-inline-start:1.5rem}.amap-credit a,.amap-legend a{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style><style>.amap-zone{fill:var(--border-strong);fill-opacity:.06;stroke:var(--border-strong);stroke-width:3}.amap-dot{fill:var(--accent);stroke:var(--bg);stroke-width:3}.amap-blk .amap-dot{fill-opacity:.45;stroke-dasharray:4 3}.amap-dn{fill:var(--on-accent);font:700 18px system-ui}.amap-back,.amap-zoom{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style><style>@media(max-width:479px){.amap[data-zoom] svg{aspect-ratio:4/3}.amap[data-tall] svg{aspect-ratio:1/1}.amap-dn{font-size:23px}.as-t,.amap-num{font-size:28px}}</style><style>.amap-quiet:not(:focus-within){position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}</style>
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 360" preserveAspectRatio="xMidYMid slice" role="group" aria-labelledby="amap-caption" data-testid="amap-svg"><g class="amap-f when-week when-month when-next-90 cat-ent product-ose modality-inperson when-weekend cat-rec" data-testid="amap-area" data-cell="872664544ffffff" data-count="7"><a href="/?zip=00000&amp;area=872664544ffffff" data-testid="amap-area-link"><title>Area 1, Blue Island: 7 events</title><polygon class="amap-cell" points="293.8,240.7 258.5,271.5 269.9,316.7 316.6,331.2 351.9,300.5 340.5,255.2" fill-opacity="0.80" stroke-width="1.5"/><text class="amap-num" x="305.2" y="286.0" text-anchor="middle" dominant-baseline="central">1<tspan x="305.2" dy="1.15em" data-testid="amap-area-name">Blue Island</tspan></text></a></g><g class="amap-f when-week when-month when-next-90 cat-mkt product-ose modality-inperson" data-testid="amap-area" data-cell="872664cdbffffff" data-count="4"><a href="/?zip=00000&amp;area=872664cdbffffff" data-testid="amap-area-link"><title>Area 2, Chicago: 4 events</title><polygon class="amap-cell" points="283.5,28.8 248.1,59.6 259.6,104.9 306.3,119.4 341.6,88.6 330.2,43.3" fill-opacity="0.54" stroke-width="1.5"/><text class="amap-num" x="294.9" y="74.1" text-anchor="middle" dominant-baseline="central">2<tspan x="294.9" dy="1.15em" data-testid="amap-area-name">Chicago</tspan></text></a></g></svg>
+              <style>.amap svg{display:block;width:100%;height:auto}.amap-cell{fill:var(--accent);stroke:var(--accent)}.amap-num{fill:var(--text);font:700 26px system-ui;paint-order:stroke;stroke:var(--bg);stroke-width:4px}.amap-legend{margin:.75rem 0 0;padding-inline-start:1.5rem}.amap-credit a,.amap-legend a{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style><style>.amap-zone{fill:var(--border-strong);fill-opacity:.06;stroke:var(--border-strong);stroke-width:3}.amap-dot{fill:var(--accent);stroke:var(--bg);stroke-width:3}.amap-blk .amap-dot{fill-opacity:.45;stroke-dasharray:4 3}.amap-dn{fill:var(--on-accent);font:700 18px system-ui}.amap-back,.amap-zoom{display:inline-flex;align-items:center;min-height:44px;color:var(--accent)}</style><style>@media(max-width:479px){.amap[data-zoom] svg{aspect-ratio:4/3}.amap[data-tall] svg{aspect-ratio:1/1}.amap-dn{font-size:23px}.as-t,.amap-num{font-size:28px}}</style><style>.amap-quiet:not(:focus-within){position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}</style><style>.amap-tip{position:fixed;z-index:20;max-width:min(18rem,calc(100vw - 32px));padding:.5rem .75rem;border:2px solid var(--accent);border-radius:8px;background:var(--bg);color:var(--text);font:16px/1.35 system-ui;pointer-events:none}.amap-tips [data-tip]{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}</style>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 360" preserveAspectRatio="xMidYMid slice" role="group" aria-labelledby="amap-caption" data-testid="amap-svg"><g class="amap-f when-week when-month when-next-90 cat-ent product-ose modality-inperson when-weekend cat-rec" data-testid="amap-area" data-cell="872664544ffffff" data-count="7" data-tip="Area 1, Blue Island: 7 events"><a href="/?zip=00000&amp;area=872664544ffffff" data-testid="amap-area-link"><title>Area 1, Blue Island: 7 events</title><polygon class="amap-cell" points="293.8,240.7 258.5,271.5 269.9,316.7 316.6,331.2 351.9,300.5 340.5,255.2" fill-opacity="0.80" stroke-width="1.5"/><text class="amap-num" x="305.2" y="286.0" text-anchor="middle" dominant-baseline="central">1<tspan x="305.2" dy="1.15em" data-testid="amap-area-name">Blue Island</tspan></text></a></g><g class="amap-f when-week when-month when-next-90 cat-mkt product-ose modality-inperson" data-testid="amap-area" data-cell="872664cdbffffff" data-count="4" data-tip="Area 2, Chicago: 4 events"><a href="/?zip=00000&amp;area=872664cdbffffff" data-testid="amap-area-link"><title>Area 2, Chicago: 4 events</title><polygon class="amap-cell" points="283.5,28.8 248.1,59.6 259.6,104.9 306.3,119.4 341.6,88.6 330.2,43.3" fill-opacity="0.54" stroke-width="1.5"/><text class="amap-num" x="294.9" y="74.1" text-anchor="middle" dominant-baseline="central">2<tspan x="294.9" dy="1.15em" data-testid="amap-area-name">Chicago</tspan></text></a></g></svg>
               <ol class="amap-legend amap-quiet" data-testid="amap-legend"><li value="1" class="amap-f when-week when-month when-next-90 cat-ent product-ose modality-inperson when-weekend cat-rec" data-testid="amap-legend-area"><strong><span data-testid="amap-legend-name">Blue Island</span> &middot; 7 events:</strong> <span class="amap-f when-week when-month when-next-90 cat-ent product-ose modality-inperson"><a href="/events/evt_g13" data-testid="amap-event">Morning Market</a></span> <span class="amap-f when-week when-month when-next-90 cat-ent product-ose modality-inperson">&middot; <a href="/events/evt_g09" data-testid="amap-event">Golden Event 9</a></span> <span class="amap-f when-week when-month when-next-90 cat-ent product-ose modality-inperson">&middot; <a href="/events/evt_g10" data-testid="amap-event">Golden Event 10</a></span> <span class="amap-f when-weekend when-week when-month when-next-90 cat-ent product-ose modality-inperson">&middot; <a href="/events/evt_g01" data-testid="amap-event">Trivia Night</a></span> <span class="amap-f when-weekend when-week when-month when-next-90 cat-rec product-ose modality-inperson">&middot; <a href="/events/evt_g02" data-testid="amap-event">Bocce League</a> <span data-testid="amap-event-sponsor">(Supported by Beggars Pizza)</span></span> <span class="amap-f when-next-90 cat-ent product-ose modality-inperson">&middot; <a href="/events/evt_g05" data-testid="amap-event">Golden Event 5</a></span> <span class="amap-f when-next-90 cat-ent product-ose modality-inperson">&middot; <a href="/events/evt_g07" data-testid="amap-event">Golden Event 7</a></span> <a class="amap-zoom" href="/?zip=00000&amp;area=872664544ffffff" data-testid="amap-zoom">Zoom in</a></li><li value="2" class="amap-f when-week when-month when-next-90 cat-mkt product-ose modality-inperson" data-testid="amap-legend-area"><strong><span data-testid="amap-legend-name">Chicago</span> &middot; 4 events:</strong> <span class="amap-f when-week when-month when-next-90 cat-mkt product-ose modality-inperson"><a href="/events/evt_g03" data-testid="amap-event">Vinyl Swap</a></span> <span class="amap-f when-next-90 cat-mkt product-ose modality-inperson">&middot; <a href="/events/evt_g04" data-testid="amap-event">Golden Event 4</a></span> <span class="amap-f when-next-90 cat-mkt product-ose modality-inperson">&middot; <a href="/events/evt_g06" data-testid="amap-event">Golden Event 6</a></span> <span class="amap-f when-next-90 cat-mkt product-ose modality-inperson">&middot; <a href="/events/evt_g08" data-testid="amap-event">Golden Event 8</a></span> <a class="amap-zoom" href="/?zip=00000&amp;area=872664cdbffffff" data-testid="amap-zoom">Zoom in</a></li></ol>
               <figcaption id="amap-caption" data-testid="amap-caption">11 events in 2 neighborhoods over the next 90 days. The filters above narrow the map and the list. Each hexagon is a few square kilometres, never a street address. Tap a hexagon to see its events on the map.</figcaption>
-            </figure>
+            </figure><script nonce="N">(function () {
+  var figs = [].filter.call(document.querySelectorAll('figure.amap'), function (f) { return f.querySelector('[data-tip]'); });
+  if (!figs.length || !document.body || !Element.prototype.closest) return;
+  var GAP = 16, LIFT = 64, HOLD = 450, SLOP = 10, LINGER = 4000, EDGE = 8;
+  var tip = document.createElement('div');
+  tip.className = 'amap-tip';
+  tip.setAttribute('data-testid', 'amap-tip');
+  tip.setAttribute('aria-hidden', 'true');
+  tip.hidden = true;
+  document.body.appendChild(tip);
+  figs.forEach(function (fig) {
+    fig.classList.add('amap-tips');
+    [].forEach.call(fig.querySelectorAll('[data-tip] title'), function (t) {
+      var p = t.parentNode;
+      if (!p.getAttribute('aria-label')) p.setAttribute('aria-label', t.textContent);
+      p.removeChild(t);
+    });
+  });
+  var cur = null, timer = 0, press = null, held = false;
+  function at(e) {
+    var t = e.target;
+    return t && t.closest ? t.closest('figure.amap [data-tip]') : null;
+  }
+  function view() {
+    var d = document.documentElement;
+    return { w: d.clientWidth || window.innerWidth, h: d.clientHeight || window.innerHeight };
+  }
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(v, hi)); }
+  // Beside the pointer: below and right, flipped where it would leave the screen.
+  function beside(x, y) {
+    var w = tip.offsetWidth, h = tip.offsetHeight, v = view();
+    var left = x + GAP, top = y + GAP;
+    if (left + w > v.w - EDGE) left = x - GAP - w;
+    if (top + h > v.h - EDGE) top = y - GAP - h;
+    put(left, top, w, h, v);
+  }
+  // Centred on x, its bottom 'above' or else its top 'below'.
+  function centred(x, above, below) {
+    var w = tip.offsetWidth, h = tip.offsetHeight, v = view();
+    var top = above - h >= EDGE ? above - h : below;
+    put(x - w / 2, top, w, h, v);
+  }
+  function put(left, top, w, h, v) {
+    tip.style.left = clamp(left, EDGE, v.w - EDGE - w) + 'px';
+    tip.style.top = clamp(top, EDGE, v.h - EDGE - h) + 'px';
+  }
+  function open(el) {
+    var text = el.getAttribute('data-tip');
+    if (!text) return false;
+    if (cur !== el) tip.textContent = text;
+    cur = el;
+    tip.hidden = false;
+    clearTimeout(timer);
+    return true;
+  }
+  function hide() {
+    clearTimeout(timer);
+    tip.hidden = true;
+    cur = null;
+  }
+  function touchShow(el, x, y) {
+    if (!open(el)) return;
+    centred(x, y - LIFT, y + LIFT);
+    timer = setTimeout(hide, LINGER);
+  }
+  function cancel() {
+    if (press) clearTimeout(press.t);
+    press = null;
+  }
+
+  document.addEventListener('pointermove', function (e) {
+    if (e.pointerType === 'touch') {
+      if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > SLOP) cancel();
+      return;
+    }
+    var el = at(e);
+    if (el && open(el)) beside(e.clientX, e.clientY);
+    else if (cur) hide();
+  });
+  document.addEventListener('pointerout', function (e) {
+    if (e.pointerType !== 'touch' && !e.relatedTarget && cur) hide();
+  });
+  document.addEventListener('pointerdown', function (e) {
+    held = false;
+    if (e.pointerType !== 'touch') return;
+    if (press) { cancel(); return; }
+    if (cur) hide();
+    var el = at(e);
+    if (!el) return;
+    var x = e.clientX, y = e.clientY;
+    press = { el: el, x: x, y: y, t: setTimeout(function () {
+      press = null;
+      held = true;
+      touchShow(el, x, y);
+    }, HOLD) };
+  }, true);
+  document.addEventListener('pointerup', function (e) {
+    if (e.pointerType !== 'touch' || !press) return;
+    var p = press;
+    cancel();
+    // A tap on a hexagon that is not a link did nothing before: it names the area.
+    if (!p.el.closest('a') && !(e.target.closest && e.target.closest('a'))) touchShow(p.el, p.x, p.y);
+  }, true);
+  document.addEventListener('pointercancel', cancel, true);
+  // Letting go after a hold shows the tooltip, it does not open the link.
+  document.addEventListener('click', function (e) {
+    if (held) { held = false; e.preventDefault(); e.stopPropagation(); }
+  }, true);
+  document.addEventListener('contextmenu', function (e) {
+    if ((held || press) && at(e)) e.preventDefault();
+  }, true);
+  document.addEventListener('focusin', function (e) {
+    var el = at(e);
+    if (!el || !open(el)) return;
+    var r = el.getBoundingClientRect();
+    centred(r.left + r.width / 2, r.top - EDGE, r.bottom + EDGE);
+  });
+  document.addEventListener('focusout', function (e) {
+    if (cur && at(e) === cur) hide();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && cur) hide();
+  });
+  window.addEventListener('scroll', function () { cancel(); if (cur) hide(); }, { passive: true });
+})();</script>
           </div>
           <div class="view-list" id="area-list" data-testid="area-list">
           <article class="event-card when-week when-month when-next-90 cat-ent product-ose modality-inperson" data-testid="area-card" data-event-id="evt_g13" data-phase="event">

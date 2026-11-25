@@ -382,6 +382,7 @@ describe("the georeference on the zoomed map is the area cell's (OSE-2150)", () 
         ' data-exact=',
         ' data-count=',
         ' data-ll=',
+        ' data-tip=',
       ]);
       expect(tag).not.toMatch(/\be\d\b/);
     }

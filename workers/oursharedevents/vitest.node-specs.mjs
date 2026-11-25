@@ -192,6 +192,8 @@ export const NODE_SPECS = [
   'tests/street-labels.spec.ts',
   'tests/sunset.spec.ts',
   'tests/map-pan.spec.ts',
+  // The map's own tooltip (owner, 2026-11-25): markup, the script in jsdom, its bans.
+  'tests/map-tip.spec.ts',
   // The landing's filter tabs and distance choice (OSE-2156): the markup, the script in jsdom, its bans.
   'tests/area-tabs.spec.ts',
   'tests/category-slider.spec.ts',
