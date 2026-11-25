@@ -252,6 +252,40 @@ only donate"), which gave blue a second meaning beside SPONSOR.
 
 ---
 
+## Every code has a title (draft, owner direction 2026-11-25)
+
+Owner: the codes "will need to be tweaked in what they display to be less technical and more customer facing, with a Title Text saying what the code is to address accessibility, then the color coding language will apply for the qr code itself across the infra."
+
+**The rule.** Every code the platform shows, on paper or on a screen, is a card with three things, in this order:
+
+1. **A title**: a short, plain sentence that says what happens when you scan, written for the person holding the phone ("See the event", not "EVENT · UTILITY"). It is real text, so a screen reader reads it, and it is the code's `alt` text too.
+2. **The code**, drawn in its UEC colour (dark modules on white, error correction H).
+3. **The short address** under it, for someone who cannot scan.
+
+The UEC name (UTILITY, CHECK-IN) is the system's word, not the reader's: it stays in the data (`data-uec`) and in this document, and leaves the card. The colour still carries the meaning, and the title means colour is never the only signal.
+
+**Proposed titles** (the owner confirms the words before they ship):
+
+| Code                           | Today's card        | Title                    | UEC         |
+| ------------------------------ | ------------------- | ------------------------ | ----------- |
+| Event page                     | EVENT · UTILITY     | See the event            | 07 UTILITY  |
+| Anonymous check-in             | CHECK IN            | Check in, no name needed | 10 CHECK-IN |
+| Registration / workshop        | REGISTER · ENTER    | Sign up to come          | 01 ENTER    |
+| Sign-up link                   | SIGN UP · ENTER     | Sign up                  | 01 ENTER    |
+| Donation link                  | DONATE · SHOP       | Give to this event       | 11 SHOP     |
+| Tickets link                   | TICKETS · SHOP      | Get tickets              | 11 SHOP     |
+| Sponsorship link               | SPONSOR             | Sponsor this event       | 03 SPONSOR  |
+| League link                    | LEAGUE · LIVE       | Scores and schedule      | 02 LIVE     |
+| Music (ourWKRP)                | MUSIC · UTILITY     | Hear the music           | 07 UTILITY  |
+| Newsletter                     | SUBSCRIBE · UTILITY | Get the newsletter       | 07 UTILITY  |
+| Menu                           | MENU · UTILITY      | See the menu             | 07 UTILITY  |
+| Other link                     | MORE · UTILITY      | More from the organizer  | 07 UTILITY  |
+| **The room's vote code** (new) | Scan to vote        | Vote here                | 06 FEEDBACK |
+
+**Across the platform.** The same card and colour apply wherever a code is shown: the printed poster, the digital poster, the TV display, the host's vote screen and a sponsor's page. Today the vote screen's code is drawn plain; under this rule it draws in FEEDBACK amber ("Voice · Opinion · Response"), with "Vote here" as its title. Colours still come only from the UEC registry (`lib/uec`), never a hex in a page.
+
+---
+
 ## How UEC Connects to the Platform
 
 | UEC Code       | Platform Feature                    | Data Generated                         |

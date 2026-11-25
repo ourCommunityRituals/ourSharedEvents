@@ -1,0 +1,28 @@
+info:
+  name: "OSE-2226 | screen | with no vote code the screen says so"
+  type: http
+  seq: 50
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/{{skinEventId}}/vote-screen"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const t = String(res.getBody() || '');
+        test('OSE-2226 screen: 200 HTML, no code yet, not cached', function () { expect(res.getStatus()).to.eql(200); expect(t).to.include('data-testid="vote-screen-none"'); expect(res.getHeader('cache-control')).to.eql('no-store'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

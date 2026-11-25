@@ -370,7 +370,12 @@ describe('the signed-link view: the report a sponsor or bar owner opens', () => 
     expect(text('report-timezone-note')[0]).toContain(hostile('ZONE'));
 
     const group = wild.querySelector('[data-testid="signed-link-locked-sections"]')!;
-    expect(group.getAttributeNames().sort()).toEqual(['class', 'data-next-depth', 'data-testid']);
+    expect(group.getAttributeNames().sort()).toEqual([
+      'class',
+      'data-next-depth',
+      'data-region',
+      'data-testid',
+    ]);
     expect(group.getAttribute('data-next-depth')).toBe(hostile('DEPTH'));
     const heading = group.querySelector('h3')!;
     expect(heading.getAttributeNames().sort()).toEqual(['data-depth', 'data-testid']);

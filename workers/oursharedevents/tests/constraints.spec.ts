@@ -98,7 +98,8 @@ describe('QA-1: Migration idempotency', () => {
     // + 1 (scan_poster_hour_tally — migration 0117, OSE-1496; no index) = 48.
     // + 1 (brand_parents — migration 0118, OSE-1553) = 49.
     // + 2 (venues, venue_operators — migration 0120, OSE-2221) = 51.
-    expect(names).toHaveLength(51);
+    // + 1 (brand_addons — migration 0121, OSE-2232) = 52.
+    expect(names).toHaveLength(52);
   });
 
   test('indexes remain at exactly 90 after idempotent re-run', async () => {

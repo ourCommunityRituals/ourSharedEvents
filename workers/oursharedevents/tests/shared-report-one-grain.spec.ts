@@ -222,7 +222,9 @@ describe('one people figure, from the posters (OSE-1784)', () => {
   test('an event alone in its slot: the baseline it builds is its own poster sum, never its people', async () => {
     const id = `${PREFIX}alone`;
     const start = new Date(Date.now() - 10 * 86400_000);
-    start.setUTCMinutes(0, 0, 0);
+    // A fixed hour, so the slot's own hour is never the people figure (15);
+    // a run at 15:00 UTC once read bucket_hour 15 as a leak.
+    start.setUTCHours(4, 0, 0, 0);
     // 12 and 3 at one poster: 10 published; 15 different people came.
     await seedEvent(id, { hours: [12, 3], attendees: 15 });
     await tenv()
@@ -250,7 +252,10 @@ describe('one people figure, from the posters (OSE-1784)', () => {
     expect(rep.corridor_density.this_event_count).toBe(10);
     // Like divided by like: the event is the whole of its baseline.
     expect(rep.corridor_density.density_ratio_30d).toBe(1);
-    expect(JSON.stringify(rep)).not.toMatch(/:15\b/);
+    // Timestamps are taken out first: their minutes and seconds are clock
+    // readings, not figures, and can read :15 on any run.
+    const figures = JSON.stringify(rep).replace(/"\d{4}-\d\d-\d\dT[^"]*"/g, '""');
+    expect(figures).not.toMatch(/:15\b/);
   });
 
   // The baseline must be the report's own figure, summed, whatever the event

@@ -125,6 +125,11 @@
  *   GET    /api/v2/admin/events/:id/preview → draft/ready pre-event page, HTML, no-store + noindex (auth, OSE-1355)
  *   GET    /api/v2/admin/events/:id/poster-preview → draft/ready poster, HTML, no-store + noindex (auth)
  *   GET    /api/v2/admin/events/:id/live → organizer's live view of one event, HTML, no-store + noindex (auth)
+ *   GET    /api/v2/admin/events/:id/vote-screen → the host's vote-code screen: the vote code's QR and "Scan to vote", HTML, no-store + noindex (auth, OSE-2226, OSE ADR-040)
+ *   GET    /api/v2/admin/events/:id/layouts → each page's layout (report, vote screen), the skins, and each as a .md skin file (auth, OSE-2232)
+ *   PUT    /api/v2/admin/events/:id/layouts → save a layout from a .md skin file {markdown} (auth, audited, OSE-2232)
+ *   GET    /api/v2/admin/addons?brand_id= → a brand's paid add-ons (platform only, OSE-2232)
+ *   PUT    /api/v2/admin/addons → turn a brand's add-on on or off {brand_id, addon, on} (platform only, audited, OSE-2232)
  *   GET    /api/v2/admin/events/:id/poster-bundle  → poster bundle for draft/ready/live, no-store (auth)
  *
  *   POST /api/v2/events/:id/forms/register      → submit registration (public)
@@ -348,6 +353,9 @@ import {
   handleVenueRollup,
 } from './handlers/venues';
 import { handleAdminEventLivePage } from './handlers/live-monitor';
+import { handleAdminVoteScreenPage } from './handlers/vote-screen';
+import { handleAdminAddons } from './handlers/brand-addons';
+import { handleAdminLayouts } from './handlers/layouts';
 import {
   handlePublicPage,
   handlePublicEventPage,
@@ -1223,6 +1231,26 @@ export async function route(
     return response;
   }
 
+  // GET/PUT /api/v2/admin/addons — OSE-2232. A brand's paid add-ons (today
+  // 'skins': any look other than the standard skin). Platform only; every PUT
+  // is audited, refusals included.
+  if (pathname === '/api/v2/admin/addons' && (method === 'GET' || method === 'PUT')) {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) {
+      if (method === 'PUT') _audit(reqId, 'ADDON_SET', 'denied', 'platform', pathname);
+      return deny;
+    }
+    const offPlatform = await _platformOnly(reqId);
+    if (offPlatform) {
+      if (method === 'PUT') _audit(reqId, 'ADDON_SET', 'denied', 'platform', pathname);
+      return offPlatform;
+    }
+    const res = await handleAdminAddons(request, env);
+    if (method === 'PUT') _audit(reqId, 'ADDON_SET', _auditOutcome(res), 'platform', pathname);
+    return res;
+  }
+
   // POST /api/v2/admin/events/backfill-h3-cells — OSE-489 one-shot H3 backfill
   if (pathname === '/api/v2/admin/events/backfill-h3-cells' && method === 'POST') {
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
@@ -1408,6 +1436,39 @@ export async function route(
       return deny;
     }
     return handleAdminEventLivePage(env, adminEventLiveMatch[1]);
+  }
+
+  // GET /api/v2/admin/events/:id/vote-screen — the host's vote-code screen
+  // (OSE-2226). Same gating as the live view above: a signed-out browser gets
+  // the sign-in page. It reads the vote code and never makes one.
+  const adminVoteScreenMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/vote-screen$/);
+  if (adminVoteScreenMatch && method === 'GET') {
+    const deny = await requireAdmin(request, env, crypto.randomUUID?.() ?? `req-${Date.now()}`);
+    if (deny) {
+      if ((request.headers.get('Accept') ?? '').includes('text/html')) {
+        return handleAdminSignInPage(env);
+      }
+      return deny;
+    }
+    return handleAdminVoteScreenPage(env, adminVoteScreenMatch[1], url.origin);
+  }
+
+  // /api/v2/admin/events/:id/layouts — how the event's pages are arranged
+  // (OSE-2232). GET reads; PUT saves a layout from a .md skin file and is
+  // audited against the event, with no detail.
+  const adminLayoutsMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/layouts$/);
+  if (adminLayoutsMatch && (method === 'GET' || method === 'PUT')) {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const authRes = await requireAdmin(request, env, reqId);
+    if (authRes) {
+      if (method === 'PUT') _audit(reqId, 'LAYOUT_SAVE', 'denied', 'event', adminLayoutsMatch[1]);
+      return authRes;
+    }
+    const response = await handleAdminLayouts(request, env, adminLayoutsMatch[1]);
+    if (method === 'PUT') {
+      _audit(reqId, 'LAYOUT_SAVE', _auditOutcome(response), 'event', adminLayoutsMatch[1]);
+    }
+    return response;
   }
 
   // GET /api/v2/admin/events/:id/poster-bundle — the poster bundle for a draft

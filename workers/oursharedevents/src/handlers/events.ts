@@ -12,6 +12,7 @@
  * Data source: D1 database (DB binding)
  */
 
+import { ADDON_REQUIRED_WORDS, hasAddon, surfacesNeedingAddon } from '../lib/brand-addons';
 import { closeVoteSetUnlessPublished, eventHasVoteSet } from '../lib/vote-sets';
 import {
   coreValuesMissing,
@@ -967,6 +968,13 @@ export async function handleCreateEvent(request: Request, env: EventsEnv): Promi
   if ('settings' in body && body.settings !== undefined) {
     const v = validateSettingsPatch(body.settings);
     if (!v.ok) return errorResponse('INVALID_SETTINGS', v.error, 400, rid);
+    // OSE-2232: the standard look is free; any other needs the skins add-on.
+    if (
+      surfacesNeedingAddon(v.value.layouts ?? undefined).length &&
+      !(await hasAddon(env.DB, brandId, 'skins'))
+    ) {
+      return errorResponse('ADDON_REQUIRED', ADDON_REQUIRED_WORDS, 403, rid);
+    }
     settingsJson = JSON.stringify(v.value);
     useSponsorsAtCreate = v.value.useSponsors;
   }
@@ -1404,6 +1412,15 @@ export async function handleUpdateEvent(
   if ('settings' in body) {
     const v = validateSettingsPatch(body.settings);
     if (!v.ok) return errorResponse('INVALID_SETTINGS', v.error, 400, rid);
+    // OSE-2232: the standard look is free; any other needs the skins add-on.
+    if (surfacesNeedingAddon(v.value.layouts ?? undefined).length) {
+      const owner = await env.DB.prepare('SELECT brand_id FROM events WHERE id = ?')
+        .bind(eventId)
+        .first<{ brand_id: string | null }>();
+      if (!(await hasAddon(env.DB, owner?.brand_id, 'skins'))) {
+        return errorResponse('ADDON_REQUIRED', ADDON_REQUIRED_WORDS, 403, rid);
+      }
+    }
     settingsPatchJson = JSON.stringify(v.value);
     useSponsorsWrite = v.value.useSponsors;
   }

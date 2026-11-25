@@ -130,7 +130,7 @@ const config = defineConfig({
   // against an empty local D1 while no longer testing what it was written for.
   // A spec joins this gate only by being named.
   testMatch:
-    /(mobile-workability|a11y-profile|admin-wizard-isolation|admin-csp-controls|admin-back-to-your-events|admin-sponsor-form|sponsor-home-flow|landing-theme|landing-empty-window|landing-page|poster-to-page-journey|publish-loop-journey|admin-deep-dive-journey|sponsor-surfaces-journey|attendee-forms-journey|report-counts-journey|form-sponsor-logo-fallback|admin-create-preview|admin-logs-settings-journey|event-page-choices|poster-layout|poster-digital-actions|display-phone-sponsor-lead|report-repeat-journey|display-tv-board|toast-service|attendance-mode|admin-stalls-card|admin-voting-card|booth-list-page|landing-map-first|fold-gate-meta|audit-text-helper)\.spec\.ts/,
+    /(mobile-workability|a11y-profile|admin-wizard-isolation|admin-csp-controls|admin-back-to-your-events|admin-sponsor-form|sponsor-home-flow|landing-theme|landing-empty-window|landing-page|poster-to-page-journey|publish-loop-journey|admin-deep-dive-journey|sponsor-surfaces-journey|attendee-forms-journey|report-counts-journey|form-sponsor-logo-fallback|admin-create-preview|admin-logs-settings-journey|event-page-choices|poster-layout|poster-digital-actions|display-phone-sponsor-lead|report-repeat-journey|display-tv-board|toast-service|attendance-mode|admin-stalls-card|admin-voting-card|booth-list-page|landing-map-first|fold-gate-meta|audit-text-helper|vote-screen-and-layouts)\.spec\.ts/,
 
   // Seeds a live event + sponsor and mints its /sponsor link so the phone audit
   // measures the real sponsor surface instead of skipping it. Runs after the
@@ -254,6 +254,8 @@ const config = defineConfig({
       ` --var ADMIN_KEY:${LOCAL_ADMIN_KEY}` +
       ` --var ALLOW_ADMIN_KEY_FALLBACK:true` +
       ` --var ADMIN_SCOPE_ALL:true` +
+      // Voting on, as staging has it (OSE-2227); the vote screen spec needs it.
+      ` --var VOTING_ENABLED:on` +
       ` --var SHARED_REPORT_SIGNING_SECRET:${LOCAL_SIGNING_SECRET}` +
       ` --var FORMS_ENCRYPTION_KEY:${LOCAL_FORMS_KEY}` +
       ` --var FORMS_HASH_PEPPER:${LOCAL_FORMS_PEPPER}` +

@@ -1,0 +1,32 @@
+info:
+  name: "OSE-2226 | setup | make the vote code"
+  type: http
+  seq: 60
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{skinEventId}}/votables/code"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2226 setup: the vote code is made', function () { expect([200, 201]).to.include(res.getStatus()); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

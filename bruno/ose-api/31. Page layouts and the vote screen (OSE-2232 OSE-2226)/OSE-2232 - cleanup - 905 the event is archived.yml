@@ -1,0 +1,32 @@
+info:
+  name: "OSE-2232 | cleanup | the event is archived"
+  type: http
+  seq: 905
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/{{skinEventId}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"status\": \"archived\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2232 cleanup: archived', function () { expect(res.getStatus()).to.be.below(300); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

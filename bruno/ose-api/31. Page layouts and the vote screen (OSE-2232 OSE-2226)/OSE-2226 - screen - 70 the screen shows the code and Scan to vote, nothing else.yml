@@ -1,0 +1,29 @@
+info:
+  name: "OSE-2226 | screen | the screen shows the code and Scan to vote, nothing else"
+  type: http
+  seq: 70
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/{{skinEventId}}/vote-screen"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const t = String(res.getBody() || '');
+        test('OSE-2226 screen: one h1, Scan to vote, the QR', function () { expect(res.getStatus()).to.eql(200); expect((t.match(/<h1[\s>]/g) || []).length).to.eql(1); expect(t).to.include('>Scan to vote</h1>'); expect(t).to.include('data-testid="vote-screen-qr"'); });
+        test('OSE-2226 screen: no title, no count', function () { expect(t).to.not.include('OSE-2232 report skins'); expect(t).to.not.match(/\b\d+ votes?\b/i); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false
