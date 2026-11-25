@@ -71,23 +71,40 @@ The solution engineer's loop: download the event's skin file from the "Page layo
 
 ## Next: the poster (priority 2, design only)
 
-The poster can take the same shape with no new idea, only new parts:
+### Two surfaces: printed and digital
 
-| Part       | What it holds                                                      |
-| ---------- | ------------------------------------------------------------------ |
-| `art`      | The event's image or flyer (photo crops to fill, flyer fits whole) |
-| `title`    | Title, date and place                                              |
-| `sponsors` | The sponsor panel: same size and place for every sponsor           |
-| `codes`    | The QR grid (`showQRSection` still turns it off)                   |
-| `blurb`    | The short description                                              |
+Owner, 2026-11-25: "a digital layout looks different than a poster layout due to available space and maximizing your qr code vs qr shortlink layout." So the poster is two surfaces, each with its own layout:
+
+| Surface          | Where it shows                      | What it favours                                                                                          |
+| ---------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `poster_print`   | Paper: letter, tabloid, half-letter | The code **and** its short address under it, both readable, since a printed code may be far from a phone |
+| `poster_digital` | A screen (the digital poster, a TV) | The code as large as the screen allows; the short address is smaller, for someone who cannot scan        |
+
+Both take the same parts and the same rules. "One layout for all paper sizes" (question 3 below) is about `poster_print` only: letter, tabloid and half-letter share one print layout, and the digital poster has its own.
+
+| Part       | What it holds                                                                              |
+| ---------- | ------------------------------------------------------------------------------------------ |
+| `art`      | The event's image or flyer (photo crops to fill, flyer fits whole)                         |
+| `title`    | Title, date and place                                                                      |
+| `sponsors` | The sponsor panel: same size and place for every sponsor                                   |
+| `codes`    | The code cards (`showQRSection` still turns it off). Each card: title, code, short address |
+| `blurb`    | The short description                                                                      |
+
+Inside a code card, the skin may choose how the code and its short address share the card (code large with the address below, or code and address side by side), within the print floor. It never drops the title or the address.
+
+### What a code card says
+
+Owner, 2026-11-25: the codes should read less technical and more customer facing, each with a title that says what it is (for accessibility), and the UEC colour language applies to every code across the platform. The rules for that are in [UEC-CODES.md](UEC-CODES.md), "Every code has a title".
+
+### The owner's answers
 
 Three questions went to the owner before building, because a poster is printed and cannot be fixed afterwards. All three are answered (2026-11-25):
 
-1. **Can the sponsor panel move?** Decided (owner, 2026-11-25): it moves as a whole, and its inside never changes. The fairness covenant says "same size, same spots for every sponsor". A poster skin could move the panel as a whole (every sponsor moves together), or the panel could be pinned. Recommended: the panel moves as a whole, and its inside never changes.
-2. **Is the QR pinned to a printable spot?** Decided (owner, 2026-11-25): it may move, never shrinks below the print floor, and never sits on the art. A code needs its quiet zone and a minimum printed size. Recommended: `codes` may move but never shrink below the print floor, and never sits on the art (type is never set on an image; a code is treated the same).
-3. **Paper sizes.** Decided (owner, 2026-11-25): one layout for all sizes, two columns only on tabloid and wider. A layout per paper size (letter, tabloid, half-letter) or one layout for all? Recommended: one layout, with two columns only on tabloid and wider.
+1. **Can the sponsor panel move?** It moves as a whole, and its inside never changes. This keeps the fairness covenant: same size, same spots for every sponsor.
+2. **Can the codes move?** They may move, never shrink below the print floor (a code needs its quiet zone and a minimum printed size), and never sit on the art.
+3. **Paper sizes.** One print layout for all sizes, two columns only on tabloid and wider. The digital poster is a separate surface with its own layout (above).
 
-The poster template (`src/templates/poster.html`) is already split into header, stage, art, body and footer blocks, so marking them with `data-region` and calling the same mover is a small change once these are answered.
+The poster template (`src/templates/poster.html`) is already split into header, stage, art, body and footer blocks, so marking them with `data-region` and calling the same mover is a small change.
 
 ## The ourWKRP side
 
