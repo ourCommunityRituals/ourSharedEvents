@@ -71,6 +71,7 @@ import { EVENT_LIVE, EVENT_ON_ITS_DATES, eventIsLive } from './event-live';
 import { eventLiveSql } from '../domain/event-state';
 import { hourStamp } from './scan-buffer';
 import { isVotableKind, isVoteTeamId, parseVotableLabel, type VotableKind } from './votes';
+import { finalizeOnlinePickAndPasses, finalSetsWithLeftovers } from './vote-crowd';
 import { resultStatements, type VoteOutcome } from './vote-results';
 
 /** The longest window an object can be open for in one go: 12 hours (a fair day). */
@@ -966,6 +967,14 @@ export async function adminFinalizeVoteSet(
   if (!set) return NO_SET;
   if (set.final) return FINAL;
   if (await finalizeVoteSet(db, set.id, eventId, 'admin', nowIso)) {
+    // ADR-040 decision 13: the Online Pick becomes final only now, after the
+    // room, and the set's Access Passes go. A failure here is finished by the
+    // nightly job (finalSetsWithLeftovers); the room's result already stands.
+    try {
+      await finalizeOnlinePickAndPasses(db, set.id);
+    } catch {
+      // the job finishes it
+    }
     const after = await readVoteSet(db, eventId);
     return after ? { ok: true, value: after } : NO_SET;
   }
@@ -1419,6 +1428,15 @@ export async function runVoteFinalJob(env: VoteFinalJobEnv): Promise<VoteFinalJo
           out.finalized++;
           await auditFinal(db, event_id, nowIso);
         }
+      } catch {
+        out.errors++;
+      }
+    }
+    // ADR-040 decision 13: every final room set's Online Pick and Access Passes
+    // are finished, including those just made final above.
+    for (const id of await finalSetsWithLeftovers(db)) {
+      try {
+        await finalizeOnlinePickAndPasses(db, id);
       } catch {
         out.errors++;
       }

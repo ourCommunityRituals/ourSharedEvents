@@ -1,0 +1,32 @@
+info:
+  name: "DEC13 | admin | 40 the Online Pick takes only on true or false"
+  type: http
+  seq: 40
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{accessNightId}}/votables/online-pick"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"on\": \"yes\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('DEC13 online pick: a non-boolean is refused', function () { expect(res.getStatus()).to.eql(400); expect(res.getBody().code).to.eql('INVALID_ONLINE_PICK'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

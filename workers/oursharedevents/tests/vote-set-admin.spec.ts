@@ -991,7 +991,7 @@ describe('7. a booth must be a stall of the same event, in use', () => {
 // ── 8: audit ─────────────────────────────────────────────────────────────────
 
 describe('the venue rules, through the route (owner cards 2026-11-26)', () => {
-  test('SECURITY | no venue is VENUE_NEEDED, a venue the platform has not set up is VENUE_NOT_SET_UP, each audited as denied', async () => {
+  test('no venue is VENUE_NEEDED, a venue the platform has not set up is VENUE_NOT_SET_UP, each audited as denied', async () => {
     expect((await call('POST', vp(A1), A, {})).status).toBe(201);
     // Unlinked: the event has no venue.
     await run('UPDATE events SET host_venue_id = NULL WHERE id = ?', A1);

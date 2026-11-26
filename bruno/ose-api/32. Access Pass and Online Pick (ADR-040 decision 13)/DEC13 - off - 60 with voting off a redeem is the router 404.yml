@@ -1,0 +1,37 @@
+info:
+  name: "DEC13 | off | 60 with voting off a redeem is the router 404"
+  type: http
+  seq: 60
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/vote/access"
+  headers:
+    - name: Content-Type
+      value: "application/json"
+    - name: Sec-Fetch-Site
+      value: same-origin
+  body:
+    type: json
+    data: "{\"token\": \"{{accessPassToken}}\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        if (bru.getEnvVar('votingSwitch') === 'on') {
+          console.log('NOT RUN (VOTING_ENABLED is on on this environment): the switch-off half runs only while it is off');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        test('DEC13 off: redeem is the router 404, byte for byte', function () { expect(res.getStatus()).to.eql(404); expect(JSON.stringify(res.getBody())).to.eql(bru.getVar('accessNowhere')); });
+        test('DEC13 off: no cookie set', function () { expect(res.getHeader('set-cookie')).to.be.undefined; });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

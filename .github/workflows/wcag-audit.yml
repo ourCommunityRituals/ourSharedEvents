@@ -75,5 +75,6 @@ jobs:
             tests/e2e/2-pages/wcag-slider.component.spec.ts \
             tests/e2e/2-pages/wcag-sponsor-kind.component.spec.ts \
             tests/e2e/2-pages/voter-page.component.spec.ts \
+            tests/e2e/2-pages/access-and-online-pick.component.spec.ts \
             tests/e2e/2-pages/card-pager.component.spec.ts \
             tests/e2e/2-pages/a11y-axe-surfaces.spec.ts

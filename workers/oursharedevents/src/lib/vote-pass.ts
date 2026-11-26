@@ -71,11 +71,39 @@ export const VOTE_PASS_TTL_SECONDS = 30 * 60;
 const VOTER_KEY_LABEL = 'ose:vote:voter-key:v1';
 /** HKDF `info` for the pass seal. Its own; never imported from another file. */
 const PASS_SEAL_LABEL = 'ose:vote:pass-seal:v1';
+/**
+ * HKDF `info` for an Access Pass's voter key (ADR-040 decision 13): k comes from
+ * the pass token, not a cookie, under its own label, so an Access Pass key can
+ * never equal a room key made from a cookie, even for the same bytes.
+ */
+const ACCESS_VOTER_KEY_LABEL = 'ose:vote:access-voter-key:v1';
+/**
+ * HKDF `info` for the Online Pick's voter key and its pass seal (decision 13).
+ * The Online Pick is a separate channel: its key and its seal are its own, so a
+ * crowd pass never opens as a room pass and a crowd key never equals a room
+ * key. Cryptographic separation on top of the separate tables.
+ */
+const CROWD_VOTER_KEY_LABEL = 'ose:vote:crowd-voter-key:v1';
+const CROWD_SEAL_LABEL = 'ose:vote:crowd-pass-seal:v1';
 
 /** Fixed, public HKDF salt (RFC 5869 allows a non-secret salt). */
 const HKDF_SALT = new TextEncoder().encode('oursharedevents:vote-pass');
 
 const PASS_PREFIX = 'vp1.';
+/** The Online Pick's pass. Another prefix and another seal: never a room pass. */
+const CROWD_PREFIX = 'vc1.';
+
+/** An Access Pass id, as vote_access_passes stores it (migration 0124). */
+const ACCESS_ID = /^vap_[0-9a-f]{32}$/;
+/** The only keys a pass's JSON may carry; anything more is not one of ours. */
+const WIRE_KEYS: ReadonlySet<string> = new Set(['e', 'x', 'p', 'k', 'a']);
+
+interface Channel {
+  prefix: string;
+  seal: string;
+}
+const ROOM: Channel = { prefix: PASS_PREFIX, seal: PASS_SEAL_LABEL };
+const CROWD: Channel = { prefix: CROWD_PREFIX, seal: CROWD_SEAL_LABEL };
 /** A pass longer than this is not one of ours; refuse before any crypto. */
 const PASS_MAX_LENGTH = 512;
 
@@ -163,9 +191,40 @@ export async function voterKey(
   cookie: string,
   eventId: string
 ): Promise<string | null> {
-  if (!pepper || !cookie || !eventId) return null;
-  const key = await subKeyFor(pepper, VOTER_KEY_LABEL, ['sign']);
-  return toHex(await crypto.subtle.sign('HMAC', key, voterKeyMessage(cookie, eventId)));
+  return keyUnder(VOTER_KEY_LABEL, pepper, cookie, eventId);
+}
+
+async function keyUnder(
+  label: string,
+  pepper: string | undefined,
+  secret: string,
+  eventId: string
+): Promise<string | null> {
+  if (!pepper || !secret || !eventId) return null;
+  const key = await subKeyFor(pepper, label, ['sign']);
+  return toHex(await crypto.subtle.sign('HMAC', key, voterKeyMessage(secret, eventId)));
+}
+
+/**
+ * An Access Pass's voter key (decision 13): k = HMAC(K_access_voter, len(token)
+ * ‖ token ‖ event_id). The same token always gives the same k at one event, so
+ * a forwarded or shared Access Pass is still one voter: sharing gains nothing.
+ */
+export async function accessVoterKey(
+  pepper: string | undefined,
+  token: string,
+  eventId: string
+): Promise<string | null> {
+  return keyUnder(ACCESS_VOTER_KEY_LABEL, pepper, token, eventId);
+}
+
+/** The Online Pick's voter key: the room's shape, under the crowd's own label. */
+export async function crowdVoterKey(
+  pepper: string | undefined,
+  cookie: string,
+  eventId: string
+): Promise<string | null> {
+  return keyUnder(CROWD_VOTER_KEY_LABEL, pepper, cookie, eventId);
 }
 
 /** What a pass carries. */
@@ -175,6 +234,12 @@ export interface VotePassClaims {
   expires_at: number;
   pepper_epoch: string;
   k: string;
+  /**
+   * Set only on a pass redeemed from an Access Pass: its id, so the vote route
+   * can refuse a revoked pass at once. It never reaches a table or a log, and
+   * the vote is counted exactly like any other (decision 13: the same weight).
+   */
+  access_id?: string;
 }
 
 interface WirePass {
@@ -182,6 +247,7 @@ interface WirePass {
   x: number;
   p: string;
   k: string;
+  a?: string;
 }
 
 /**
@@ -194,8 +260,52 @@ export async function mintVotePass(
   eventId: string,
   nowMs: number
 ): Promise<string | null> {
+  return sealPass(ROOM, pepper, await voterKey(pepper, cookie, eventId), eventId, nowMs);
+}
+
+/**
+ * Mint a room pass from an Access Pass (decision 13). The caller has checked
+ * the Access Pass (lib/vote-access-pass.ts). The pass is a room pass: the same
+ * page, the same route, the same weight. It carries the Access Pass id only so
+ * a revoke stops it before it runs out.
+ */
+export async function mintAccessVotePass(
+  pepper: string | undefined,
+  token: string,
+  eventId: string,
+  accessId: string,
+  nowMs: number
+): Promise<string | null> {
+  if (!ACCESS_ID.test(accessId)) return null;
+  return sealPass(
+    ROOM,
+    pepper,
+    await accessVoterKey(pepper, token, eventId),
+    eventId,
+    nowMs,
+    accessId
+  );
+}
+
+/** Mint an Online Pick pass: the crowd's own key and seal, never a room pass. */
+export async function mintCrowdPass(
+  pepper: string | undefined,
+  cookie: string,
+  eventId: string,
+  nowMs: number
+): Promise<string | null> {
+  return sealPass(CROWD, pepper, await crowdVoterKey(pepper, cookie, eventId), eventId, nowMs);
+}
+
+async function sealPass(
+  ch: Channel,
+  pepper: string | undefined,
+  k: string | null,
+  eventId: string,
+  nowMs: number,
+  accessId?: string
+): Promise<string | null> {
   const epoch = await pepperEpoch(pepper);
-  const k = await voterKey(pepper, cookie, eventId);
   if (!pepper || !epoch || !k) return null;
   const wire: WirePass = {
     e: eventId,
@@ -203,8 +313,9 @@ export async function mintVotePass(
     p: epoch,
     k,
   };
-  const body = PASS_PREFIX + b64urlEncodeBytes(new TextEncoder().encode(JSON.stringify(wire)));
-  const seal = await subKeyFor(pepper, PASS_SEAL_LABEL, ['sign', 'verify']);
+  if (accessId) wire.a = accessId;
+  const body = ch.prefix + b64urlEncodeBytes(new TextEncoder().encode(JSON.stringify(wire)));
+  const seal = await subKeyFor(pepper, ch.seal, ['sign', 'verify']);
   const mac = await crypto.subtle.sign('HMAC', seal, new TextEncoder().encode(body));
   return `${body}.${b64urlEncodeBytes(new Uint8Array(mac))}`;
 }
@@ -225,18 +336,43 @@ export async function openVotePass(
   nowMs: number,
   eventId: string
 ): Promise<VotePassClaims | null> {
+  return openPass(ROOM, pepper, pass, nowMs, eventId);
+}
+
+/**
+ * Read an Online Pick pass back. A room pass never opens here, and a crowd
+ * pass never opens in openVotePass: another prefix and another seal. A crowd
+ * pass never carries an Access Pass id.
+ */
+export async function openCrowdPass(
+  pepper: string | undefined,
+  pass: unknown,
+  nowMs: number,
+  eventId: string
+): Promise<VotePassClaims | null> {
+  const claims = await openPass(CROWD, pepper, pass, nowMs, eventId);
+  return claims && !claims.access_id ? claims : null;
+}
+
+async function openPass(
+  ch: Channel,
+  pepper: string | undefined,
+  pass: unknown,
+  nowMs: number,
+  eventId: string
+): Promise<VotePassClaims | null> {
   if (!pepper || !eventId || typeof pass !== 'string' || pass.length > PASS_MAX_LENGTH) return null;
-  if (!pass.startsWith(PASS_PREFIX)) return null;
+  if (!pass.startsWith(ch.prefix)) return null;
   const dot = pass.lastIndexOf('.');
-  if (dot <= PASS_PREFIX.length) return null;
+  if (dot <= ch.prefix.length) return null;
   const body = pass.slice(0, dot);
   const mac = b64urlDecodeBytes(pass.slice(dot + 1));
-  const json = b64urlDecodeBytes(body.slice(PASS_PREFIX.length));
+  const json = b64urlDecodeBytes(body.slice(ch.prefix.length));
   if (!mac || !json || mac.length !== 32) return null;
   // One spelling only: atob ignores a last character's unused bits.
   if (b64urlEncodeBytes(mac) !== pass.slice(dot + 1)) return null;
-  if (b64urlEncodeBytes(json) !== body.slice(PASS_PREFIX.length)) return null;
-  const seal = await subKeyFor(pepper, PASS_SEAL_LABEL, ['sign', 'verify']);
+  if (b64urlEncodeBytes(json) !== body.slice(ch.prefix.length)) return null;
+  const seal = await subKeyFor(pepper, ch.seal, ['sign', 'verify']);
   const ok = await crypto.subtle.verify('HMAC', seal, mac, new TextEncoder().encode(body));
   if (!ok) return null;
   let wire: Partial<WirePass>;
@@ -245,8 +381,11 @@ export async function openVotePass(
   } catch {
     return null;
   }
+  if (!wire || typeof wire !== 'object' || Array.isArray(wire)) return null;
+  // Exactly our keys: a pass with another field is not one we minted.
+  if (Object.keys(wire).some((key) => !WIRE_KEYS.has(key))) return null;
+  if (wire.a !== undefined && (typeof wire.a !== 'string' || !ACCESS_ID.test(wire.a))) return null;
   if (
-    !wire ||
     typeof wire.e !== 'string' ||
     !wire.e ||
     !Number.isInteger(wire.x) ||
@@ -259,7 +398,14 @@ export async function openVotePass(
   if (Math.floor(nowMs / 1000) >= (wire.x as number)) return null;
   if (wire.p !== (await pepperEpoch(pepper))) return null;
   if (wire.e !== eventId) return null;
-  return { event_id: wire.e, expires_at: wire.x as number, pepper_epoch: wire.p, k: wire.k };
+  const claims: VotePassClaims = {
+    event_id: wire.e,
+    expires_at: wire.x as number,
+    pepper_epoch: wire.p,
+    k: wire.k,
+  };
+  if (wire.a) claims.access_id = wire.a;
+  return claims;
 }
 
 export interface VotePassEnv extends VotingSwitchEnv {

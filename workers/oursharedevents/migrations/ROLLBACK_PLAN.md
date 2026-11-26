@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0123; the entries below do not cover every migration after 0083, see the note at 0104)
+- `DB` — main / anonymous public surface (highest migration: 0124; the entries below do not cover every migration after 0083, see the note at 0104)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -110,6 +110,24 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0124: vote_access_passes and the Online Pick tables vote_crowd_sets,
+-- vote_crowd_tallies, vote_crowd_receipts, vote_crowd_participants (OSE ADR-040
+-- decision 13). Additive: five new tables, one index, no column. THE ROLLBACK
+-- IS: revert the Worker and LEAVE THE TABLES. The older Worker never reads
+-- them: no Access Pass can be given or redeemed, no Online Pick is offered, and
+-- the Room Pick is unchanged (it never read these tables). Rows left behind
+-- hold no person: a pass is an HMAC lookup, a crowd row is a counter or an
+-- HMAC marker.
+--
+-- Surgical reverse, only if the tables themselves must go (given passes stop
+-- working; an unfinished Online Pick is lost):
+DROP TABLE IF EXISTS vote_crowd_participants;
+DROP TABLE IF EXISTS vote_crowd_receipts;
+DROP TABLE IF EXISTS vote_crowd_tallies;
+DROP TABLE IF EXISTS vote_crowd_sets;
+DROP INDEX IF EXISTS idx_vote_access_passes_set;
+DROP TABLE IF EXISTS vote_access_passes;
+
 -- 0123: vote windows (OSE-2234, OSE ADR-040, owner card 2026-11-26: windows
 -- run their full length): vote_sets.opened_at, the hour the set first opened
 -- (the 30-day backstop that makes a set final), and votable_objects.

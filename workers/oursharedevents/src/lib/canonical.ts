@@ -58,6 +58,8 @@ export const EVENT_SCREEN_SEGMENTS: readonly string[] = [
   'booths',
   // OSE-2129: /events/<id>/vote is the voter page.
   'vote',
+  // ADR-040 decision 13: /events/<id>/online-pick is the Online Pick page.
+  'online-pick',
 ];
 
 const READABLE_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;

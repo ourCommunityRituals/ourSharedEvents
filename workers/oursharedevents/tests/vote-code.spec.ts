@@ -623,19 +623,18 @@ describe('OSE-2142 | a vote set follows its event status', () => {
     expect(re.json.code).toBe('WINDOWS_STARTED');
   });
 
-  test('SECURITY | dates that lapse on their own are no pause button: the next edit closes the set (CCR loop 7, M1)', async () => {
+  test('dates that have passed: the next edit closes the set, and it stays closed', async () => {
     await openNight();
     const code = await makeCode();
     expect(await setState(NIGHT)).toBe('open');
-    // Time runs past the event's last date with no edit: the set row is still
-    // open, and the live check refuses votes (written here as the date lapsing).
+    // The event's last date passes with no edit (written here directly).
     await run(
       `UPDATE events SET start_date = '2000-01-01', end_date = '2000-01-01' WHERE id = ?`,
       NIGHT
     );
     expect(await setState(NIGHT)).toBe('open');
-    // The host moves the dates forward to revive the running window: the edit
-    // closes the set first, because the event was not live when it came in.
+    // The dates are moved forward: the edit closes the set first, because the
+    // event was not live when it came in.
     const back = await call('PUT', `/api/v2/admin/events/${NIGHT}`, {
       start_date: '2099-06-01',
       end_date: '2099-06-01',

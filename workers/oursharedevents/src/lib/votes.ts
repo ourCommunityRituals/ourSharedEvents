@@ -33,10 +33,34 @@
  * tests/e2e/0-architecture/votes-never-who.invariant.spec.ts (T0).
  */
 
-/** The six vote tables, all in DB (ADR-040 decision 1). Never in FORMS_DB. */
+/** The vote tables, all in DB (ADR-040 decisions 1 and 13). Never in FORMS_DB. */
 export const VOTE_TABLES = [
   'vote_sets',
   'votable_objects',
+  'vote_tallies',
+  'vote_receipts',
+  'vote_participants',
+  'vote_team_markers',
+  // ADR-040 decision 13 (migration 0124): the Access Pass and the Online Pick.
+  // The Online Pick's own tables; no statement names one of these and a room
+  // counter or marker table (the T0 gate, "channels never mix").
+  'vote_access_passes',
+  'vote_crowd_sets',
+  'vote_crowd_tallies',
+  'vote_crowd_receipts',
+  'vote_crowd_participants',
+] as const;
+
+/** The Online Pick's tables. A statement that names one never names a room table below. */
+export const VOTE_CROWD_TABLES = [
+  'vote_crowd_sets',
+  'vote_crowd_tallies',
+  'vote_crowd_receipts',
+  'vote_crowd_participants',
+] as const;
+
+/** The room's counter and marker tables: the Room Pick's numbers. */
+export const VOTE_ROOM_COUNT_TABLES = [
   'vote_tallies',
   'vote_receipts',
   'vote_participants',
@@ -79,6 +103,9 @@ export const VOTABLE_LABEL_MAX = 80;
 export const VOTE_RECEIPT_CONTEXT = 'ose:vote:receipt:v1';
 export const VOTE_PARTICIPANT_CONTEXT = 'ose:vote:participant:v1';
 export const VOTE_TEAM_CONTEXT = 'ose:vote:team-marker:v1';
+/** The Online Pick's markers (decision 13): their own labels, never the room's. */
+export const VOTE_CROWD_RECEIPT_CONTEXT = 'ose:vote:crowd-receipt:v1';
+export const VOTE_CROWD_PARTICIPANT_CONTEXT = 'ose:vote:crowd-participant:v1';
 
 import { offLimitsRuleFor } from './vote-off-limits';
 
@@ -202,4 +229,22 @@ export function voteTeamMarker(
 ): Promise<string | null> {
   if (!isVoteTeamId(teamId)) return Promise.resolve(null);
   return marker(VOTE_TEAM_CONTEXT, pepper, k, teamId);
+}
+
+/** An Online Pick receipt: one crowd vote per crowd key per object. Never equals a room receipt. */
+export function voteCrowdReceipt(
+  pepper: string | undefined,
+  k: string,
+  objectId: string
+): Promise<string | null> {
+  return marker(VOTE_CROWD_RECEIPT_CONTEXT, pepper, k, objectId);
+}
+
+/** An Online Pick participant marker: counts distinct crowd voters, for the crowd's own V. */
+export function voteCrowdParticipantMarker(
+  pepper: string | undefined,
+  k: string,
+  setId: string
+): Promise<string | null> {
+  return marker(VOTE_CROWD_PARTICIPANT_CONTEXT, pepper, k, setId);
 }

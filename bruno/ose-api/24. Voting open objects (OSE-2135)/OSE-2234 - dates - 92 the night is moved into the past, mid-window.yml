@@ -3,8 +3,8 @@ info:
   type: http
   seq: 92
 
-# CCR loop 6 F1: moving the dates into the past is no pause button on a
-# running window. The same edit closes the set; 93 to 95 show it stays closed.
+# Voting follows the event: moving its dates into the past ends voting for the
+# night. The same edit closes the set; 93 to 95 show it stays closed.
 
 http:
   method: PUT

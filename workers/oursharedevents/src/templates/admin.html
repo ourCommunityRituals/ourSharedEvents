@@ -1653,6 +1653,16 @@
           'vote-add': function (el) {
             if (window.voteAdd) window.voteAdd(el);
           },
+          // ADR-040 decision 13: Access Passes and the Online Pick.
+          'votes-access-give': function (el) {
+            if (window.votesAccessGive) window.votesAccessGive(el);
+          },
+          'votes-access-revoke': function (el) {
+            if (window.votesAccessRevoke) window.votesAccessRevoke(el);
+          },
+          'votes-online': function (el) {
+            if (window.votesOnline) window.votesOnline(el);
+          },
           // OSE-1998: the Stalls card. Row buttons carry data-booth-id.
           'stalls-toggle': function (el) {
             if (window.stallsToggle) window.stallsToggle(el);
@@ -7169,11 +7179,48 @@
           </div>
         </div>
 
+        <!-- OSE ADR-040 decision 13: people who cannot be in the room. The Access
+             Pass (counts in the Room Pick, at most 4, a link shown once) and the
+             Online Pick (for fun, never the Room Pick). No count of votes here. -->
+        <div class="card-body" id="votes-away" data-testid="votes-away" hidden>
+          <h3 class="card-title">People who can’t be here</h3>
+          <h4 class="card-title" id="votes-access-title">Access Pass</h4>
+          <p class="sub-line" data-testid="votes-access-note">Give someone who can’t come a link to vote in the Room Pick, the same as everyone in the room. No reason is asked. Each link is one voter. You can give at most 4, and taking one back does not free a place.</p>
+          <p class="sub-line" id="votes-access-left" data-testid="votes-access-left" aria-live="polite"></p>
+          <div class="flex-row">
+            <button type="button" class="btn btn-secondary" id="votes-access-give" data-action="votes-access-give" data-testid="votes-access-give">Give an Access Pass</button>
+          </div>
+          <div id="votes-access-new" data-testid="votes-access-new" hidden>
+            <p class="sub-line" data-testid="votes-access-new-note">Send this link to the person now. It is shown only once.</p>
+            <div class="pd-link"><code id="votes-access-url" data-testid="votes-access-url"></code></div>
+          </div>
+          <ul class="pc-list" id="votes-access-list" data-testid="votes-access-list" aria-labelledby="votes-access-title"></ul>
+          <h4 class="card-title" id="votes-online-title">Online Pick</h4>
+          <p class="sub-line" data-testid="votes-online-note">Lets people who aren’t here vote for fun. It never changes the Room Pick, and the page says it can be gamed.</p>
+          <p class="sub-line" id="votes-online-state" data-testid="votes-online-state" aria-live="polite"></p>
+          <p class="sub-line" id="votes-online-burst" data-testid="votes-online-burst" role="status" hidden>More people came to the Online Pick, or came faster, than a full room would. Someone may be gaming the Online Pick. Only you see this. The Room Pick is not affected.</p>
+          <div class="flex-row">
+            <button type="button" class="btn btn-secondary" id="votes-online-on" data-action="votes-online" data-on="true" data-testid="votes-online-on">Turn the Online Pick on</button>
+            <button type="button" class="btn btn-secondary" id="votes-online-off" data-action="votes-online" data-on="false" data-testid="votes-online-off">Turn the Online Pick off</button>
+          </div>
+        </div>
+
         <div class="card-body">
           <p class="create-msg" id="votes-msg" data-testid="votes-msg" role="status" aria-live="polite"></p>
         </div>
       </div>
 
+      <template id="vote-access-row-tpl">
+        <li class="detail-card" data-testid="vote-access-row">
+          <div class="detail-card-text">
+            <span class="detail-card-main" data-testid="vote-access-row-name"></span>
+            <span class="detail-card-sub" data-testid="vote-access-row-state"></span>
+          </div>
+          <div class="detail-card-actions">
+            <button type="button" class="btn btn-danger" data-action="votes-access-revoke" data-testid="vote-access-row-revoke">Take back</button>
+          </div>
+        </li>
+      </template>
       <template id="vote-row-tpl">
         <li class="detail-card" data-testid="vote-row">
           <div class="detail-card-text">
@@ -7233,6 +7280,8 @@
           VENUE_NOT_SET_UP: 'The platform has not set this venue up for voting yet. Ask us to set its room limit.',
           VENUE_NEEDED: 'Link this event to its venue first. For a park or open field, add it as an outdoor venue.',
           ROOM_SIZE_MISSING: 'This vote was opened without a room size, so it cannot be reopened. Finish it, or start a new vote.',
+          ACCESS_PASS_LIMIT: 'All 4 Access Passes for this vote have been given.',
+          ONLINE_PICK_TEAM_NIGHT: 'The Online Pick is for nights played by songs, stalls or entries, not teams.',
         };
         return Object.prototype.hasOwnProperty.call(SAID, code) ? SAID[code] : 'Could not save. Nothing was changed. Try again.';
       };
@@ -7280,7 +7329,7 @@
         while (list.firstChild) list.removeChild(list.firstChild);
         if (!data) {
           byId('votes-summary').textContent = 'Could not read the vote. Try again in a moment.';
-          ['votes-make', 'votes-set-actions', 'votes-add', 'votes-empty', 'votes-team-note', 'votes-publish-hint', 'votes-code', 'votes-flood', 'votes-room', 'votes-room-field'].forEach(function (x) { byId(x).hidden = true; });
+          ['votes-make', 'votes-set-actions', 'votes-add', 'votes-empty', 'votes-team-note', 'votes-publish-hint', 'votes-code', 'votes-flood', 'votes-room', 'votes-room-field', 'votes-away'].forEach(function (x) { byId(x).hidden = true; });
           return;
         }
         // OSE-2142: nothing is more live than its event. Not Published, Open and
@@ -7332,6 +7381,18 @@
         replaceCode.hidden = !codeUrl;
         replaceCode.style.display = replaceCode.hidden ? 'none' : '';
         var team = !!set && set.played_by === 'team';
+        // ADR-040 decision 13: the Access Pass and the Online Pick. Not on a team night, never after final.
+        byId('votes-away').hidden = !set || set.final || team;
+        var op = data.online_pick && typeof data.online_pick === 'object' ? data.online_pick : {};
+        byId('votes-online-state').textContent = op.on === true ? 'The Online Pick is on.' : 'The Online Pick is off.';
+        byId('votes-online-burst').hidden = op.burst_seen !== true;
+        [['votes-online-on', op.on !== true], ['votes-online-off', op.on === true]].forEach(function (pair) {
+          var b = byId(pair[0]);
+          b.hidden = !pair[1];
+          b.style.display = b.hidden ? 'none' : '';
+        });
+        byId('votes-access-new').hidden = true;
+        byId('votes-access-url').textContent = '';
         // Once voting has opened, nothing can be added (OBJECTS_FIXED, 2026-11-26).
         byId('votes-add').hidden = !set || set.final || team || set.opened === true;
         byId('votes-team-note').hidden = !team || set.final;
@@ -7376,7 +7437,7 @@
           var byId = function (x) { return document.getElementById(x); };
           var list = byId('votes-list');
           if (list) while (list.firstChild) list.removeChild(list.firstChild);
-          ['votes-make', 'votes-set-actions', 'votes-add', 'votes-empty', 'votes-team-note', 'votes-publish-hint', 'votes-code'].forEach(function (x) {
+          ['votes-make', 'votes-set-actions', 'votes-add', 'votes-empty', 'votes-team-note', 'votes-publish-hint', 'votes-code', 'votes-away'].forEach(function (x) {
             var el = byId(x);
             if (el) el.hidden = true;
           });
@@ -7388,8 +7449,9 @@
         if (seq !== window._votesSeq) return;
         window.renderVotesCard(
           id,
-          r.ok ? { set: r.data.set, objects: r.data.objects, event_live: r.data.event_live, code: r.data.code } : null
+          r.ok ? { set: r.data.set, objects: r.data.objects, event_live: r.data.event_live, code: r.data.code, online_pick: r.data.online_pick } : null
         );
+        if (r.ok && r.data.set && !r.data.set.final && r.data.set.played_by !== 'team') window.loadAccessPasses(id, seq);
       };
       /** OSE-2127: send one write, then read the card again and say what happened. */
       window.votesWrite = async function (btn, tail, body, done) {
@@ -7471,6 +7533,59 @@
           input.focus();
         }
         return r;
+      };
+      /** ADR-040 decision 13: the Access Passes given, how many are left, and a Take back button for each live one. */
+      window.loadAccessPasses = async function (id, seq) {
+        var r = await window.votesFetch('/api/v2/admin/events/' + encodeURIComponent(String(id)) + '/votables/access-passes');
+        if (seq !== window._votesSeq) return;
+        var list = document.getElementById('votes-access-list');
+        var left = document.getElementById('votes-access-left');
+        var give = document.getElementById('votes-access-give');
+        if (!list || !left || !give) return;
+        while (list.firstChild) list.removeChild(list.firstChild);
+        var a = r.ok && r.data.access && typeof r.data.access === 'object' ? r.data.access : null;
+        if (!a) { left.textContent = 'Could not read the Access Passes. Try again in a moment.'; return; }
+        var remaining = typeof a.remaining === 'number' ? a.remaining : 0;
+        left.textContent = remaining === 1 ? '1 Access Pass left to give.' : remaining + ' Access Passes left to give.';
+        give.disabled = remaining < 1;
+        var tpl = document.getElementById('vote-access-row-tpl');
+        (Array.isArray(a.passes) ? a.passes : []).forEach(function (p, i) {
+          if (!p || !/^vap_[0-9a-f]{32}$/.test(String(p.id))) return;
+          var row = tpl.content.firstElementChild.cloneNode(true);
+          var at = function (x) { return row.querySelector('[data-testid="' + x + '"]'); };
+          at('vote-access-row-name').textContent = 'Access Pass ' + (i + 1);
+          at('vote-access-row-state').textContent = p.revoked ? 'Taken back' : 'Can vote';
+          var btn = at('vote-access-row-revoke');
+          if (p.revoked) btn.remove();
+          else {
+            btn.setAttribute('data-pass-id', String(p.id));
+            btn.setAttribute('aria-label', 'Take back Access Pass ' + (i + 1));
+          }
+          list.appendChild(row);
+        });
+      };
+      /** Give one Access Pass. Its link is shown once, here, and kept nowhere. */
+      window.votesAccessGive = async function (btn) {
+        var r = await window.votesWrite(btn, '/access-passes', {}, 'An Access Pass is ready. Send the link below now: it is shown only once.');
+        if (!r || r.stale || !r.ok) return r;
+        var url = r.data.access_pass && typeof r.data.access_pass.url === 'string' ? r.data.access_pass.url : '';
+        // The link must be this site's own /access page, so a changed answer
+        // cannot put another site's link in front of the host.
+        var own = window.location.origin + '/access#';
+        if (url && url.indexOf(own) === 0 && /^[A-Za-z0-9_-]{43}$/.test(url.slice(own.length))) {
+          document.getElementById('votes-access-url').textContent = url;
+          document.getElementById('votes-access-new').hidden = false;
+        }
+        return r;
+      };
+      window.votesAccessRevoke = function (btn) {
+        var pid = btn.getAttribute('data-pass-id') || '';
+        if (!/^vap_[0-9a-f]{32}$/.test(pid)) return null;
+        return window.votesWrite(btn, '/access-passes/' + encodeURIComponent(pid) + '/revoke', {}, 'That Access Pass is taken back. It cannot vote again.');
+      };
+      window.votesOnline = function (btn) {
+        var on = btn.getAttribute('data-on') === 'true';
+        return window.votesWrite(btn, '/online-pick', { on: on }, on ? 'The Online Pick is on.' : 'The Online Pick is off.');
       };
       window.addEventListener('ose:event-selected', function (ev) {
         var d = ev.detail || {};

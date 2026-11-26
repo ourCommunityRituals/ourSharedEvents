@@ -1,0 +1,39 @@
+info:
+  name: "DEC13 | on | 80 a pass taken back is refused with the one answer"
+  type: http
+  seq: 80
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/vote/access"
+  headers:
+    - name: Content-Type
+      value: "application/json"
+    - name: Sec-Fetch-Site
+      value: same-origin
+  body:
+    type: json
+    data: "{\"token\": \"{{accessPassToken}}\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        if (bru.getEnvVar('votingSwitch') !== 'on') {
+          console.log('NOT RUN (VOTING_ENABLED off on this environment): the switch-on half of decision 13');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('DEC13 on: revoked pass, 403 ACCESS_PASS_INVALID', function () { expect(res.getStatus()).to.eql(403); expect(b.code).to.eql('ACCESS_PASS_INVALID'); });
+        test('DEC13 on: no cookie, no-store', function () { expect(res.getHeader('set-cookie')).to.be.undefined; expect(String(res.getHeader('cache-control'))).to.contain('no-store'); });
+        bru.setVar('accessRefusal', JSON.stringify(b));
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false
