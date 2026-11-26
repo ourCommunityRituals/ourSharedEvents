@@ -7223,7 +7223,7 @@
           ROOM_SIZE_NEEDED: 'Say how many the room can hold, then open voting.',
           ROOM_SIZE_OUT_OF_RANGE: 'The room size must be from 10 to 50000.',
           LABEL_FIXED: 'A name cannot change once voting has opened, so votes stay with what was voted for.',
-          LABEL_TAKEN: 'That name is already in the vote, and voting has opened. Adding it again would split its votes.',
+          OBJECTS_FIXED: 'Voting has opened, so nothing can be added. Add everything before opening voting.',
         };
         return Object.prototype.hasOwnProperty.call(SAID, code) ? SAID[code] : 'Could not save. Nothing was changed. Try again.';
       };
@@ -7323,7 +7323,8 @@
         replaceCode.hidden = !codeUrl;
         replaceCode.style.display = replaceCode.hidden ? 'none' : '';
         var team = !!set && set.played_by === 'team';
-        byId('votes-add').hidden = !set || set.final || team;
+        // Once voting has opened, nothing can be added (OBJECTS_FIXED, 2026-11-26).
+        byId('votes-add').hidden = !set || set.final || team || set.opened === true;
         byId('votes-team-note').hidden = !team || set.final;
         byId('votes-empty').hidden = !set || objects.length > 0;
         var kind = byId('vote-kind');
