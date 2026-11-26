@@ -35,6 +35,7 @@ import { VOTING_ON } from '../src/lib/voting-switch';
 import { runVoteFinalJob } from '../src/lib/vote-sets';
 import { resetCrowdFloodMemo } from '../src/lib/vote-crowd';
 import { castVote } from '../src/lib/vote-cast';
+import { linkVenue } from './helpers/link-venue';
 import { pepperEpoch } from '../src/lib/anon-id-hash';
 
 interface TestEnv {
@@ -163,6 +164,8 @@ async function seedEvent(id: string, brand: string) {
     `Access and Online Pick fixture ${id}`,
     id
   );
+  // Voting opens only on an event linked to its venue (VENUE_NEEDED, #1566).
+  await linkVenue(tenv.DB, id);
 }
 
 async function makeSet(eventId: string, labels: string[], playedBy: 'object' | 'team' = 'object') {
