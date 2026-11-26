@@ -406,6 +406,7 @@ describe('one vote set per event', () => {
       opened: false,
       final: false,
       result: null,
+      flood_seen: false,
     });
     const again = await call('POST', vp(A1), A, { played_by: 'team' });
     expect(again.status).toBe(409);
@@ -1178,7 +1179,7 @@ describe('9. no admin answer carries a guarded key', () => {
     // The set answer is exactly these fields, and an object exactly these.
     const list = await call('GET', vp(A1), A);
     expect(Object.keys(list.json.set).sort()).toEqual(
-      ['event_id', 'final', 'id', 'opened', 'played_by', 'result', 'state'].sort()
+      ['event_id', 'final', 'flood_seen', 'id', 'opened', 'played_by', 'result', 'state'].sort()
     );
     expect(Object.keys(list.json.objects[0]).sort()).toEqual(
       [

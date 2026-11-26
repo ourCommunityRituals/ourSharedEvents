@@ -835,7 +835,7 @@ export async function route(
     // Limited per caller (OSE-1496): past the limit the visitor is still sent
     // on and the scan is not counted. Never a 429 on a poster link.
     return publicCountLimited('qr-scan', (req, e: typeof env, countable) =>
-      handleQrScan(req, e, qrToken, countable)
+      handleQrScan(req, e, qrToken, countable, ctx)
     )(request, env);
   }
 

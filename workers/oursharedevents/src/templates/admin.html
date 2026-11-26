@@ -7092,6 +7092,7 @@
         <div>
           <h2 class="card-title">Voting</h2>
           <p class="sub-line" id="votes-summary" data-testid="votes-summary" aria-live="polite"></p>
+          <p class="sub-line" id="votes-flood" data-testid="votes-flood" role="status" hidden>A sudden burst of scans came in on your vote code, more than a full room would make. Results may be padded. If the code was photographed or shared, replace it.</p>
         </div>
         <button type="button" class="btn btn-secondary card-action" id="votes-toggle" data-action="votes-toggle" data-testid="votes-toggle" aria-expanded="false" aria-controls="votes-body">Show</button>
       </div>
@@ -7259,7 +7260,7 @@
         while (list.firstChild) list.removeChild(list.firstChild);
         if (!data) {
           byId('votes-summary').textContent = 'Could not read the vote. Try again in a moment.';
-          ['votes-make', 'votes-set-actions', 'votes-add', 'votes-empty', 'votes-team-note', 'votes-publish-hint', 'votes-code'].forEach(function (x) { byId(x).hidden = true; });
+          ['votes-make', 'votes-set-actions', 'votes-add', 'votes-empty', 'votes-team-note', 'votes-publish-hint', 'votes-code', 'votes-flood'].forEach(function (x) { byId(x).hidden = true; });
           return;
         }
         // OSE-2142: nothing is more live than its event. Not Published, Open and
@@ -7268,6 +7269,8 @@
         var set = data.set || null;
         var objects = Array.isArray(data.objects) ? data.objects : [];
         byId('votes-summary').textContent = window.votesSummary(set);
+        // OSE-2234: a flood of vote passes was seen. A flag, never a count.
+        byId('votes-flood').hidden = !(set && set.flood_seen === true);
         byId('votes-make').hidden = !!set;
         var actions = byId('votes-set-actions');
         actions.hidden = !set || set.final;

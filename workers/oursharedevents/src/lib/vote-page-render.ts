@@ -216,6 +216,13 @@ export const VOTE_PAGE_SCRIPT = `(function () {
   });
 })();`;
 
+/**
+ * The line under a result whose night saw a flood of vote passes (OSE-2234).
+ * Draft words; the owner's wording for the report is still open (ADR-040).
+ */
+export const PADDED_WORDS =
+  'A sudden burst of scans of the vote code came in during this vote, so this result may be padded.';
+
 function renderResult(result: PublicVoteResult | null): string {
   if (!result) return '';
   let body: string;
@@ -230,9 +237,14 @@ function renderResult(result: PublicVoteResult | null): string {
           .map((l) => `<li class="detail-card-main">${esc(l)}</li>`)
           .join('')}</ul>`;
   }
+  // OSE-2234: the host was warned of a flood during the night; the result says so.
+  const padded = result.padded
+    ? `
+        <p class="sub-line" data-testid="vote-result-padded">${esc(PADDED_WORDS)}</p>`
+    : '';
   return `<section class="card vp-gap" aria-labelledby="vote-result-title" data-testid="vote-result" data-outcome="${result.outcome}">
         <h2 class="section-title" id="vote-result-title">The result</h2>
-        ${body}
+        ${body}${padded}
       </section>`;
 }
 

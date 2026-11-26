@@ -137,6 +137,12 @@ export interface VoteSetView {
    * count, a margin, a voter number or which rule decided.
    */
   result: VoteSetResult | null;
+  /**
+   * A flood of vote passes was seen on the event's vote code (OSE-2234,
+   * lib/vote-flood.ts). A flag only, for the host: no count, no time. It stays
+   * true through a reopen and after final.
+   */
+  flood_seen: boolean;
 }
 
 /** A final set's one result (ADR-040 decision 7, Q14). */
@@ -172,6 +178,7 @@ interface SetRow {
   winner_object_id: string | null;
   winner_label: string | null;
   winner_team_id: string | null;
+  flood_seen: number;
 }
 
 interface ObjectRow {
@@ -186,7 +193,7 @@ interface ObjectRow {
 }
 
 const SET_SELECT = `SELECT id, event_id, state, played_by, (pepper_epoch IS NOT NULL) AS opened, is_final,
-       outcome, winner_object_id, winner_team_id,
+       outcome, winner_object_id, winner_team_id, flood_seen,
        (SELECT w.label FROM votable_objects w
          WHERE w.id = vote_sets.winner_object_id AND w.set_id = vote_sets.id) AS winner_label
   FROM vote_sets`;
@@ -216,6 +223,7 @@ function projectSet(row: SetRow): VoteSetView {
     opened: Number(row.opened) === 1,
     final: Number(row.is_final) === 1,
     result: projectResult(row),
+    flood_seen: Number(row.flood_seen) === 1,
   };
 }
 

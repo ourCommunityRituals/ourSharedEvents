@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0114; the entries below do not cover every migration after 0083, see the note at 0104)
+- `DB` — main / anonymous public surface (highest migration: 0122; the entries below do not cover every migration after 0083, see the note at 0104)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -110,6 +110,13 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0122: vote_sets.flood_seen (OSE-2234, OSE ADR-040 decision 6, detection
+-- only): a one-way flag that a flood of vote passes was seen on the event's
+-- vote code. Additive: one column, default 0. No row is written or rewritten.
+-- THE ROLLBACK IS: revert the Worker and LEAVE THE COLUMN. The older Worker
+-- never reads it; a flag already set stays in its row and shows again when
+-- this Worker returns. SQLite cannot drop a column with a CHECK; leave it.
+
 -- 0121: brand_addons (OSE-2232, the paid add-ons the platform has turned on
 -- for a brand; today only 'skins'). Additive: one new table, no index, no
 -- column. THE ROLLBACK IS: revert the Worker and LEAVE THE TABLE. The older

@@ -20,6 +20,8 @@
  *      "Publish the event to open voting."; once the event is Published it opens.
  *   7. OSE-2140: the room's vote code is made from the card, which shows its
  *      `/q` URL (asking for a pass) and its QR, and is replaced from it.
+ *   8. OSE-2234: the flood warning is hidden on a normal night and shows, with
+ *      no number, when the set answer says a flood was seen.
  *
  * Runs in the blocking phone audit (playwright.mobile.config.ts), against the
  * local worker that config starts with a local pepper. The event is made here.
@@ -292,6 +294,39 @@ test.describe('admin: the Voting card', () => {
     expect(text).not.toMatch(/\d+\s*votes?\b/i);
     expect(text).not.toMatch(/\bvotes?\s*:\s*\d/i);
     expect(text).not.toMatch(/fewer than 5|withheld|margin|floor/i);
+    // OSE-2234: a night with no flood shows no flood warning.
+    await expect(page.getByTestId('votes-flood')).toBeHidden();
+  });
+
+  test('the flood warning: shown, with no number, when the set says a flood was seen (OSE-2234)', async ({
+    page,
+  }) => {
+    // The flag cannot be raised from a browser here (it needs a burst of vote
+    // passes), so the set answer is changed on its way to the page: the card
+    // must show what the server says, and only a flag, never a number. A
+    // normal night's card hides it ("the card never shows a count", above).
+    await page.route(`**/api/v2/admin/events/${eventId}/votables`, async (route) => {
+      const res = await route.fetch();
+      const body = (await res.json()) as { set?: Record<string, unknown> };
+      if (body.set) body.set.flood_seen = true;
+      await route.fulfill({ response: res, json: body });
+    });
+    await openCard(page);
+    const warn = page.getByTestId('votes-flood');
+    await expect(warn).toBeVisible();
+    await expect(warn).toContainText('Results may be padded');
+    expect(await warn.innerText()).not.toMatch(/\d/);
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme });
+      const results = await new AxeBuilder({ page })
+        .include('[data-testid="votes-card"]')
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+        .analyze();
+      const found = results.violations
+        .filter((v) => v.impact === 'serious' || v.impact === 'critical')
+        .map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`);
+      expect(found, `${colorScheme}:\n${found.join('\n')}`).toEqual([]);
+    }
   });
 
   test('at 375px the card fits, its controls are 44px, its fields 16px, and axe is clean', async ({

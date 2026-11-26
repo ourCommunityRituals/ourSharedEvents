@@ -2,7 +2,7 @@
 
 Written 2026-10-07 for the first production deploy (launch 2026-10-24).
 
-Covers: main 0078–0121, forms 0015–0018.
+Covers: main 0078–0122, forms 0015–0018.
 
 This is a plan to read, not a script to run. **You do not apply these by hand.** The
 `T1 Deploy → Production` job applies them, in order, before it deploys the Worker.
@@ -11,7 +11,7 @@ This is a plan to read, not a script to run. **You do not apply these by hand.**
 
 | Database                          | Production is at | This build needs | To apply |
 | --------------------------------- | ---------------- | ---------------- | -------- |
-| Main (`ocr-db-production`)        | 77               | 121              | 44       |
+| Main (`ocr-db-production`)        | 77               | 122              | 45       |
 | Forms (`ocr-forms-db-production`) | 14 (see note)    | 18               | 4        |
 
 - The main level was read on 2026-10-01 and again in the two days before this was written.
@@ -128,7 +128,7 @@ its counts were not taken first. They were read on staging the next day (run 436
 events, 60 of them with no place at all, 3 of those on the public list. Its per-status breakdown was
 replaced by one count on 2026-11-15 so the file fits the strict rule.
 
-## Main database, 0078 to 0121
+## Main database, 0078 to 0122
 
 "Rows" answers: does it write or remove rows that already exist?
 
@@ -178,6 +178,7 @@ replaced by one count on 2026-11-15 so the file fits the strict rule.
 | `0119_clear_phone_ids.sql`                                | Deletes every `anon_id_returns` row and clears the phone id and browser hash in `scan_node_returns` (OSE-2214).                   | Yes  |
 | `0120_venues.sql`                                         | Adds `venues`, `venue_operators` and `events.host_venue_id`, so a venue owner sees the activity there (OSE-2221). Writes no row.  | No   |
 | `0121_brand_addons.sql`                                   | Adds `brand_addons`, the paid add-ons the platform has turned on for a brand (OSE-2232: skins). Writes no row.                    | No   |
+| `0122_vote_flood_seen.sql`                                | Adds `vote_sets.flood_seen`, a one-way flag that a flood of vote passes was seen (OSE-2234). Default 0. Writes no row.            | No   |
 
 ## Forms database, 0015 to 0018
 
@@ -421,7 +422,7 @@ The deploy job does the first three itself and goes red if any fails.
 
    Both say `No migrations to apply`.
 
-2. **The level.** Expected: `0121_brand_addons.sql` and `121`;
+2. **The level.** Expected: `0122_vote_flood_seen.sql` and `122`;
    then `0018_registration_email_encrypted.sql` and `18`.
 
    ```bash
