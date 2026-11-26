@@ -53,7 +53,6 @@ Every story is implemented from all six POVs simultaneously. CC reads all six an
 - 2026-11-23: Icon category slider on the landing, `/map` and Create Sponsor (OSE-2207; PR #1518, merged 2026-11-23 16:48 UTC as `b0b8938`; staging chain T1–T4 green on `4bd8ba1`, a later `main` SHA that contains it, run 45220685354)
 - 2026-11-20: The zoomed map measures to each place, and the position is read only on a tap (OSE-2198; PR #1491, merged 2026-11-20 03:55 UTC as `86b1a6d1`; staging chain T1–T4 green on the later `main` SHA `ac0d7a4` (#1505), which…
 - 2026-11-18: The admin Voting card (OSE-2127; PR #1432, merged by the owner 2026-11-18 13:47 UTC as `697f498`; staging chain T1–T4 green on that SHA, run 44317363830)
-- 2026-11-18: The Voting card: publish hint and the room's vote code (part of OSE-2140 and OSE-2142; PR #1460, merged 2026-11-18 21:35 UTC as `68e1980b`; the staging chain for that SHA, run 44403047974, had not run when this line w…
 
 ### Sr Design FE
 
