@@ -1,0 +1,33 @@
+info:
+  name: OSE-2234 | open | an event with no venue does not open
+  type: http
+  seq: 55
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteNightId}}/votables/open"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"room_size\": 200}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2234 open: 409 VENUE_NEEDED, link the event to its venue first', function () { expect(res.getStatus()).to.eql(409); expect(b.code).to.eql('VENUE_NEEDED'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

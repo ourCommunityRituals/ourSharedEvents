@@ -1,0 +1,33 @@
+info:
+  name: OSE-2234 | open | a venue the platform has not set up does not open
+  type: http
+  seq: 57
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteNightId}}/votables/open"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"room_size\": 200}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2234 open: 409 VENUE_NOT_SET_UP, the platform sets each venue first', function () { expect(res.getStatus()).to.eql(409); expect(b.code).to.eql('VENUE_NOT_SET_UP'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

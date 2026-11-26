@@ -180,7 +180,7 @@ What this means: the margin T stops a handful of extra votes from a tie, and not
 ## 7. Gaps in this review
 
 - Staging was not exercised. Voting is on in staging (#1552) and off in production; nothing in this branch changes either. Every result here is from the container's test rig, so none counts as Done until the staging chain runs after merge (AGENTS.md).
-- Bruno folder 32 covers the new routes in both switch positions (26 requests). It was run green on a local worker, not yet on staging.
+- Bruno folder 32 covers the new routes in both switch positions (30 requests; the platform sets the venue up first, as #1566 requires). It was run green on a local worker, not yet on staging.
 - The edge rate limits and WAF were not read.
 - The host's admin card for giving and revoking passes and for the Online Pick switch is not built; the API is.
 - Webkit was not run locally (only Chromium is installed here); CI runs the component step.

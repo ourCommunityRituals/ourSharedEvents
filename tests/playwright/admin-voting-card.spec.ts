@@ -81,6 +81,13 @@ test.describe('admin: the Voting card', () => {
     });
     expect(venue.status(), await venue.text()).toBe(201);
     const venueId = ((await venue.json()) as { id: string }).id;
+    // The platform sets each venue up first (owner card 2026-11-26,
+    // VENUE_NOT_SET_UP): outdoors with no permit limit, so 500 is the ceiling.
+    const setUp = await request.put(`/api/v2/admin/venues/${venueId}/room-ceiling`, {
+      headers: { ...AUTH, 'Content-Type': 'application/json' },
+      data: { room_kind: 'outdoor', room_cap: null },
+    });
+    expect(setUp.status(), await setUp.text()).toBe(200);
     const linked = await request.put(`/api/v2/admin/events/${id}/venue`, {
       headers: { ...AUTH, 'Content-Type': 'application/json' },
       data: { venue_id: venueId },

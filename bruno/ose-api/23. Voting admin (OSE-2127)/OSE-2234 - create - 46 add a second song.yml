@@ -1,11 +1,11 @@
 info:
-  name: OSE-2127 | setup | the night is held at its venue
+  name: OSE-2234 | create | add a second song
   type: http
-  seq: 13
+  seq: 46
 
 http:
-  method: PUT
-  url: "{{baseUrl}}/api/v2/admin/events/{{voteNightId}}/venue"
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteNightId}}/votables/objects"
   headers:
     - name: CF-Access-Client-Id
       value: "{{cfAccessClientId}}"
@@ -15,7 +15,7 @@ http:
       value: "application/json"
   body:
     type: json
-    data: "{\"venue_id\": \"{{voteNightVenueId}}\"}"
+    data: "{\"kind\": \"song\", \"label\": \"Song two\"}"
   auth: inherit
 
 runtime:
@@ -23,7 +23,8 @@ runtime:
     - type: after-response
       code: |-
         const b = res.getBody() || {};
-        test('OSE-2127 setup: the night is linked to its venue, so voting can open', function () { expect(res.getStatus()).to.eql(200); expect(b.venue_id).to.eql(bru.getVar('voteNightVenueId')); });
+        test('OSE-2234 create: 201, the second song is in draft', function () { expect(res.getStatus()).to.eql(201); expect(b.object.state).to.eql('draft'); });
+        bru.setVar('voteSongTwoId', (b.object && b.object.id) || 'missing-song');
 
 settings:
   encodeUrl: true

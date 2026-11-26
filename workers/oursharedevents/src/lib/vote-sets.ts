@@ -67,7 +67,7 @@
  */
 
 import { pepperEpoch } from './anon-id-hash';
-import { EVENT_LIVE, EVENT_ON_ITS_DATES, EVENT_PUBLISHED, eventIsLive } from './event-live';
+import { EVENT_LIVE, EVENT_ON_ITS_DATES, eventIsLive } from './event-live';
 import { eventLiveSql } from '../domain/event-state';
 import { hourStamp } from './scan-buffer';
 import { isVotableKind, isVoteTeamId, parseVotableLabel, type VotableKind } from './votes';
@@ -511,9 +511,22 @@ const ROOM_CEILING_SQL = `COALESCE((SELECT v.room_cap FROM events e JOIN venues 
  * building's fire-marshal capacity, or for an open field or park (an outdoor
  * venue) its permit's limit, else ROOM_CEILING_DEFAULT. A host cannot dodge a
  * venue's limit by leaving the event unlinked. One `?`: the event id.
+ *
+ * And the venue must be one the platform has set up, indoor or outdoor
+ * (`room_kind` not null; owner card 2026-11-26, "Yes, platform sets each venue
+ * first"): a venue a host makes starts with neither, so a host cannot make a
+ * look-alike of a capped venue and link the event there to get 500 (CCR loop
+ * 6, F2). Outdoors with no permit limit the platform sets room_kind and leaves
+ * room_cap null, and 500 applies.
  */
 const VENUE_LINKED_SQL = `EXISTS (SELECT 1 FROM events e JOIN venues v ON v.id = e.host_venue_id
-                                  WHERE e.id = ?)`;
+                                  WHERE e.id = ? AND v.room_kind IS NOT NULL)`;
+
+const VENUE_NOT_SET_UP = fail(
+  409,
+  'VENUE_NOT_SET_UP',
+  'The platform has not set this venue up for voting yet (indoor or outdoor, and its limit); ask the platform to'
+);
 
 const VENUE_NEEDED = fail(
   409,
@@ -527,6 +540,15 @@ async function venueLinked(db: D1Database, eventId: string): Promise<boolean> {
     .bind(eventId)
     .first<{ linked: number }>();
   return row?.linked === 1;
+}
+
+/** Why the event's venue does not let voting open: none linked, or not set up by the platform. */
+async function venueRefusal(db: D1Database, eventId: string): Promise<VoteFail> {
+  const row = await db
+    .prepare(`SELECT v.id FROM events e JOIN venues v ON v.id = e.host_venue_id WHERE e.id = ?`)
+    .bind(eventId)
+    .first<{ id: string }>();
+  return row ? VENUE_NOT_SET_UP : VENUE_NEEDED;
 }
 
 /** The ceiling for an event's room size, read for the refusal's words. */
@@ -613,7 +635,7 @@ export async function openVoteSet(
     // An event that is not live says so first, as it did before this rule.
     const event = await eventRefusal(db, eventId);
     if (event) return event;
-    return VENUE_NEEDED;
+    return venueRefusal(db, eventId);
   }
   const ceiling = await roomCeiling(db, eventId);
   if (room.value > ceiling) {
@@ -675,7 +697,7 @@ export async function openVoteSet(
       !set.opened &&
       !(await venueLinked(db, eventId))
     )
-      return VENUE_NEEDED;
+      return venueRefusal(db, eventId);
     return whySetRefused(db, eventId, ['draft']);
   }
   const set = await readVoteSet(db, eventId);
@@ -761,6 +783,13 @@ export async function reopenVoteSet(
  * never opens one. Batched by handlers/events.ts (PUT status) and
  * handlers/qr-verify.ts (the verify undo); the T0 gate votes-never-who rule 11
  * holds that every status writer does.
+ *
+ * CCR loop 6 (F1): it closes the set unless the event is LIVE, Published and
+ * on its dates, and the admin edit batches it with every PUT, a date-only edit
+ * included. Otherwise a host could move the end date into the past to pause one
+ * entry's running window, then move it back: a pause button the owner ruled out
+ * ("No: windows run their full length", 2026-11-26). Closed, the set does not
+ * reopen once a window has run (WINDOWS_STARTED).
  */
 export function closeVoteSetUnlessPublished(db: D1Database, eventId: string): D1PreparedStatement {
   return db
@@ -768,7 +797,7 @@ export function closeVoteSetUnlessPublished(db: D1Database, eventId: string): D1
       `UPDATE vote_sets
           SET state = 'closed', updated_at = strftime('%Y-%m-%d %H:00:00', 'now')
         WHERE event_id = ? AND state = 'open' AND is_final = 0
-          AND NOT ${EVENT_PUBLISHED}`
+          AND NOT ${EVENT_LIVE}`
     )
     .bind(eventId, eventId);
 }

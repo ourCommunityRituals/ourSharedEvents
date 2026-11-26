@@ -595,6 +595,34 @@ describe('OSE-2142 | a vote set follows its event status', () => {
     expect(passOf(await scan(code.token))).toBeNull();
   });
 
+  test('SECURITY | a date moved into the past is no pause button: the set closes and stays closed (CCR loop 6, F1)', async () => {
+    await openNight();
+    const code = await makeCode();
+    expect(await setState(NIGHT)).toBe('open');
+    // A field-only edit that keeps the event on its dates leaves voting alone.
+    expect(
+      (await call('PUT', `/api/v2/admin/events/${NIGHT}`, { title: 'Song night, renamed' })).status
+    ).toBe(200);
+    expect(await setState(NIGHT)).toBe('open');
+    // The end date moved into the past, mid-window: the set closes in the same batch.
+    const past = await call('PUT', `/api/v2/admin/events/${NIGHT}`, {
+      start_date: '2000-01-01',
+      end_date: '2000-01-01',
+    });
+    expect(past.status, JSON.stringify(past.json)).toBe(200);
+    expect(await setState(NIGHT)).toBe('closed');
+    // Moved back, it stays closed, and a window has run, so it cannot reopen.
+    const back = await call('PUT', `/api/v2/admin/events/${NIGHT}`, {
+      start_date: '2099-06-01',
+      end_date: '2099-06-01',
+    });
+    expect(back.status, JSON.stringify(back.json)).toBe(200);
+    expect(await setState(NIGHT)).toBe('closed');
+    expect(passOf(await scan(code.token))).toBeNull();
+    const re = await call('POST', vp(NIGHT, '/reopen'), {});
+    expect(re.json.code).toBe('WINDOWS_STARTED');
+  });
+
   test('OSE-2142 | SECURITY | the QR verify undo (active to ready) closes the set in the same batch', async () => {
     await openNight();
     const undo = await call('POST', `/api/v2/admin/events/${NIGHT}/unverify-qr`, {});

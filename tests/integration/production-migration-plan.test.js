@@ -180,3 +180,16 @@ describe('the deployment runbook points at the preflight and the plan, once', ()
     expect(runbook).toContain('did not settle in two minutes');
   });
 });
+
+describe('the rollback plan keeps up with the newest main migration (CCR OSE-2234 loop 6)', () => {
+  test('it names the newest migration as the highest, and has an entry for it', () => {
+    const newest = readdirSync(join(WORKER, 'migrations'))
+      .filter((f) => /^\d{4}_.*\.sql$/.test(f))
+      .sort()
+      .pop()
+      .slice(0, 4);
+    const rollback = read('workers/oursharedevents/migrations/ROLLBACK_PLAN.md');
+    expect(rollback).toContain(`(highest migration: ${newest};`);
+    expect(rollback).toMatch(new RegExp(`^-- ${newest}: `, 'm'));
+  });
+});

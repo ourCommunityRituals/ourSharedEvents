@@ -411,6 +411,18 @@ const normalize = (sql: string, sqlComments = true) =>
     .trim();
 
 /** Why a statement could reopen, revive or restamp a vote set. Empty when it cannot. */
+/** The text of a WHERE clause outside every parenthesis: its top level. */
+function topLevelOf(where: string): string {
+  let depth = 0;
+  let out = '';
+  for (const ch of where) {
+    if (ch === '(') depth++;
+    else if (ch === ')') depth = Math.max(0, depth - 1);
+    else if (depth === 0) out += ch;
+  }
+  return out;
+}
+
 function flagProblems(raw: string, sqlComments = true): string[] {
   const out: string[] = [];
   for (const sql of normalize(raw, sqlComments)
@@ -494,7 +506,12 @@ function flagProblems(raw: string, sqlComments = true): string[] {
           out.push(`sets an object's window in a tuple: ${part}`);
         const opens = /^state\s*=/i.test(part) && !/^state\s*=\s*'closed'$/i.test(part);
         const arms = /^closes_at\s*=/i.test(part) && !/^closes_at\s*=\s*NULL$/i.test(part);
-        if ((opens || arms) && !/\bstate\s*=\s*'draft'/i.test(where))
+        // The draft guard must hold for the whole statement: at the top level
+        // of the WHERE, with no top-level OR beside it (CCR loop 6, F3), so
+        // "(state = 'closed' OR state = 'draft')" or a subquery's draft does
+        // not count.
+        const top = topLevelOf(where);
+        if ((opens || arms) && (!/\bstate\s*=\s*'draft'/i.test(top) || /\bOR\b/i.test(top)))
           out.push(
             `opens or re-arms an object's window without a "state = 'draft'" guard: ${part}`
           );
@@ -1115,6 +1132,9 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
       'UPDATE votable_objects SET state = ? WHERE id = ? AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)',
       "UPDATE votable_objects SET window_seconds = ? WHERE id = ? AND state = 'draft' AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)",
       "UPDATE votable_objects SET (state, closes_at) = ('open', ?) WHERE id = ? AND state = 'draft' AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)",
+      "UPDATE votable_objects SET state = 'open', closes_at = ? WHERE id = ? AND (state = 'closed' OR state = 'draft') AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)",
+      "UPDATE votable_objects SET state = 'open', closes_at = ? WHERE id = ? AND state = 'closed' OR state = 'draft' AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)",
+      "UPDATE votable_objects SET closes_at = ? WHERE id = ? AND set_id IN (SELECT o.set_id FROM votable_objects o WHERE o.state = 'draft' AND o.set_id IN (SELECT id FROM vote_sets WHERE is_final = 0))",
     ];
     expect(reopen.filter((sql) => flagProblems(sql).length === 0)).toEqual([]);
     // A shell line: its --command flag is not a SQL comment.
