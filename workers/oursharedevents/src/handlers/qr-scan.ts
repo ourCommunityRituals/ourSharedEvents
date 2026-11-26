@@ -396,10 +396,16 @@ export async function handleCrowdEntry(
     console.warn(JSON.stringify({ type: 'CROWD_PASS_SKIPPED', error: errorLabel(err) }));
   }
   if (!may) return home(eventPage);
-  const { anonId, isNew, cookieValue } = await getOrCreateAnonId(request, env.ANON_ID_HASH_PEPPER);
-  const pass = await mintCrowdPass(env.ANON_ID_HASH_PEPPER, anonId, eventId, nowMs);
+  const {
+    anonId,
+    isNew,
+    cookieValue: newCookie,
+  } = await getOrCreateAnonId(request, env.ANON_ID_HASH_PEPPER);
+  const crowdPass = await mintCrowdPass(env.ANON_ID_HASH_PEPPER, anonId, eventId, nowMs);
   const res = home(
-    pass ? `${url.origin}/events/${encodeURIComponent(eventId)}/online-pick#t=${pass}` : eventPage
+    crowdPass
+      ? `${url.origin}/events/${encodeURIComponent(eventId)}/online-pick#t=${crowdPass}`
+      : eventPage
   );
-  return isNew ? setAnonCookie(res, cookieValue) : res;
+  return isNew ? setAnonCookie(res, newCookie) : res;
 }

@@ -37,6 +37,7 @@
  * room's result reads room tables only (lib/vote-results.ts).
  */
 
+import { hourStamp } from './scan-buffer';
 import { pepperEpoch } from './anon-id-hash';
 import { EVENT_LIVE } from './event-live';
 import { voteCrowdParticipantMarker, voteCrowdReceipt } from './votes';
@@ -103,7 +104,6 @@ export async function setOnlinePick(
   if (!set) return NO_SET;
   if (set.is_final === 1 || set.is_void === 1) return SET_DONE;
   if (set.played_by === 'team') return TEAM_NIGHT;
-  const hour = `${nowIso.slice(0, 13).replace('T', ' ')}:00:00`;
   if (on) {
     const epoch = await pepperEpoch(pepper);
     if (!epoch)
@@ -120,7 +120,7 @@ export async function setOnlinePick(
           epoch,
           drawUniform(...SECRET_MARGIN_RANGE),
           drawUniform(...SECRET_FLOOR_RANGE),
-          hour,
+          hourStamp(nowIso),
           set.id,
           eventId
         ),
@@ -129,7 +129,7 @@ export async function setOnlinePick(
           `UPDATE vote_crowd_sets SET is_on = 1, updated_at = ?
             WHERE set_id = ? AND event_id = ? AND is_final = 0`
         )
-        .bind(hour, set.id, eventId),
+        .bind(hourStamp(nowIso), set.id, eventId),
     ]);
   } else {
     await db
@@ -137,7 +137,7 @@ export async function setOnlinePick(
         `UPDATE vote_crowd_sets SET is_on = 0, updated_at = ?
           WHERE set_id = ? AND event_id = ? AND is_final = 0`
       )
-      .bind(hour, set.id, eventId)
+      .bind(hourStamp(nowIso), set.id, eventId)
       .run();
   }
   return { ok: true, value: await readOnlinePick(db, eventId) };

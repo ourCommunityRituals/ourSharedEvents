@@ -1,5 +1,7 @@
 # CCR v3.0 security sweep: voting red team and blue team (2026-11-26)
 
+**Method note:** this is a ccr-security-sweep report (STRIDE and LINDDUN, six seats played by one reviewer). It is not a repo CCR worksheet: no role agents ran, so it does not go in `.claude/outputs/` and is not a gate result. A repo CCR (`.claude/skills/ccr/SKILL.md`, with `dr-of-security`) is the recommended next step before merge.
+
 **Mode:** 3-loop sweep (Surface, Pressure, Verification against code). **Profile:** github-cloudflare plus ocr-ose. **Target:** OSE voting: the Room Pick, the Access Pass and the Online Pick (ADR-040 decisions 5 to 13), branch `claude/project-thread-9tnu7q`. **Scope note:** not comparable with run 1 (2026-11-25, whole hub); this run is one feature, deeper.
 
 ## Verdict: Held, 86%
