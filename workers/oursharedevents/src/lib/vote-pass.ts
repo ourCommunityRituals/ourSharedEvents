@@ -287,6 +287,14 @@ export async function issueVotePass(
   return mintVotePass(env.ANON_ID_HASH_PEPPER, cookie, eventId, nowMs);
 }
 
+/**
+ * Where a vote code with a stale stamp lands (CCR F7): the voter page with no
+ * pass, which says "Scan the code on the screen again." (SCAN_AGAIN_WORDS).
+ */
+export function staleVotePageTarget(origin: string, eventId: string): string {
+  return `${origin}/events/${encodeURIComponent(eventId)}/vote`;
+}
+
 /** Where a vote code lands with a pass: the voter page, the pass in the fragment only. */
 export function votePageTarget(origin: string, eventId: string, pass: string): string {
   return `${origin}/events/${encodeURIComponent(eventId)}/vote#t=${pass}`;

@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0114; the entries below do not cover every migration after 0083, see the note at 0104)
+- `DB` — main / anonymous public surface (highest migration: 0122; the entries below do not cover every migration after 0083, see the note at 0104)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -110,6 +110,22 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0122: vote integrity (OSE-2234, OSE ADR-040 decision 6, amended
+-- 2026-11-26): vote_sets.flood_seen, a one-way flag set by the room check at
+-- final (public: the result may be padded), vote_sets.burst_seen, a one-way
+-- flag set by the per-minute alarm (the host's only), and vote_sets.room_size,
+-- the room size the host gave at the first open; and on venues, room_kind and
+-- room_cap, the room-size ceiling only a platform admin sets. No trigger (0025):
+-- the T0 gate votes-never-who keeps the flags one-way and the room size fixed.
+-- Additive: five columns (defaults 0, null, 0, null, null). No row is written
+-- or rewritten.
+-- THE ROLLBACK IS: revert the Worker and LEAVE THE COLUMNS. The older Worker
+-- never reads or writes any of these columns; a flag, room size or ceiling
+-- already set stays in its row and shows again when this Worker returns. Note:
+-- the older Worker opens a set with no room size (null) and no ceiling, and
+-- such a set is not room-checked at final. SQLite cannot drop a column with a
+-- CHECK; leave them.
+
 -- 0121: brand_addons (OSE-2232, the paid add-ons the platform has turned on
 -- for a brand; today only 'skins'). Additive: one new table, no index, no
 -- column. THE ROLLBACK IS: revert the Worker and LEAVE THE TABLE. The older

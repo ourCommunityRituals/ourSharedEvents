@@ -50,6 +50,7 @@ import {
   VOTE_TEAM_CONTEXT,
 } from '../src/lib/votes';
 import { closeVoteSet, createVoteSet, openVoteSet } from '../src/lib/vote-sets';
+import { voteCodeStamp } from '../src/lib/vote-code-window';
 
 interface TestEnv {
   DB: D1Database;
@@ -129,7 +130,8 @@ beforeAll(async () => {
   for (const id of [OPEN, OPEN_2, NOSET, DRAFT, CLOSED]) await seedEvent(id);
   for (const id of [OPEN, OPEN_2, DRAFT, CLOSED])
     await mustOk(createVoteSet(tenv.DB, id, 'object'));
-  for (const id of [OPEN, OPEN_2, CLOSED]) await mustOk(openVoteSet(tenv.DB, id, PEPPER, nowIso()));
+  for (const id of [OPEN, OPEN_2, CLOSED])
+    await mustOk(openVoteSet(tenv.DB, id, PEPPER, nowIso(), 200));
   await mustOk(closeVoteSet(tenv.DB, CLOSED, nowIso()));
 });
 
@@ -153,7 +155,10 @@ async function scanRequest(
   opts: { type?: string | null; cookie?: string } = {}
 ): Promise<Request> {
   const type = opts.type === undefined ? 'vote' : opts.type;
-  const url = `${ORIGIN}/q/${TOKEN[eventId]}${type === null ? '' : `?type=${type}`}`;
+  // The rotating code: a vote scan carries this minute's stamp, as the room screen shows it.
+  const stamp =
+    type === 'vote' ? `&w=${await voteCodeStamp(PEPPER, TOKEN[eventId], Date.now())}` : '';
+  const url = `${ORIGIN}/q/${TOKEN[eventId]}${type === null ? '' : `?type=${type}${stamp}`}`;
   const headers: Record<string, string> = { 'User-Agent': 'vote-pass-test' };
   if (opts.cookie !== undefined) {
     const pepper = (env as unknown as { ANON_ID_HASH_PEPPER: string }).ANON_ID_HASH_PEPPER;

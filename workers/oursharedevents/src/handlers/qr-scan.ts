@@ -34,6 +34,9 @@
  * still the only place the cookie is read on the vote path (invariant 4). The
  * vote code alone keeps the cookie and a one-hour keyed marker (ADR-040), so a
  * repeat scan keeps its pass; its scans are never a published count.
+ * Each pass minted counts toward the event's flood alarm (OSE-2234,
+ * lib/vote-flood.ts): past a full room's minute the vote set is flagged, and
+ * nothing is blocked.
  * NO LOG LINE names the redirect's Location, the pass or the voter key
  * (tests/e2e/0-architecture/votes-never-who.invariant.spec.ts).
  *
@@ -48,8 +51,15 @@ import { getOrCreateAnonId, setAnonCookie, type AnonCookieValue } from '../lib/a
 import { scanHourOf, takePosterHourPlace } from '../lib/poster-hour-cap';
 import { enqueueOrWriteScan, scanDedupKey, type ScanMessage } from '../lib/scan-buffer';
 import { scanNodeKey } from '../lib/scan-node-key';
-import { issueVotePass, votePageTarget, VOTE_CODE_TYPE } from '../lib/vote-pass';
-import type { VotingSwitchEnv } from '../lib/voting-switch';
+import {
+  issueVotePass,
+  staleVotePageTarget,
+  votePageTarget,
+  VOTE_CODE_TYPE,
+} from '../lib/vote-pass';
+import { votingEnabled, type VotingSwitchEnv } from '../lib/voting-switch';
+import { noteVotePassMinted, type VoteFloodLimiter } from '../lib/vote-flood';
+import { voteCodeStampOk } from '../lib/vote-code-window';
 
 import { errorLabel } from '../lib/error-label';
 // One warning per isolate, not one per scan: the missing secret is a config
@@ -75,6 +85,9 @@ export interface QrScanEnv extends VotingSwitchEnv {
   // Optional scan write-buffer. Bound → the hot path enqueues and returns;
   // unbound → the direct D1 batch (dark-launch parity). See lib/scan-buffer.ts.
   SCAN_QUEUE?: Queue<ScanMessage>;
+  // OSE-2234: counts minted vote passes per event per minute, to flag a flood
+  // (lib/vote-flood.ts). Detection only; unbound → nothing is flagged.
+  VOTE_FLOOD_LIMITER?: VoteFloodLimiter;
   // OSE-2133: the voting switch comes from VotingSwitchEnv (lib/voting-switch.ts,
   // S3c). Only votingEnabled reads it; on, a vote code may mint a pass.
 }
@@ -108,7 +121,10 @@ export async function handleQrScan(
   request: Request,
   env: QrScanEnv,
   qrToken: string,
-  countable: boolean = true
+  countable: boolean = true,
+  // OSE-2234: with a context, flood detection runs after the answer is sent
+  // (waitUntil), so it can never slow a vote redirect.
+  ctx?: Pick<ExecutionContext, 'waitUntil'>
 ): Promise<Response> {
   if (!env.DB) {
     // Infrastructure not ready — redirect to homepage rather than stranding the attendee.
@@ -183,6 +199,30 @@ export async function handleQrScan(
   const bucket = scanBucket(nowDate);
   const url = new URL(request.url);
   const isVoteCode = deployment.is_vote_code === 1;
+
+  // CCR F7 and F12 (OSE-2234): with voting on, a vote scan whose stamp is not
+  // this minute's or the last (a photo, a shared link, an old tab) counts
+  // nothing and sets nothing: no row, no hour marker, no cookie. The voter
+  // lands on the vote page with no pass, which says to scan the code on the
+  // screen again, so an honest voter is told rather than dropped silently.
+  // With no pepper no stamp can be checked and no pass can exist, so that
+  // scan keeps today's answer (the event page) rather than "scan again".
+  if (
+    isVoteCode &&
+    votingEnabled(env) &&
+    !!env.ANON_ID_HASH_PEPPER &&
+    url.searchParams.get('type') === VOTE_CODE_TYPE &&
+    !(await voteCodeStampOk(env.ANON_ID_HASH_PEPPER, qrToken, url.searchParams.get('w'), nowMs))
+  ) {
+    console.log(JSON.stringify({ type: 'SCAN_NOT_COUNTED', reason: 'vote_code_changed' }));
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: staleVotePageTarget(url.origin, eventId),
+        'Cache-Control': 'no-store',
+      },
+    });
+  }
 
   // OSE-2214 (owner, 2026-11-23; ADR-024 option C for scans): OSE counts the
   // traffic on the code, never the phone. A poster code neither reads nor sets
@@ -303,14 +343,34 @@ export async function handleQrScan(
   // OSE-2133: a vote code whose scan stands may carry a pass, in the fragment
   // only. A failure here (a D1 blip reading the set) mints none and the
   // visitor keeps today's redirect; the line names the failure, nothing else.
-  if (voterId && scanStored && url.searchParams.get('type') === VOTE_CODE_TYPE) {
+  // The rotating code (lib/vote-code-window.ts): a pass needs this minute's
+  // stamp, or the last minute's, from the room screen. A stale or missing
+  // stamp was answered above with no row; the check is kept here too so a pass
+  // can never be minted without it.
+  if (
+    voterId &&
+    scanStored &&
+    url.searchParams.get('type') === VOTE_CODE_TYPE &&
+    (await voteCodeStampOk(env.ANON_ID_HASH_PEPPER, qrToken, url.searchParams.get('w'), nowMs))
+  ) {
     let pass: string | null = null;
     try {
       pass = await issueVotePass(env, voterId, eventId, deploymentId, nowMs);
     } catch (err) {
       console.warn(JSON.stringify({ type: 'VOTE_PASS_SKIPPED', error: errorLabel(err) }));
     }
-    if (pass) redirectTarget = votePageTarget(url.origin, eventId, pass);
+    if (pass) {
+      redirectTarget = votePageTarget(url.origin, eventId, pass);
+      // OSE-2234: count the pass toward the event's flood alarm. Detection
+      // only: it never throws and never changes this answer. With a context it
+      // runs after the answer, so a slow binding or D1 never delays the vote.
+      const noted = noteVotePassMinted(env, eventId).then((wrote) => {
+        // The one flood line: the event id and nothing else (OSE-2234).
+        if (wrote) console.warn(JSON.stringify({ type: 'VOTE_FLOOD_SEEN', event_id: eventId }));
+      });
+      if (ctx) ctx.waitUntil(noted);
+      else await noted;
+    }
   }
 
   const redirectResponse = new Response(null, {

@@ -216,6 +216,20 @@ export const VOTE_PAGE_SCRIPT = `(function () {
   });
 })();`;
 
+/**
+ * The line under a result whose room check found more voters than the room
+ * size the host gave (OSE-2234). Only the room check sets it; a burst of scans
+ * warns the host only (owner, decision card 2026-11-26, "Room check only,
+ * show room size"). It says nothing about how many voted.
+ */
+export const PADDED_WORDS =
+  'More voters took part than the room holds, so this result may be padded.';
+
+/** The room size the host gave at open, shown with the final result (same decision). */
+export function roomSizeWords(size: number): string {
+  return `Room size the host gave when voting opened: ${size}.`;
+}
+
 function renderResult(result: PublicVoteResult | null): string {
   if (!result) return '';
   let body: string;
@@ -230,9 +244,20 @@ function renderResult(result: PublicVoteResult | null): string {
           .map((l) => `<li class="detail-card-main">${esc(l)}</li>`)
           .join('')}</ul>`;
   }
+  // OSE-2234: the room check found more voters than the room holds.
+  const padded = result.padded
+    ? `
+        <p class="sub-line" data-testid="vote-result-padded">${esc(PADDED_WORDS)}</p>`
+    : '';
+  // The host's room size, so the room can see the number the check used.
+  const room =
+    result.room_size != null
+      ? `
+        <p class="sub-line" data-testid="vote-result-room">${esc(roomSizeWords(result.room_size))}</p>`
+      : '';
   return `<section class="card vp-gap" aria-labelledby="vote-result-title" data-testid="vote-result" data-outcome="${result.outcome}">
         <h2 class="section-title" id="vote-result-title">The result</h2>
-        ${body}
+        ${body}${room}${padded}
       </section>`;
 }
 

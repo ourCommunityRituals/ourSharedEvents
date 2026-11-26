@@ -27,7 +27,7 @@ runtime:
         const b = res.getBody() || {};
         var code = b.code || {};
         var url = String(code.url || '');
-        var m = /\/q\/(qrt_[0-9a-f]{32})\?type=vote$/.exec(url);
+        var m = /\/q\/(qrt_[0-9a-f]{32})\?type=vote&w=(\d+\.[0-9a-f]{32})$/.exec(url);
         var shaped = !!m;
         var hasQr = String(code.qr || '').indexOf('data:image/') === 0;
         bru.setVar('voteCodeToken', m ? m[1] : 'qrt_missing');

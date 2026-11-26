@@ -117,7 +117,7 @@
  *   POST   /api/v2/admin/events/:id/votables → make the event's one vote set, played by objects or teams (auth, audited)
  *   POST   /api/v2/admin/events/:id/votables/code → make the room's vote code, or return the one in use; its token is in no public answer (auth, audited, OSE-2140)
  *   POST   /api/v2/admin/events/:id/votables/code/replace → retire the vote code and make a new token, in one batch (auth, audited, OSE-2140)
- *   POST   /api/v2/admin/events/:id/votables/open|reopen|close → open (stamps the epoch, draws T and V once), reopen, close the set; refused when final; open and reopen need the event Published (auth, audited, OSE-2142)
+ *   POST   /api/v2/admin/events/:id/votables/open|reopen|close → open { room_size } (stamps the epoch, draws T and V once, fixes the room size), reopen, close the set; refused when final; open and reopen need the event Published (auth, audited, OSE-2142)
  *   POST   /api/v2/admin/events/:id/votables/finalize → compute the night's result and make a closed set final, for good; the answer's set.result is the outcome and the winner only (auth, audited, OSE-2130)
  *   POST   /api/v2/admin/events/:id/votables/objects → add a song or stall to the set (auth, audited)
  *   PUT    /api/v2/admin/events/:id/votables/objects/:oid → change an object of this event (auth, audited)
@@ -234,6 +234,7 @@
  *   DELETE /api/v2/admin/venues/:id/operators/:brand    → take a brand off the venue's list; its events stop counting (owner only, audited)
  *   GET    /api/v2/admin/venues/:id/rollup              → floored scans, taps and sponsors at the venue, per operator and in total (owner only)
  *   PUT    /api/v2/admin/events/:id/venue               → hold the event at a venue that lists its brand, or clear it (auth, audited)
+ *   PUT    /api/v2/admin/venues/:id/room-ceiling        → the voting room-size ceiling: indoor fire-marshal capacity or outdoor permit limit (platform admins only, audited; OSE-2234)
  *
  *   Admin Audit Log (auth required — OSE-212):
  *   GET    /api/v2/admin/audit-log          → paginated audit entries
@@ -351,6 +352,7 @@ import {
   handlePutVenueOperator,
   handleSetEventVenue,
   handleVenueRollup,
+  handlePutVenueRoomCeiling,
 } from './handlers/venues';
 import { handleAdminEventLivePage } from './handlers/live-monitor';
 import { handleAdminVoteScreenPage } from './handlers/vote-screen';
@@ -707,7 +709,8 @@ export async function route(
     outcome: 'success' | 'denied',
     resourceType?: string,
     resourceId?: string,
-    brandId?: string | null
+    brandId?: string | null,
+    details?: Record<string, unknown>
   ): void {
     ctx.waitUntil(
       logAdminAction(env, {
@@ -719,6 +722,7 @@ export async function route(
         outcome,
         ip: _ip,
         brand_id: brandId ?? null,
+        ...(details ? { details } : {}),
       })
     );
   }
@@ -835,7 +839,7 @@ export async function route(
     // Limited per caller (OSE-1496): past the limit the visitor is still sent
     // on and the scan is not counted. Never a 429 on a poster link.
     return publicCountLimited('qr-scan', (req, e: typeof env, countable) =>
-      handleQrScan(req, e, qrToken, countable)
+      handleQrScan(req, e, qrToken, countable, ctx)
     )(request, env);
   }
 
@@ -1286,7 +1290,20 @@ export async function route(
           .catch(() => null)) as { id?: unknown } | null;
         if (typeof body?.id === 'string') id = body.id;
       }
-      _audit(reqId, action, outcome, 'venue', id);
+      // A room-limit change keeps its old and new values (OSE-2234, CCR loop 4).
+      let details: Record<string, unknown> | undefined;
+      if (action === 'SET_VENUE_ROOM_CEILING' && outcome === 'success') {
+        const b = (await res
+          .clone()
+          .json()
+          .catch(() => null)) as {
+          room_kind?: unknown;
+          room_cap?: unknown;
+          was?: unknown;
+        } | null;
+        if (b) details = { room_kind: b.room_kind, room_cap: b.room_cap, was: b.was };
+      }
+      _audit(reqId, action, outcome, 'venue', id, undefined, details);
     }
     return res;
   };
@@ -1315,6 +1332,19 @@ export async function route(
     const [, id, brand] = venueOperatorMatch;
     return _venueCall(reqId, deny, 'UNLIST_VENUE_OPERATOR', id, () =>
       handleDeleteVenueOperator(request, env, id, brand)
+    );
+  }
+  // PUT /api/v2/admin/venues/:id/room-ceiling — OSE-2234 (owner, 2026-11-26): a
+  // ceiling on a voting room size that no host sets. Platform admins only; any
+  // other caller gets the 404 of a route that does not exist.
+  const venueCeilingMatch = pathname.match(/^\/api\/v2\/admin\/venues\/([^/]+)\/room-ceiling$/);
+  if (venueCeilingMatch && method === 'PUT') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny =
+      (await requireAdmin(request, env, reqId)) ?? (await requirePlatformScope(request, env));
+    const id = venueCeilingMatch[1];
+    return _venueCall(reqId, deny, 'SET_VENUE_ROOM_CEILING', id, () =>
+      handlePutVenueRoomCeiling(request, env, id)
     );
   }
   const venueRollupMatch = pathname.match(/^\/api\/v2\/admin\/venues\/([^/]+)\/rollup$/);

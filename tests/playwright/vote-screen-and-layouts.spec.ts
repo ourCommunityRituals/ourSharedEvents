@@ -67,11 +67,14 @@ test.describe('the host vote screen and page layouts', () => {
       data: { kind: 'entry', label: 'The blue float' },
     });
     expect(song.status()).toBe(201);
-    expect((await request.post(vp('/open'), { headers: json, data: {} })).ok()).toBe(true);
+    expect(
+      (await request.post(vp('/open'), { headers: json, data: { room_size: 200 } })).ok()
+    ).toBe(true);
     const c = await request.post(vp('/code'), { headers: json, data: {} });
     expect(c.ok(), await c.text()).toBe(true);
     code = ((await c.json()) as { code: { url: string; qr: string } }).code;
-    expect(code.url).toMatch(/\/q\/qrt_[0-9a-f]{32}\?type=vote$/);
+    // The rotating code: the URL carries this minute's stamp.
+    expect(code.url).toMatch(/\/q\/qrt_[0-9a-f]{32}\?type=vote&w=\d+\.[0-9a-f]{32}$/);
   });
 
   test('1. on a TV it shows only the code, large, and "Scan to vote"', async ({ page }) => {
@@ -84,7 +87,9 @@ test.describe('the host vote screen and page layouts', () => {
     await expect(page.getByTestId('vote-screen-line')).toHaveText('Scan to vote');
     const qr = page.getByTestId('vote-screen-qr');
     await expect(qr).toBeVisible();
-    expect(await qr.getAttribute('src')).toBe(code.qr);
+    // The screen makes its own QR for the minute it loads in, so it matches
+    // the card's only within the same minute: check it is a QR image.
+    expect(await qr.getAttribute('src')).toMatch(/^data:image\//);
     const box = await qr.boundingBox();
     expect(box?.height ?? 0).toBeGreaterThan(500);
     await expect(page.locator('body')).not.toContainText(/\d+\s+votes?/i);

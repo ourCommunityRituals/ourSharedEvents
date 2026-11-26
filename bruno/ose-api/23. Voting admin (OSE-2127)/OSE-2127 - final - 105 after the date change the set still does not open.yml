@@ -15,7 +15,7 @@ http:
       value: "application/json"
   body:
     type: json
-    data: "{}"
+    data: "{\"room_size\": 200}"
   auth: inherit
 
 runtime:

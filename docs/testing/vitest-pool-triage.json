@@ -4171,7 +4171,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): env.DB, createExecutionContext, waitOnExecutionContext",
-      "testCount": 15
+      "testCount": 20
     },
     {
       "file": "workers/oursharedevents/tests/visitor-country-cleared.spec.ts",
@@ -4186,6 +4186,20 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch, createExecutionContext, waitOnExecutionContext",
       "testCount": 25
+    },
+    {
+      "file": "workers/oursharedevents/tests/vote-flood.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 19
+    },
+    {
+      "file": "workers/oursharedevents/tests/vote-integrity.spec.ts",
+      "bucket": "node",
+      "needsReview": true,
+      "reason": "cloudflare:test imported for env only, no runtime marker",
+      "testCount": 20
     },
     {
       "file": "workers/oursharedevents/tests/vote-off-limits.spec.ts",
@@ -4241,7 +4255,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
-      "testCount": 57
+      "testCount": 59
     },
     {
       "file": "workers/oursharedevents/tests/vote-tables.spec.ts",

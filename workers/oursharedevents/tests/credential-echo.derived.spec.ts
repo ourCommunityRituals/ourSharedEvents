@@ -135,6 +135,7 @@ import {
   type SignedLinkRule,
   VOTE_PASS_SHAPE,
 } from './helpers/credential-echo';
+import { voteCodeStamp } from '../src/lib/vote-code-window';
 
 interface TestEnv {
   DB: D1Database;
@@ -1003,13 +1004,24 @@ describe('the vote pass rides only in the fragment of the /q redirect', () => {
       .bind(`pd-${EVENT}`, EVENT, CODE)
       .run();
     const made = await createVoteSet(E.DB, EVENT, 'object');
-    const opened = await openVoteSet(E.DB, EVENT, E.ANON_ID_HASH_PEPPER, new Date().toISOString());
+    const opened = await openVoteSet(
+      E.DB,
+      EVENT,
+      E.ANON_ID_HASH_PEPPER,
+      new Date().toISOString(),
+      200
+    );
     if (!made.ok || !opened.ok) throw new Error('the vote set could not be made and opened');
   });
 
   test('a vote scan answers 302 with one pass, at the end of Location, after /events/:id/vote#t=', async () => {
     logLines = [];
-    const r = await send('GET', `${PATH}?type=vote`, {}, votingOn());
+    const r = await send(
+      'GET',
+      `${PATH}?type=vote&w=${await voteCodeStamp(E.ANON_ID_HASH_PEPPER, CODE, Date.now())}`,
+      {},
+      votingOn()
+    );
     expect(r.status).toBe(302);
     const location = r.answer.headers.find(([n]) => n.toLowerCase() === 'location')?.[1] ?? '';
     const passes = onePass(location);
@@ -1042,7 +1054,12 @@ describe('the vote pass rides only in the fragment of the /q redirect', () => {
   });
 
   test('a pass anywhere but that place is a leak (negative controls on made-up answers)', async () => {
-    const real = await send('GET', `${PATH}?type=vote`, {}, votingOn());
+    const real = await send(
+      'GET',
+      `${PATH}?type=vote&w=${await voteCodeStamp(E.ANON_ID_HASH_PEPPER, CODE, Date.now())}`,
+      {},
+      votingOn()
+    );
     const location = real.answer.headers.find(([n]) => n.toLowerCase() === 'location')?.[1] ?? '';
     const pass = onePass(location)[0];
     expect(pass).toBeTruthy();

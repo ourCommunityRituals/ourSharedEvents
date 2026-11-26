@@ -295,7 +295,7 @@ export const MATRIX_ROUTES: readonly MatrixRoute[] = [
   }),
   eventRoute('/api/v2/admin/events/:id/votables/(.+)', 'POST', '/votables/open', {
     variant: 'open the set',
-    body: () => ({}),
+    body: () => ({ room_size: 200 }),
   }),
   eventRoute('/api/v2/admin/events/:id/votables/(.+)', 'POST', '', {
     variant: 'add an object',
@@ -506,6 +506,8 @@ export const ROUTE_EXEMPTIONS: Readonly<Record<string, string>> = {
     'A venue is not one of the matrix fixtures; its isolation is held by tests/venues.spec.ts (OSE-2221): only the owner brand reaches a venue by id, another brand gets the same 404 as an unknown venue, and a list shows a brand only the venues it owns or is listed at.',
   '/api/v2/admin/venues/:id/operators/:id':
     'A venue is not one of the matrix fixtures; its isolation is held by tests/venues.spec.ts (OSE-2221): only the owner brand reaches a venue by id, another brand gets the same 404 as an unknown venue, and a list shows a brand only the venues it owns or is listed at.',
+  '/api/v2/admin/venues/:id/room-ceiling':
+    'Platform only (requirePlatformScope, OSE-2234): a brand never sets a room ceiling, its own venue or another, and gets the 404 of a route that does not exist. Held by tests/venues.spec.ts.',
   '/api/v2/admin/venues/:id/rollup':
     'A venue is not one of the matrix fixtures; its isolation is held by tests/venues.spec.ts (OSE-2221): only the owner brand reaches a venue by id, another brand gets the same 404 as an unknown venue, and a list shows a brand only the venues it owns or is listed at.',
   '/admin': 'HTML shell; carries no rows. The data calls it makes are the routes above.',

@@ -102,6 +102,7 @@ const TRIVIA_ADMIN = 'trivia@example.com';
 const LEAGUE_ADMIN = 'league@example.com';
 const DJ_ADMIN = 'dj@example.com';
 const OTHER_ADMIN = 'other@example.com';
+const PLATFORM_ADMIN = 'platform@example.com'; // the operator of the platform (OSE-2234)
 
 async function event(id: string, brand: string): Promise<void> {
   await env.DB.prepare(
@@ -153,6 +154,7 @@ beforeAll(async () => {
     [LEAGUE_ADMIN]: [LEAGUE],
     [DJ_ADMIN]: [DJ],
     [OTHER_ADMIN]: [OTHER],
+    [PLATFORM_ADMIN]: ['ose-platform'],
   });
   for (const [id, b] of [
     ['vn-e-bar', BAR],
@@ -347,5 +349,110 @@ describe('nobody else reaches the venue', () => {
     const res = await call('GET', `/api/v2/admin/venues/${venue}/rollup`, BAR_ADMIN);
     const text = await res.text();
     expect(text).not.toMatch(/vn-e-|title|email|anon/i);
+  });
+});
+
+describe('the voting room-size ceiling: set by the platform only (OSE-2234, owner 2026-11-26)', () => {
+  const path = () => `/api/v2/admin/venues/${venue}/room-ceiling`;
+  const row = () =>
+    env.DB.prepare('SELECT room_kind, room_cap FROM venues WHERE id = ?')
+      .bind(venue)
+      .first<{ room_kind: string | null; room_cap: number | null }>();
+
+  test("the venue's owner, an operator and a stranger cannot set it: the 404 of no route", async () => {
+    for (const who of [BAR_ADMIN, CO_ADMIN, TRIVIA_ADMIN, OTHER_ADMIN]) {
+      const res = await call('PUT', path(), who, { room_kind: 'outdoor', room_cap: 50000 });
+      expect(res.status, who).toBe(404);
+    }
+    expect(await row()).toEqual({ room_kind: null, room_cap: null });
+  });
+
+  test('a platform admin sets indoors to the fire-marshal capacity, audited', async () => {
+    const res = await call('PUT', path(), PLATFORM_ADMIN, { room_kind: 'indoor', room_cap: 120 });
+    expect(res.status).toBe(200);
+    expect(await row()).toEqual({ room_kind: 'indoor', room_cap: 120 });
+    const audit = await env.DB.prepare(
+      `SELECT outcome, details FROM admin_audit_log
+        WHERE action = 'SET_VENUE_ROOM_CEILING' AND resource_id = ? ORDER BY created_at DESC LIMIT 1`
+    )
+      .bind(venue)
+      .first<{ outcome: string; details: string | null }>();
+    expect(audit?.outcome).toBe('success');
+    // The old and new values are kept, so a raised limit can be traced later.
+    expect(JSON.parse(audit?.details ?? 'null')).toEqual({
+      room_kind: 'indoor',
+      room_cap: 120,
+      was: { room_kind: null, room_cap: null },
+    });
+  });
+
+  test('indoors needs a number; outdoors takes a permit limit or none; anything else is refused', async () => {
+    const put = async (body: unknown) => {
+      const res = await call('PUT', path(), PLATFORM_ADMIN, body);
+      return { status: res.status, code: ((await res.json()) as { code?: string }).code };
+    };
+    expect(await put({ room_kind: 'indoor' })).toMatchObject({
+      status: 400,
+      code: 'ROOM_CAP_NEEDED',
+    });
+    expect(await put({ room_kind: 'indoor', room_cap: 9 })).toMatchObject({
+      status: 400,
+      code: 'INVALID_ROOM_CAP',
+    });
+    expect(await put({ room_kind: 'indoor', room_cap: 12.5 })).toMatchObject({ status: 400 });
+    expect(await put({ room_kind: 'tent', room_cap: 100 })).toMatchObject({
+      status: 400,
+      code: 'INVALID_ROOM_KIND',
+    });
+    expect(await put({ room_kind: 'outdoor', room_cap: null, note: 'x' })).toMatchObject({
+      status: 400,
+      code: 'UNKNOWN_FIELD',
+    });
+    expect(await row()).toEqual({ room_kind: 'indoor', room_cap: 120 });
+    expect(await put({ room_kind: 'outdoor', room_cap: 2000 })).toMatchObject({ status: 200 });
+    expect(await row()).toEqual({ room_kind: 'outdoor', room_cap: 2000 });
+    expect(await put({ room_kind: 'outdoor', room_cap: null })).toMatchObject({ status: 200 });
+    expect(await row()).toEqual({ room_kind: 'outdoor', room_cap: null });
+  });
+
+  test("SECURITY | a host cannot shed the venue's room limit by moving or clearing the venue (CCR loop 4)", async () => {
+    const ceil = (v: string, body: unknown) =>
+      call('PUT', `/api/v2/admin/venues/${v}/room-ceiling`, PLATFORM_ADMIN, body);
+    const move = (v: string | null) =>
+      call('PUT', '/api/v2/admin/events/vn-e-bar/venue', BAR_ADMIN, { venue_id: v });
+    expect((await ceil(venue, { room_kind: 'indoor', room_cap: 80 })).status).toBe(200);
+    expect(await hostOf('vn-e-bar')).toBe(venue);
+    // A second venue of the bar's, with no limit set by the platform.
+    const made = await call('POST', '/api/v2/admin/venues', BAR_ADMIN, {
+      brand_id: BAR,
+      name: 'The Corner Tap Patio',
+    });
+    expect(made.status).toBe(201);
+    const patio = ((await made.json()) as { id: string }).id;
+    for (const target of [null, patio]) {
+      const res = await move(target);
+      expect(res.status, String(target)).toBe(409);
+      expect(((await res.json()) as { code: string }).code).toBe('VENUE_ROOM_LIMIT_KEPT');
+      expect(await hostOf('vn-e-bar')).toBe(venue);
+    }
+    // Once the platform sets the patio's limit, the move is allowed.
+    expect((await ceil(patio, { room_kind: 'outdoor', room_cap: 300 })).status).toBe(200);
+    expect((await move(patio)).status).toBe(200);
+    expect(await hostOf('vn-e-bar')).toBe(patio);
+    // And back, and an event at a venue with no limit moves freely (the control).
+    expect((await move(venue)).status).toBe(200);
+    expect((await ceil(venue, { room_kind: 'outdoor', room_cap: null })).status).toBe(200);
+    expect((await move(null)).status).toBe(200);
+    expect(await hostOf('vn-e-bar')).toBeNull();
+  });
+
+  test('an unknown venue is 404 for the platform too', async () => {
+    const res = await call(
+      'PUT',
+      `/api/v2/admin/venues/ven_${'0'.repeat(32)}/room-ceiling`,
+      PLATFORM_ADMIN,
+      { room_kind: 'outdoor', room_cap: null }
+    );
+    expect(res.status).toBe(404);
   });
 });

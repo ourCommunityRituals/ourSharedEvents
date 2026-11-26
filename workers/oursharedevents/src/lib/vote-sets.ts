@@ -115,6 +115,29 @@ const FINAL = fail(
   'VOTE_SET_FINAL',
   'The vote set is final; nothing reopens it or adds to it'
 );
+/** A label is fixed once the set has opened (2026-11-26): a rename would move votes to another name. */
+const LABEL_FIXED = fail(
+  409,
+  'LABEL_FIXED',
+  'A name is fixed once voting has opened, so votes stay with what was voted for'
+);
+/** The voter's list is ordered by sort, so a move to the top is fixed too (CCR loop 4). */
+const ORDER_FIXED = fail(
+  409,
+  'ORDER_FIXED',
+  'The order of the list is fixed once voting has opened, so no entry is moved to the top'
+);
+/**
+ * Once voting has opened, the set's list of objects is fixed (owner,
+ * 2026-11-26, after CCR loops 1 to 3): a host cannot add a decoy, a second
+ * "Song A" that splits a song's votes, or a late favourite. Everything to be
+ * voted on is added before voting opens.
+ */
+const OBJECTS_FIXED = fail(
+  409,
+  'OBJECTS_FIXED',
+  'Voting has opened, so nothing can be added to this vote set; add everything before opening voting'
+);
 const EVENT_OVER = fail(409, 'EVENT_OVER', 'The event is over; voting cannot open again');
 /** OSE-2142: the event is on but not Published. The admin card says "Publish the event to open voting." */
 export const EVENT_NOT_PUBLISHED = fail(
@@ -137,6 +160,24 @@ export interface VoteSetView {
    * count, a margin, a voter number or which rule decided.
    */
   result: VoteSetResult | null;
+  /**
+   * The room check at final found more voters than the room size the host
+   * gave (OSE-2234, lib/vote-results.ts ROOM_CHECK_UPDATE), so the public
+   * result says it may be padded. A flag only: no count, no time. One-way.
+   */
+  flood_seen: boolean;
+  /**
+   * A burst of vote passes faster than one room makes was seen on the event's
+   * vote code (lib/vote-flood.ts). The host's alarm only, never public. A flag
+   * only: no count, no time. It stays true through a reopen and after final.
+   */
+  burst_seen: boolean;
+  /**
+   * The room size the host gave when voting first opened: the most people the
+   * room can hold. Fixed from then on (written only where room_size IS NULL; T0 gate votes-never-who). Null before
+   * the first open. Admin only; never in a public answer.
+   */
+  room_size: number | null;
 }
 
 /** A final set's one result (ADR-040 decision 7, Q14). */
@@ -172,6 +213,9 @@ interface SetRow {
   winner_object_id: string | null;
   winner_label: string | null;
   winner_team_id: string | null;
+  flood_seen: number;
+  burst_seen: number;
+  room_size: number | null;
 }
 
 interface ObjectRow {
@@ -186,7 +230,7 @@ interface ObjectRow {
 }
 
 const SET_SELECT = `SELECT id, event_id, state, played_by, (pepper_epoch IS NOT NULL) AS opened, is_final,
-       outcome, winner_object_id, winner_team_id,
+       outcome, winner_object_id, winner_team_id, flood_seen, burst_seen, room_size,
        (SELECT w.label FROM votable_objects w
          WHERE w.id = vote_sets.winner_object_id AND w.set_id = vote_sets.id) AS winner_label
   FROM vote_sets`;
@@ -216,6 +260,9 @@ function projectSet(row: SetRow): VoteSetView {
     opened: Number(row.opened) === 1,
     final: Number(row.is_final) === 1,
     result: projectResult(row),
+    flood_seen: Number(row.flood_seen) === 1,
+    burst_seen: Number(row.burst_seen) === 1,
+    room_size: row.room_size == null ? null : Number(row.room_size),
   };
 }
 
@@ -416,16 +463,110 @@ async function noPepper(db: D1Database, eventId: string): Promise<VoteFail> {
   );
 }
 
+/** The room size a host may give: the most people the room can hold (migration 0122). */
+export const ROOM_SIZE_RANGE = [10, 50000] as const;
+
 /**
- * First open: draft → open. Stamps the pepper epoch and draws T and V, once.
- * With no pepper, refuses: a set that opens with no epoch could never count.
+ * The ceiling on a room size when the platform has set none for the event's
+ * venue (owner, decision card 2026-11-26, "Permit limit, else 500"): the event
+ * is at no venue, at a venue with no setting, or outdoors with no permit limit.
+ */
+export const ROOM_CEILING_DEFAULT = 500;
+
+/**
+ * The ceiling, in SQL, for the event bound to its one `?`: the event's
+ * venue's room_cap (indoors the fire-marshal capacity, outdoors the permit's
+ * limit), set only by a platform admin, else ROOM_CEILING_DEFAULT. The host
+ * cannot raise it: the host sets neither room_kind nor room_cap, and a venue
+ * the host makes starts with neither, so it gets the default.
+ */
+const ROOM_CEILING_SQL = `COALESCE((SELECT v.room_cap FROM events e JOIN venues v ON v.id = e.host_venue_id
+                                       WHERE e.id = ?), ${ROOM_CEILING_DEFAULT})`;
+
+/** The ceiling for an event's room size, read for the refusal's words. */
+export async function roomCeiling(db: D1Database, eventId: string): Promise<number> {
+  const row = await db
+    .prepare(
+      `SELECT v.room_cap AS cap FROM events e JOIN venues v ON v.id = e.host_venue_id WHERE e.id = ?`
+    )
+    .bind(eventId)
+    .first<{ cap: number | null }>();
+  const cap = Number(row?.cap);
+  return row?.cap != null && Number.isInteger(cap) ? cap : ROOM_CEILING_DEFAULT;
+}
+
+function overCeiling(ceiling: number): VoteFail {
+  return fail(
+    400,
+    'ROOM_SIZE_OVER_CEILING',
+    `The room size here can be at most ${ceiling}: the limit for this venue, set by the platform`
+  );
+}
+
+/**
+ * A room size from a request body, or why not. Required to open voting
+ * (2026-11-26, the room size check at final): a whole number in ROOM_SIZE_RANGE.
+ */
+export function parseRoomSize(v: unknown): VoteResult<number> {
+  if (typeof v !== 'number' || !Number.isInteger(v))
+    return fail(
+      400,
+      'ROOM_SIZE_NEEDED',
+      'Say how many the room can hold (a whole number) to open voting'
+    );
+  if (v < ROOM_SIZE_RANGE[0] || v > ROOM_SIZE_RANGE[1])
+    return fail(
+      400,
+      'ROOM_SIZE_OUT_OF_RANGE',
+      `The room size must be from ${ROOM_SIZE_RANGE[0]} to ${ROOM_SIZE_RANGE[1]}`
+    );
+  return { ok: true, value: v };
+}
+
+/**
+ * First open: draft → open. Stamps the pepper epoch and draws T and V, once,
+ * and writes the room size the host gave, once. With no pepper, refuses: a
+ * set that opens with no epoch could never count. Without a valid room size,
+ * refuses (ROOM_SIZE_NEEDED), after saying first why else it could not open.
+ *
+ * THE ROOM SIZE IS FIXED HERE (2026-11-26, owner: hosts and sponsors must not
+ * push a result up or down). Only this first open writes it, under a
+ * "room_size IS NULL" guard that the T0 gate votes-never-who requires of every
+ * statement that writes it (D1 takes no trigger, migration 0025), so a host
+ * cannot raise it after the night to hide padding. A reopen keeps it.
+ * The size itself is the host's word, but under a ceiling the host cannot set
+ * (ROOM_CEILING_SQL: the venue's fire-marshal or permit limit, set by a
+ * platform admin, else ROOM_CEILING_DEFAULT), and it is shown with the final
+ * result. Within the ceiling a host can still give a size above the room
+ * (CCR loop 1, F1), which ADR-040 names.
  */
 export async function openVoteSet(
   db: D1Database,
   eventId: string,
   pepper: string | undefined,
-  nowIso: string
+  nowIso: string,
+  roomSize: unknown
 ): Promise<VoteResult<VoteSetView>> {
+  const room = parseRoomSize(roomSize);
+  if (!room.ok) {
+    // A set that does not exist, is final or already opened says so first, so
+    // a refused open answers as it did before the room size was asked for.
+    const set = await readVoteSet(db, eventId);
+    if (!set) return NO_SET;
+    if (set.final) return FINAL;
+    if (set.state !== 'draft' || set.opened)
+      return fail(409, 'WRONG_STATE', `The vote set is ${set.state}`);
+    return room;
+  }
+  const ceiling = await roomCeiling(db, eventId);
+  if (room.value > ceiling) {
+    const set = await readVoteSet(db, eventId);
+    if (!set) return NO_SET;
+    if (set.final) return FINAL;
+    if (set.state !== 'draft' || set.opened)
+      return fail(409, 'WRONG_STATE', `The vote set is ${set.state}`);
+    return overCeiling(ceiling);
+  }
   const epoch = await pepperEpoch(pepper);
   if (!epoch) return noPepper(db, eventId);
   const margin = drawUniform(SECRET_MARGIN_RANGE[0], SECRET_MARGIN_RANGE[1]);
@@ -433,14 +574,40 @@ export async function openVoteSet(
   const res = await db
     .prepare(
       `UPDATE vote_sets
-          SET state = 'open', pepper_epoch = ?, secret_margin = ?, secret_floor = ?, updated_at = ?
+          SET state = 'open', pepper_epoch = ?, secret_margin = ?, secret_floor = ?, room_size = ?, updated_at = ?
         WHERE event_id = ? AND state = 'draft' AND is_final = 0
           AND pepper_epoch IS NULL AND secret_margin IS NULL AND secret_floor IS NULL
+          AND room_size IS NULL
+          AND ? <= ${ROOM_CEILING_SQL}
           AND ${EVENT_LIVE}`
     )
-    .bind(epoch, margin, floor, hourStamp(nowIso), eventId, eventId)
+    .bind(
+      epoch,
+      margin,
+      floor,
+      room.value,
+      hourStamp(nowIso),
+      eventId,
+      room.value,
+      eventId,
+      eventId
+    )
     .run();
-  if ((res.meta?.changes ?? 0) === 0) return whySetRefused(db, eventId, ['draft']);
+  if ((res.meta?.changes ?? 0) === 0) {
+    // The ceiling moved down between the read and the write: say so.
+    const now = await roomCeiling(db, eventId);
+    const set = await readVoteSet(db, eventId);
+    if (
+      set &&
+      !set.final &&
+      set.state === 'draft' &&
+      !set.opened &&
+      room.value > now &&
+      !(await eventRefusal(db, eventId))
+    )
+      return overCeiling(now);
+    return whySetRefused(db, eventId, ['draft']);
+  }
   const set = await readVoteSet(db, eventId);
   return set ? { ok: true, value: set } : NO_SET;
 }
@@ -460,6 +627,7 @@ export async function reopenVoteSet(
           SET state = 'open', updated_at = ?
         WHERE event_id = ? AND state = 'closed' AND is_final = 0
           AND pepper_epoch IS NOT NULL AND pepper_epoch = ?
+          AND room_size IS NOT NULL
           AND ${EVENT_LIVE}`
     )
     .bind(hourStamp(nowIso), eventId, epoch, eventId)
@@ -471,6 +639,14 @@ export async function reopenVoteSet(
   const why = await whySetRefused(db, eventId, ['closed']);
   if (why.code !== 'WRONG_STATE') return why;
   const set = await readVoteSet(db, eventId);
+  // A set an older Worker opened has no room size, so the room check at final
+  // could never run on it (CCR F9): it is not reopened.
+  if (set?.state === 'closed' && set.room_size === null)
+    return fail(
+      409,
+      'ROOM_SIZE_MISSING',
+      'This vote set was opened without a room size, so it cannot be reopened; finalize it or start a new one'
+    );
   if (set?.state === 'closed')
     return fail(
       409,
@@ -639,8 +815,10 @@ export async function finalizeVoteSet(
       )
       .bind(setId, setId),
   ]);
-  // results[0..1] write the result, [2] closes the objects, [3] makes it final.
-  return (results[3]?.meta?.changes ?? 0) > 0;
+  // The result statements (the outcome, the winner, the room size check) come
+  // first, then one closes the objects, then one makes the set final, then the
+  // three deletes. Counted from the end, so a new result statement cannot move it.
+  return (results[results.length - 4]?.meta?.changes ?? 0) > 0;
 }
 
 /**
@@ -778,12 +956,12 @@ export async function createVotable(
   const team = teamRule(set, input.group_id);
   if (team) return team;
   if (input.booth_id && !(await boothOfEvent(db, input.booth_id, eventId))) return BOOTH_MISS;
+  if (set.opened) return OBJECTS_FIXED;
   const id = newId('vobj');
   // One statement: the set is not final, the event is on, the set holds one
-  // kind, it is under the cap, and the booth is this event's. A set that has
-  // opened takes a new object only while its event is live (OSE-2142): setting
-  // up on a draft or ready event is for a set still in draft. Then the object's
-  // tally row, made with it (0111), only if the object was made.
+  // kind, it is under the cap, the set has never opened (no pepper epoch:
+  // OBJECTS_FIXED, owner 2026-11-26), and the booth is this event's. Then the
+  // object's tally row, made with it (0111), only if the object was made.
   const [made] = await db.batch([
     db
       .prepare(
@@ -795,6 +973,7 @@ export async function createVotable(
             AND (s.state = 'draft' OR ${EVENT_LIVE})
             AND NOT EXISTS (SELECT 1 FROM votable_objects o WHERE o.set_id = s.id AND o.kind <> ?)
             AND (SELECT COUNT(*) FROM votable_objects o WHERE o.set_id = s.id) < ?
+            AND s.pepper_epoch IS NULL
             AND (? IS NULL OR EXISTS (SELECT 1 FROM event_booths b
                                        WHERE b.id = ? AND b.event_id = s.event_id AND b.is_active = 1))`
       )
@@ -825,6 +1004,7 @@ export async function createVotable(
     const now = await readVoteSet(db, eventId);
     if (!now) return NO_SET;
     if (now.final) return FINAL;
+    if (now.opened) return OBJECTS_FIXED;
     if (!(await eventStillOn(db, eventId))) return EVENT_OVER;
     if (now.state !== 'draft' && !(await eventIsLive(db, eventId))) return EVENT_NOT_PUBLISHED;
     const other = await db
@@ -849,7 +1029,12 @@ export async function createVotable(
   return view ? { ok: true, value: view } : NO_OBJECT;
 }
 
-/** Change an object's label, sort, booth or team. A team changes only before the first open. */
+/**
+ * Change an object's label, sort, booth or team. A team, and the label, change
+ * only before the first open (2026-11-26): once votes can be cast, renaming
+ * a song or stall would move its votes to a different name, a way for a host
+ * to push a result up or down. Fix a typo before opening voting.
+ */
 export async function updateVotable(
   db: D1Database,
   eventId: string,
@@ -864,6 +1049,10 @@ export async function updateVotable(
   const changesTeam = 'group_id' in patch && patch.group_id !== current.group_id;
   if (changesTeam && set.opened)
     return fail(409, 'TEAM_FIXED', 'A team is fixed once the vote set has opened');
+  const changesLabel = patch.label !== undefined && patch.label !== current.label;
+  if (changesLabel && set.opened) return LABEL_FIXED;
+  const changesOrder = patch.sort !== undefined && patch.sort !== current.sort;
+  if (changesOrder && set.opened) return ORDER_FIXED;
   if ('group_id' in patch) {
     const team = teamRule(set, patch.group_id ?? null);
     if (team) return team;
@@ -880,7 +1069,9 @@ export async function updateVotable(
         WHERE id = ? AND event_id = ?
           AND set_id IN (SELECT id FROM vote_sets
                           WHERE event_id = ? AND is_final = 0
-                            AND (pepper_epoch IS NULL OR votable_objects.group_id IS ?))
+                            AND (pepper_epoch IS NULL
+                                 OR (votable_objects.group_id IS ? AND votable_objects.label = ?
+                                     AND votable_objects.sort = ?)))
           AND (? IS NULL OR EXISTS (SELECT 1 FROM event_booths b
                                      WHERE b.id = ? AND b.event_id = votable_objects.event_id
                                        AND b.is_active = 1))`
@@ -895,6 +1086,8 @@ export async function updateVotable(
       eventId,
       eventId,
       group,
+      label,
+      sort,
       booth,
       booth
     )
@@ -904,6 +1097,8 @@ export async function updateVotable(
     if (now?.final) return FINAL;
     if (changesTeam && now?.opened)
       return fail(409, 'TEAM_FIXED', 'A team is fixed once the vote set has opened');
+    if (changesLabel && now?.opened) return LABEL_FIXED;
+    if (changesOrder && now?.opened) return ORDER_FIXED;
     return NO_OBJECT;
   }
   const view = await readObject(db, eventId, objectId);
