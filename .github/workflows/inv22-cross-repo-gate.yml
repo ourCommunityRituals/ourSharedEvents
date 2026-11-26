@@ -86,6 +86,8 @@ jobs:
           repository: ourCommunityRituals/OCR-docs
           path: ocr-docs
           ref: main
+          # Full history, so brain-pin can prove the pin is on main (CCR F3).
+          fetch-depth: 0
           token: ${{ secrets.OCR_HUB_READ }}
           # ADR-012 0.1: never leave the token where later steps can read it.
           persist-credentials: false
@@ -96,6 +98,22 @@ jobs:
         if: github.actor != 'dependabot[bot]'
         working-directory: ${{ github.workspace }}
         run: bash ose/scripts/ci/assert-no-persisted-token.sh ocr-docs
+
+      # CCR F3: move the brain to the OCR-docs commit pinned in .ocr-brain-ref.
+      # The pin must be on OCR-docs main and may not move back from the base
+      # branch's pin, so a brain change reaches OSE only through a reviewed PR.
+      - name: 'Pin the brain to .ocr-brain-ref (CCR F3)'
+        if: github.actor != 'dependabot[bot]'
+        working-directory: ${{ github.workspace }}
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          base_pin=""
+          if [ -n "$BASE_REF" ]; then
+            git -C ose fetch --no-tags --depth=1 origin "refs/heads/${BASE_REF}"
+            base_pin="$(git -C ose show FETCH_HEAD:.ocr-brain-ref 2>/dev/null | tr -d '[:space:]' || true)"
+          fi
+          bash ose/scripts/ci/brain-pin.sh ocr-docs ose/.ocr-brain-ref "$base_pin"
 
       - name: Set up Python
         if: github.actor != 'dependabot[bot]'
