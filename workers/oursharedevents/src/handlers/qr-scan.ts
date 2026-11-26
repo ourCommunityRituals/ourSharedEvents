@@ -52,7 +52,7 @@ import { scanHourOf, takePosterHourPlace } from '../lib/poster-hour-cap';
 import { enqueueOrWriteScan, scanDedupKey, type ScanMessage } from '../lib/scan-buffer';
 import { scanNodeKey } from '../lib/scan-node-key';
 import { issueVotePass, mintCrowdPass, votePageTarget, VOTE_CODE_TYPE } from '../lib/vote-pass';
-import { onlinePickMayMint } from '../lib/vote-crowd';
+import { noteCrowdPassMinted, onlinePickMayMint } from '../lib/vote-crowd';
 import { votingEnabled } from '../lib/voting-switch';
 import type { VotingSwitchEnv } from '../lib/voting-switch';
 import { noteVotePassMinted, type VoteFloodLimiter } from '../lib/vote-flood';
@@ -381,6 +381,7 @@ export async function handleCrowdEntry(
   request: Request,
   env: QrScanEnv,
   eventId: string,
+  ctx?: Pick<ExecutionContext, 'waitUntil'>,
   nowMs: number = Date.now()
 ): Promise<Response> {
   const url = new URL(request.url);
@@ -402,6 +403,16 @@ export async function handleCrowdEntry(
     cookieValue: newCookie,
   } = await getOrCreateAnonId(request, env.ANON_ID_HASH_PEPPER);
   const crowdPass = await mintCrowdPass(env.ANON_ID_HASH_PEPPER, anonId, eventId, nowMs);
+  if (crowdPass) {
+    // F1 (2026-11-26 sweep): count the pass toward the Online Pick's swarm
+    // alarm, the host's only. Detection only, never throws, off the answer path.
+    const noted = noteCrowdPassMinted(env, eventId).then((wrote) => {
+      if (wrote)
+        console.warn(JSON.stringify({ type: 'ONLINE_PICK_FLOOD_SEEN', event_id: eventId }));
+    });
+    if (ctx) ctx.waitUntil(noted);
+    else await noted;
+  }
   const res = home(
     crowdPass
       ? `${url.origin}/events/${encodeURIComponent(eventId)}/online-pick#t=${crowdPass}`

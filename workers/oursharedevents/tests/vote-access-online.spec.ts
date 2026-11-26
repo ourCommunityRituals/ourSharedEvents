@@ -33,6 +33,7 @@ import {
 import { ACCESS_PASS_CAP, accessLookup } from '../src/lib/vote-access-pass';
 import { VOTING_ON } from '../src/lib/voting-switch';
 import { runVoteFinalJob } from '../src/lib/vote-sets';
+import { resetCrowdFloodMemo } from '../src/lib/vote-crowd';
 
 interface TestEnv {
   DB: D1Database;
@@ -473,7 +474,7 @@ describe('Access Pass: redeeming and voting', () => {
 
 // ── The Online Pick ──────────────────────────────────────────────────────────
 
-async function entry(eventId: string, cookieValue?: string) {
+async function entry(eventId: string, cookieValue?: string, over: Partial<RouterEnv> = {}) {
   const res = await routed(
     new Request(`${ORIGIN}/q/crowd/${eventId}`, {
       headers: {
@@ -481,7 +482,8 @@ async function entry(eventId: string, cookieValue?: string) {
         ...(cookieValue ? { Cookie: `ose_anon=${cookieValue}` } : {}),
       },
       redirect: 'manual',
-    })
+    }),
+    over
   );
   return { status: res.status, location: res.headers.get('Location') ?? '', res };
 }
@@ -493,7 +495,7 @@ describe('Online Pick: on and off', () => {
     expect(e.status).toBe(302);
     expect(e.location).toBe(`${ORIGIN}/events/${N1}`);
     const list = await admin('GET', vp(N1));
-    expect(list.json.online_pick).toEqual({ on: false, final: false });
+    expect(list.json.online_pick).toEqual({ on: false, final: false, burst_seen: false });
   });
 
   test('on: the way in mints a crowd pass in the fragment of the Online Pick page', async () => {
@@ -503,8 +505,40 @@ describe('Online Pick: on and off', () => {
     expect(e.location.startsWith(`${ORIGIN}/events/${N1}/online-pick#t=vc1.`)).toBe(true);
     // The host's view: on, never a count, T or V.
     const list = await admin('GET', vp(N1));
-    expect(list.json.online_pick).toEqual({ on: true, final: false });
+    expect(list.json.online_pick).toEqual({ on: true, final: false, burst_seen: false });
     expect(JSON.stringify(list.json)).not.toMatch(/secret|margin|floor|epoch|up_count/);
+  });
+
+  test('F1: a swarm on the way in trips the host-only alarm, once, and never blocks or shows in public [no alarm]', async () => {
+    const [a] = await openNight(N1);
+    expect((await admin('POST', vp(N1, '/online-pick'), { on: true })).status).toBe(200);
+    resetCrowdFloodMemo();
+    const keys: string[] = [];
+    let n = 0;
+    const limiter = {
+      limit: async ({ key }: { key: string }) => {
+        keys.push(key);
+        n += 1;
+        return { success: n <= 3 };
+      },
+    };
+    for (let i = 0; i < 6; i++) {
+      const e = await entry(N1, undefined, { VOTE_FLOOD_LIMITER: limiter } as Partial<RouterEnv>);
+      // Detection only: every browser still gets its pass.
+      expect(e.location.startsWith(`${ORIGIN}/events/${N1}/online-pick#t=vc1.`)).toBe(true);
+    }
+    // Keyed by the event only, under the crowd's own prefix.
+    expect([...new Set(keys)]).toEqual([`crowd-flood:${N1}`]);
+    const list = await admin('GET', vp(N1));
+    expect(list.json.online_pick).toEqual({ on: true, final: false, burst_seen: true });
+    // The room's own alarm is untouched.
+    expect((await one(`SELECT burst_seen FROM vote_sets WHERE event_id = ?`, N1))?.burst_seen).toBe(
+      0
+    );
+    // No public answer names it.
+    const page = await routed(new Request(`${ORIGIN}/events/${N1}/online-pick`));
+    expect(await page.text()).not.toMatch(/burst|gaming the Online Pick/i);
+    void a;
   });
 
   test('a team night cannot have an Online Pick (v1)', async () => {
@@ -521,7 +555,11 @@ describe('Online Pick: on and off', () => {
     expect(
       (await admin('POST', vp(N1, '/online-pick'), { on: true }, adminAs(OWNER_B))).status
     ).toBe(404);
-    expect((await admin('GET', vp(N1))).json.online_pick).toEqual({ on: false, final: false });
+    expect((await admin('GET', vp(N1))).json.online_pick).toEqual({
+      on: false,
+      final: false,
+      burst_seen: false,
+    });
   });
 });
 

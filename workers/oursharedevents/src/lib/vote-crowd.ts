@@ -38,6 +38,7 @@
  */
 
 import { hourStamp } from './scan-buffer';
+import type { VoteFloodEnv } from './vote-flood';
 import { pepperEpoch } from './anon-id-hash';
 import { EVENT_LIVE } from './event-live';
 import { voteCrowdParticipantMarker, voteCrowdReceipt } from './votes';
@@ -62,11 +63,19 @@ export const ONLINE_PICK_HOST_NOTE =
 export const ONLINE_PICK_GAMEABLE_NOTE =
   "Anyone can vote here, so this can be gamed. That's why it's for fun and never the official result.";
 
-/** What the host sees: whether it is on, and whether it is final. Never a count, T or V. */
+/**
+ * What the host sees: whether it is on, whether it is final, and whether the
+ * swarm alarm tripped. Never a count, T or V.
+ */
 export interface OnlinePickView {
   on: boolean;
   final: boolean;
+  burst_seen: boolean;
 }
+
+/** The host's words when the swarm alarm tripped. Only the host sees them. */
+export const ONLINE_PICK_BURST_WORDS =
+  'More Online Pick links were opened in one minute than a full room would. Someone may be gaming the Online Pick. The Room Pick is not affected.';
 
 const NO_SET = fail(404, 'VOTE_SET_NOT_FOUND', 'This event has no vote set');
 const SET_DONE = fail(409, 'VOTE_SET_FINAL', 'This vote is over');
@@ -79,10 +88,10 @@ const TEAM_NIGHT = fail(
 /** The host's view of the Online Pick, or off when it was never turned on. */
 export async function readOnlinePick(db: D1Database, eventId: string): Promise<OnlinePickView> {
   const row = await db
-    .prepare(`SELECT is_on, is_final FROM vote_crowd_sets WHERE event_id = ?`)
+    .prepare(`SELECT is_on, is_final, burst_seen FROM vote_crowd_sets WHERE event_id = ?`)
     .bind(eventId)
-    .first<{ is_on: number; is_final: number }>();
-  return { on: row?.is_on === 1, final: row?.is_final === 1 };
+    .first<{ is_on: number; is_final: number; burst_seen: number }>();
+  return { on: row?.is_on === 1, final: row?.is_final === 1, burst_seen: row?.burst_seen === 1 };
 }
 
 /**
@@ -340,4 +349,45 @@ export async function readPublicCrowdResult(
   if (row.outcome === 'winner' && row.winner_label)
     return { outcome: 'winner', label: String(row.winner_label) };
   return null;
+}
+
+/**
+ * The Online Pick's swarm alarm (F1 of the 2026-11-26 sweep), the room's
+ * alarm (lib/vote-flood.ts) applied to the Online Pick's way in. Every crowd
+ * pass `/q/crowd/:eventId` mints counts once in the same Workers Rate Limiting
+ * binding, under its own key (`crowd-flood:` and the event id only). Past
+ * VOTE_FLOOD_PASSES_PER_MINUTE in a minute, vote_crowd_sets.burst_seen turns
+ * to 1, once. The host sees it; no public answer carries it.
+ *
+ * It detects and never blocks: the Online Pick is gameable by design and says
+ * so. Its use is to tell the host that the for-fun result was swarmed. No
+ * count, time, address, cookie or pass is kept. Never throws.
+ */
+export const MARK_CROWD_FLOOD_SQL = `UPDATE vote_crowd_sets SET burst_seen = 1
+  WHERE event_id = ? AND burst_seen = 0 AND is_final = 0`;
+
+export function crowdFloodKey(eventId: string): string {
+  return `crowd-flood:${eventId}`;
+}
+
+const crowdFlagged = new Set<string>();
+
+/** For tests only: forget what this isolate has flagged. */
+export function resetCrowdFloodMemo(): void {
+  crowdFlagged.clear();
+}
+
+export async function noteCrowdPassMinted(env: VoteFloodEnv, eventId: string): Promise<boolean> {
+  const limiter = env.VOTE_FLOOD_LIMITER;
+  if (!limiter || !eventId || !env.DB) return false;
+  try {
+    const { success } = await limiter.limit({ key: crowdFloodKey(eventId) });
+    if (success || crowdFlagged.has(eventId)) return false;
+    const res = await env.DB.prepare(MARK_CROWD_FLOOD_SQL).bind(eventId).run();
+    if (crowdFlagged.size >= 1000) crowdFlagged.clear();
+    crowdFlagged.add(eventId);
+    return (res.meta?.changes ?? 0) > 0;
+  } catch {
+    return false;
+  }
 }

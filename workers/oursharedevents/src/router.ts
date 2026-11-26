@@ -843,7 +843,7 @@ export async function route(
   const crowdEntryMatch = pathname.match(/^\/q\/crowd\/([^/]+)$/);
   if (crowdEntryMatch && method === 'GET') {
     if (await isPublicReadLimited(request, env, 'crowd-entry')) return publicReadLimitResponse();
-    return handleCrowdEntry(request, env, crowdEntryMatch[1]);
+    return handleCrowdEntry(request, env, crowdEntryMatch[1], ctx);
   }
   if (pathname.startsWith('/q/') && method === 'GET') {
     const qrToken = pathname.slice('/q/'.length);

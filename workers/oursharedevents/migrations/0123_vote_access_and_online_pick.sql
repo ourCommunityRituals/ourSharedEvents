@@ -50,6 +50,9 @@ CREATE TABLE IF NOT EXISTS vote_crowd_sets (
   is_final         INTEGER NOT NULL DEFAULT 0 CHECK (is_final IN (0, 1)),
   outcome          TEXT    CHECK (outcome IS NULL OR outcome IN ('winner', 'too_close')),
   winner_object_id TEXT,
+  -- The host's swarm alarm (lib/vote-crowd.ts noteCrowdPassMinted): one-way, set to
+  -- 1 when Online Pick passes for the event pass a full room's minute. No count, no time.
+  burst_seen       INTEGER NOT NULL DEFAULT 0 CHECK (burst_seen IN (0, 1)),
   updated_at       TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%d %H:00:00', 'now')),
   FOREIGN KEY (set_id, event_id) REFERENCES vote_sets(id, event_id),
   CHECK (is_final = 0 OR (is_on = 0 AND secret_margin IS NULL AND secret_floor IS NULL))

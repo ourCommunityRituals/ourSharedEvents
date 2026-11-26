@@ -170,6 +170,15 @@
       "find": "(await isPublicReadLimited(request, env, 'vote-cast', PUBLIC_PAGE_MAX))",
       "replace": "(false)",
       "kill": ["workers/oursharedevents/tests/vote-access-online.spec.ts"]
+    },
+    {
+      "id": "online-pick-alarm-never-trips",
+      "layer": "integration",
+      "rule": "Past a full room's minute of Online Pick passes, the host's swarm alarm trips (vote_crowd_sets.burst_seen), detection only.",
+      "file": "workers/oursharedevents/src/lib/vote-crowd.ts",
+      "find": "    if (success || crowdFlagged.has(eventId)) return false;",
+      "replace": "    if (success || !crowdFlagged.has(eventId)) return false;",
+      "kill": ["workers/oursharedevents/tests/vote-access-online.spec.ts"]
     }
   ]
 }

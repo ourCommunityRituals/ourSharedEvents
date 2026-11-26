@@ -24,6 +24,10 @@
  *      hidden on a normal night and show, with no number, when the set says so.
  *   9. The room size: voting does not open without it, and once open it is
  *      shown as fixed and no longer asked for (2026-11-26).
+ *  10. OSE ADR-040 decision 13: an Access Pass is given from the card, its
+ *      link shown once; it is taken back and the place is not freed; the
+ *      Online Pick is turned on and off; its host-only swarm warning shows
+ *      only when the server says so.
  *
  * Runs in the blocking phone audit (playwright.mobile.config.ts), against the
  * local worker that config starts with a local pepper. The event is made here.
@@ -250,6 +254,58 @@ test.describe('admin: the Voting card', () => {
     await page.getByTestId('votes-reopen').click();
     await expect(summary(page)).toHaveText('Voting is open.');
     await expect(page.getByTestId('votes-msg')).toHaveText('Voting is open again.');
+  });
+
+  test('Access Pass and Online Pick: give, take back, on and off (ADR-040 decision 13)', async ({
+    page,
+  }) => {
+    await openCard(page);
+    await expect(page.getByTestId('votes-away')).toBeVisible();
+    await expect(page.getByTestId('votes-access-left')).toHaveText('4 Access Passes left to give.');
+    await page.getByTestId('votes-access-give').click();
+    await expect(page.getByTestId('votes-access-new')).toBeVisible();
+    await expect(page.getByTestId('votes-access-url')).toHaveText(/\/access#[A-Za-z0-9_-]{43}$/);
+    await expect(page.getByTestId('votes-access-left')).toHaveText('3 Access Passes left to give.');
+    const passRows = page.locator('[data-testid="vote-access-row"]');
+    await expect(passRows).toHaveCount(1);
+    await expect(passRows.first().getByTestId('vote-access-row-state')).toHaveText('Can vote');
+    // Taking it back is for good, and does not free a place.
+    await passRows.first().getByTestId('vote-access-row-revoke').click();
+    await expect(passRows.first().getByTestId('vote-access-row-state')).toHaveText('Taken back');
+    await expect(passRows.first().getByTestId('vote-access-row-revoke')).toHaveCount(0);
+    await expect(page.getByTestId('votes-access-left')).toHaveText('3 Access Passes left to give.');
+    // The link is shown once: opening the admin again never shows it.
+    // A new browser, as the next test would get: the admin would otherwise reopen the event it remembers.
+    await page.evaluate(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
+    await openCard(page);
+    await expect(page.getByTestId('votes-access-new')).toBeHidden();
+    expect(await page.getByTestId('votes-card').innerText()).not.toMatch(/\/access#/);
+
+    await expect(page.getByTestId('votes-online-state')).toHaveText('The Online Pick is off.');
+    await expect(page.getByTestId('votes-online-burst')).toBeHidden();
+    await page.getByTestId('votes-online-on').click();
+    await expect(page.getByTestId('votes-online-state')).toHaveText('The Online Pick is on.');
+    await page.getByTestId('votes-online-off').click();
+    await expect(page.getByTestId('votes-online-state')).toHaveText('The Online Pick is off.');
+  });
+
+  test('the Online Pick swarm warning shows only when the server says so, with no number', async ({
+    page,
+  }) => {
+    await page.route(`**/api/v2/admin/events/${eventId}/votables`, async (route) => {
+      const res = await route.fetch();
+      const body = (await res.json()) as { online_pick?: Record<string, unknown> };
+      body.online_pick = { on: true, final: false, burst_seen: true };
+      await route.fulfill({ response: res, json: body });
+    });
+    await openCard(page);
+    const burst = page.getByTestId('votes-online-burst');
+    await expect(burst).toBeVisible();
+    await expect(burst).toContainText('Only you see this');
+    expect(await burst.innerText()).not.toMatch(/\d/);
   });
 
   test('a write that ends after another event is selected leaves the new card alone', async ({
