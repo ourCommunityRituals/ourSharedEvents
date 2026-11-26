@@ -106,7 +106,7 @@ const card = (id: string, inner: string) =>
 const textLine = (t: string) =>
   `<p class="sponsor-panel-text" data-testid="sponsor-item-text">${t}</p>`;
 const addressLine = (t: string) =>
-  `<p class="sponsor-panel-text" data-testid="sponsor-item-address">${t}</p>`;
+  `<p class="sponsor-panel-text sub-line" data-testid="sponsor-item-address">${t}</p>`;
 
 function sponsor(over: Partial<Sponsor> = {}): Sponsor {
   return {

@@ -1133,7 +1133,7 @@ function renderSponsorItem(s: SponsorBasicRow): string {
   // 0083 / OSE-1435: the location the sponsor chose to show, as its own muted line.
   const address = (s.address_line ?? '').trim();
   const addressLine = address
-    ? `<p class="sponsor-panel-text" data-testid="sponsor-item-address">${esc(address)}</p>`
+    ? `<p class="sponsor-panel-text sub-line" data-testid="sponsor-item-address">${esc(address)}</p>`
     : '';
   return `${link}${textLine}${addressLine}`;
 }
