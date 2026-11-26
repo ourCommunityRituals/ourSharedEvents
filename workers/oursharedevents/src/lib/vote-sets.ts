@@ -621,6 +621,7 @@ export async function reopenVoteSet(
           SET state = 'open', updated_at = ?
         WHERE event_id = ? AND state = 'closed' AND is_final = 0
           AND pepper_epoch IS NOT NULL AND pepper_epoch = ?
+          AND room_size IS NOT NULL
           AND ${EVENT_LIVE}`
     )
     .bind(hourStamp(nowIso), eventId, epoch, eventId)
@@ -632,6 +633,14 @@ export async function reopenVoteSet(
   const why = await whySetRefused(db, eventId, ['closed']);
   if (why.code !== 'WRONG_STATE') return why;
   const set = await readVoteSet(db, eventId);
+  // A set an older Worker opened has no room size, so the room check at final
+  // could never run on it (CCR F9): it is not reopened.
+  if (set?.state === 'closed' && set.room_size === null)
+    return fail(
+      409,
+      'ROOM_SIZE_MISSING',
+      'This vote set was opened without a room size, so it cannot be reopened; finalize it or start a new one'
+    );
   if (set?.state === 'closed')
     return fail(
       409,

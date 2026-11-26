@@ -50,6 +50,10 @@ import {
   voteCodeStampOk,
 } from '../src/lib/vote-code-window';
 import { VOTE_SCREEN_RELOAD_SECONDS } from '../src/handlers/vote-screen';
+import { castVote } from '../src/lib/vote-cast';
+import { moveVotable } from '../src/lib/vote-sets';
+import { voterKey } from '../src/lib/vote-pass';
+import { pepperEpoch } from '../src/lib/anon-id-hash';
 
 interface TestEnv {
   DB: D1Database;
@@ -216,6 +220,39 @@ describe('the rotating vote code', () => {
       expect(res.status, String(w)).toBe(302);
       expect(hasPass(res), String(w)).toBe(false);
     }
+  });
+
+  test('SECURITY | a stale scan counts nothing and tells the voter to scan again (CCR F7, F12)', async () => {
+    await ok(openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 200));
+    await run(`DELETE FROM scan_placement_events WHERE event_id = ?`, EV);
+    const rows = async () =>
+      (
+        await tenv.DB.prepare(`SELECT COUNT(*) AS c FROM scan_placement_events WHERE event_id = ?`)
+          .bind(EV)
+          .first<{ c: number }>()
+      )?.c ?? 0;
+    const req = new Request(
+      `${ORIGIN}/q/${TOKEN[EV]}?type=vote&w=${await voteCodeStamp(PEPPER, TOKEN[EV], Date.now() - 2 * MINUTE)}`
+    );
+    const res = await handleQrScan(req, scanEnv(), TOKEN[EV], true);
+    expect(res.status).toBe(302);
+    // The vote page with no pass: it reads "Scan the code on the screen again."
+    expect(res.headers.get('Location')).toBe(`${ORIGIN}/events/${EV}/vote`);
+    expect(res.headers.get('Set-Cookie')).toBeNull();
+    expect(await rows()).toBe(0);
+    // The control: a fresh stamp from a browser with no cookie writes its row,
+    // sets the cookie and carries a pass.
+    const fresh = await handleQrScan(
+      new Request(
+        `${ORIGIN}/q/${TOKEN[EV]}?type=vote&w=${await voteCodeStamp(PEPPER, TOKEN[EV], Date.now())}`
+      ),
+      scanEnv(),
+      TOKEN[EV],
+      true
+    );
+    expect(hasPass(fresh)).toBe(true);
+    expect(fresh.headers.get('Set-Cookie')).not.toBeNull();
+    expect(await rows()).toBe(1);
   });
 
   test("SECURITY | a forged stamp mints no pass: another code's, a changed seal, another pepper", async () => {
@@ -395,6 +432,44 @@ describe('the room check at final', () => {
     expect(out[EV_2]).toMatchObject({ flood_seen: 0, outcome: 'winner' });
   });
 
+  test('SECURITY | through the cast path: eleven real voters in a room of ten flag the night; ten do not (CCR F14)', async () => {
+    const epoch = (await pepperEpoch(PEPPER)) as string;
+    for (const [eventId, count] of [
+      [EV, 11],
+      [EV_2, 10],
+    ] as const) {
+      const obj = await ok(
+        createVotable(tenv.DB, eventId, {
+          kind: 'song',
+          label: 'One',
+          booth_id: null,
+          group_id: null,
+          sort: 0,
+        })
+      );
+      await ok(openVoteSet(tenv.DB, eventId, PEPPER, nowIso(), 10));
+      const id = (obj as unknown as { value: { id: string } }).value.id;
+      await ok(moveVotable(tenv.DB, eventId, id, 'open', 600, nowIso()));
+      for (let i = 0; i < count; i++) {
+        const k = (await voterKey(PEPPER, freshCookie(), eventId)) as string;
+        expect(
+          await castVote(tenv.DB, PEPPER, {
+            eventId,
+            objectId: id,
+            side: 'up',
+            k,
+            epoch,
+            nowMs: Date.now(),
+          })
+        ).toBe('accepted');
+      }
+      await ok(closeVoteSet(tenv.DB, eventId, nowIso()));
+      await ok(adminFinalizeVoteSet(tenv.DB, eventId, nowIso()));
+    }
+    expect((await setRow(EV))?.flood_seen).toBe(1);
+    expect((await setRow(EV_2))?.flood_seen).toBe(0);
+  });
+
   test('a set opened before the room size existed is not checked', async () => {
     await ok(openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 10));
     // As a set opened by the older Worker: no room size, so the row is
@@ -410,6 +485,24 @@ describe('the room check at final', () => {
     await voters(before!.id, 30);
     await ok(adminFinalizeVoteSet(tenv.DB, EV, nowIso()));
     expect((await setRow(EV))?.flood_seen).toBe(0);
+  });
+});
+
+describe('a set with no room size is not reopened (CCR F9)', () => {
+  test('SECURITY | a closed set an older Worker opened stays closed; one with a room size reopens', async () => {
+    await ok(openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 50));
+    await ok(closeVoteSet(tenv.DB, EV, nowIso()));
+    // As the older Worker left it: opened, closed, no room size.
+    await run(`UPDATE vote_sets SET room_size = NULL WHERE event_id = ?`, EV);
+    const r = await reopenVoteSet(tenv.DB, EV, PEPPER, nowIso());
+    expect(r).toMatchObject({ ok: false, status: 409, code: 'ROOM_SIZE_MISSING' });
+    expect((await readVoteSet(tenv.DB, EV))?.state).toBe('closed');
+    // It can still be finalized, so its night is not lost.
+    await ok(adminFinalizeVoteSet(tenv.DB, EV, nowIso()));
+    // The control: a set with its room size reopens.
+    await ok(openVoteSet(tenv.DB, EV_2, PEPPER, nowIso(), 50));
+    await ok(closeVoteSet(tenv.DB, EV_2, nowIso()));
+    await ok(reopenVoteSet(tenv.DB, EV_2, PEPPER, nowIso()));
   });
 });
 
