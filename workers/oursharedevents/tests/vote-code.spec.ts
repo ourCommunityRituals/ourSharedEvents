@@ -49,6 +49,7 @@ import { readPosterReach } from '../src/lib/poster-reach';
 import { readPreEventActivity } from '../src/lib/pre-event-activity';
 import { collectGoLiveEvidence } from '../src/lib/go-live-evidence';
 import { voteCodeStamp } from '../src/lib/vote-code-window';
+import { makeVoteCode } from '../src/lib/vote-code';
 
 interface TestEnv {
   DB: D1Database;
@@ -420,6 +421,26 @@ describe('OSE-2140 | the room has its own vote code', () => {
     expect(r.status).toBe(201);
     expect((await call('POST', vp(PREP), {})).status).toBe(201);
   });
+});
+
+describe('OSE-2234 | the stamped vote code fits a QR on real hosts', () => {
+  // The staging host plus a full token and stamp runs past the 122 bytes a
+  // level-M QR holds; the code must still draw (it did not, on staging).
+  for (const origin of [
+    'https://oursharedevents.com',
+    'https://stg.oursharedevents.com',
+    'https://events.a-longer-client-domain.example',
+  ]) {
+    test(`a QR is drawn for ${origin}`, async () => {
+      const { code } = await makeVoteCode(tenv.DB, NIGHT, origin, {
+        pepper: PEPPER,
+        nowMs: Date.now(),
+      });
+      expect(code.url.startsWith(`${origin}/q/qrt_`)).toBe(true);
+      expect(code.url).toMatch(/\?type=vote&w=\d+\.[0-9a-f]{32}$/);
+      expect(code.qr.startsWith('data:image/')).toBe(true);
+    });
+  }
 });
 
 describe('OSE-2140 | the vote code is not a poster in any number (owner, 2026-11-18)', () => {
