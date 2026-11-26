@@ -367,9 +367,10 @@ describe('5. the written exception: an archived, listed event keeps its recap sp
     expect(html).not.toContain(`/api/v2/sponsors/${RECAP.sponsorId}/logo`);
   });
 
-  test('live control: the live page shows the sponsor as its logo', async () => {
+  test('live control: the live page shows the sponsor as its wide logo', async () => {
     const html = await (await get(`/events/${LIVE.eventId}`)).text();
-    expect(html).toContain(`/api/v2/sponsors/${LIVE.sponsorId}/logo?slot=sidebar`);
+    // The banner uses the wide logo (top banner), served at the default slot.
+    expect(html).toContain(`src="/api/v2/sponsors/${LIVE.sponsorId}/logo"`);
   });
 
   test('an archived event that was never listed has no recap to show', async () => {
