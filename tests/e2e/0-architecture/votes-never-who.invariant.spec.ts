@@ -26,7 +26,10 @@
  *      Worker, the migrations, scripts/ and .github/workflows/:
  *        - a write to vote_sets sets is_final, is_void, flood_seen and burst_seen (OSE-2234)
  *          only to the literal 1, by plain `column = 1`, never in a tuple or
- *          an expression, so a flood once seen is never cleared;
+ *          an expression, so a flood once seen is never cleared (no trigger:
+ *          D1's remote runner cannot take one, migration 0025);
+ *        - room_size (OSE-2234) is set only by a write whose WHERE says
+ *          `room_size IS NULL`, so it is written once and never changed;
  *        - pepper_epoch and played_by are set only by a write whose WHERE says
  *          the column IS NULL (stamped once, never restamped);
  *        - secret_margin and secret_floor are set to a value only by a write
@@ -426,7 +429,9 @@ function flagProblems(raw: string, sqlComments = true): string[] {
       for (const part of splitTop(setPart.replace(/\bRETURNING\b.*$/i, ''))) {
         if (
           /^\(/.test(part) &&
-          /\b(?:is_final|is_void|flood_seen|burst_seen|pepper_epoch|played_by)\b/i.test(part)
+          /\b(?:is_final|is_void|flood_seen|burst_seen|pepper_epoch|played_by|room_size)\b/i.test(
+            part
+          )
         )
           out.push(`sets a one-way column in a tuple: ${part}`);
         if (/\bis_final\b/i.test(part) && !/^is_final\s*=\s*1$/i.test(part))
@@ -453,7 +458,10 @@ function flagProblems(raw: string, sqlComments = true): string[] {
           )
             out.push(`${col} is drawn without a "pepper_epoch IS NULL" guard: ${part}`);
         }
-        for (const col of ['pepper_epoch', 'played_by']) {
+        // room_size (OSE-2234): written once, by the first open, so it needs a
+        // "room_size IS NULL" guard; D1's remote runner cannot take a trigger
+        // (migration 0025), so this gate is what holds it fixed.
+        for (const col of ['pepper_epoch', 'played_by', 'room_size']) {
           if (
             new RegExp(`^${col}\\s*=`, 'i').test(part) &&
             !new RegExp(`\\b${col}\\s+IS\\s+NULL\\b`, 'i').test(where)
@@ -1068,6 +1076,10 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
       "UPDATE vote_sets SET (flood_seen, state) = (0, 'closed') WHERE id = ?",
       'UPDATE vote_sets SET burst_seen = 0 WHERE id = ?',
       "UPDATE vote_sets SET (burst_seen, state) = (0, 'closed') WHERE id = ?",
+      // OSE-2234: the room size is written once, by the first open.
+      'UPDATE vote_sets SET room_size = ? WHERE id = ?',
+      'UPDATE vote_sets SET room_size = 50000 WHERE event_id = ? AND is_final = 0',
+      "UPDATE vote_sets SET (room_size, state) = (?, 'open') WHERE id = ? AND room_size IS NULL",
     ];
     expect(reopen.filter((sql) => flagProblems(sql).length === 0)).toEqual([]);
     // A shell line: its --command flag is not a SQL comment.
@@ -1089,6 +1101,7 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
       'SELECT is_final FROM vote_sets WHERE id = ?',
       'UPDATE vote_sets SET flood_seen = 1 WHERE event_id = ? AND flood_seen = 0 AND is_final = 0',
       'UPDATE vote_sets SET burst_seen = 1 WHERE event_id = ? AND burst_seen = 0 AND is_final = 0',
+      "UPDATE vote_sets SET state = 'open', pepper_epoch = ?, room_size = ? WHERE id = ? AND is_final = 0 AND pepper_epoch IS NULL AND room_size IS NULL",
     ];
     expect(fine.filter((sql) => flagProblems(sql).length > 0)).toEqual([]);
 

@@ -200,14 +200,22 @@ async function makeCode(eventId = NIGHT): Promise<{ token: string; id: string; u
 }
 
 /** Make NIGHT's set with one song, open the set and the song. */
-async function openNight(eventId = NIGHT): Promise<void> {
+async function openNight(eventId = NIGHT, extra: string[] = []): Promise<string[]> {
   expect((await call('POST', vp(eventId), { played_by: 'object' })).status).toBe(201);
   const song = await call('POST', vp(eventId, '/objects'), { kind: 'song', label: 'Song one' });
   expect(song.status).toBe(201);
+  // Everything is added before voting opens (OBJECTS_FIXED after).
+  const ids: string[] = [];
+  for (const label of extra) {
+    const more = await call('POST', vp(eventId, '/objects'), { kind: 'song', label });
+    expect(more.status).toBe(201);
+    ids.push(more.json.object.id as string);
+  }
   expect((await call('POST', vp(eventId, '/open'), { room_size: 200 })).status).toBe(200);
   expect((await call('POST', vp(eventId, `/objects/${song.json.object.id}/open`), {})).status).toBe(
     200
   );
+  return ids;
 }
 
 const setState = async (eventId: string) =>
@@ -599,16 +607,13 @@ describe('OSE-2142 | a vote set follows its event status', () => {
   });
 
   test('OSE-2142 | a set that has opened takes no object, and opens no object, while its event is not Published', async () => {
-    await openNight();
-    const draftSong = await call('POST', vp(NIGHT, '/objects'), {
-      kind: 'song',
-      label: 'Song two',
-    });
-    expect(draftSong.status).toBe(201);
+    const [songTwo] = await openNight(NIGHT, ['Song two']);
+    const draftSong = { json: { object: { id: songTwo } } };
     await run(`UPDATE events SET status = 'ready' WHERE id = ?`, NIGHT);
+    // An opened set takes no new object at all (OBJECTS_FIXED, 2026-11-26).
     const add = await call('POST', vp(NIGHT, '/objects'), { kind: 'song', label: 'Song three' });
     expect(add.status).toBe(409);
-    expect(add.json.code).toBe('EVENT_NOT_PUBLISHED');
+    expect(add.json.code).toBe('OBJECTS_FIXED');
     // Held open by a bypassing write, an object still does not open.
     await run(`UPDATE vote_sets SET state = 'open' WHERE event_id = ?`, NIGHT);
     const openObj = await call('POST', vp(NIGHT, `/objects/${draftSong.json.object.id}/open`), {});
@@ -617,7 +622,7 @@ describe('OSE-2142 | a vote set follows its event status', () => {
     // Archived reads as over, as before.
     await run(`UPDATE events SET status = 'archived' WHERE id = ?`, NIGHT);
     const over = await call('POST', vp(NIGHT, '/objects'), { kind: 'song', label: 'Song four' });
-    expect(over.json.code).toBe('EVENT_OVER');
+    expect(over.json.code).toBe('OBJECTS_FIXED');
   });
 
   test('OSE-2142 | migration 0113 closes a set already open on an event that is not Published', async () => {

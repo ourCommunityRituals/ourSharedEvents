@@ -7,6 +7,7 @@
  *   DELETE /api/v2/admin/venues/:id/operators/:brand    take an operator off the venue's list
  *   GET    /api/v2/admin/venues/:id/rollup              traffic and sponsors at the venue, per operator
  *   PUT    /api/v2/admin/events/:id/venue               hold an event at a venue (or clear it)
+ *   PUT    /api/v2/admin/venues/:id/room-ceiling        the voting room-size ceiling (platform admins only)
  *
  * Owner, 2026-11-23: a bar owner has several event operators on the property,
  * each its own brand, and sees all the activity at the place and the
@@ -222,6 +223,76 @@ export async function handleCreateVenue(request: Request, env: VenuesEnv): Promi
       .bind(id, brand, name)
       .run();
     return json(request, reqId, { ok: true, id, name, owner_brand: brand }, 201);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUT /api/v2/admin/venues/:id/room-ceiling  (OSE-2234, owner 2026-11-26)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ROOM_CAP_RANGE = [10, 50000] as const;
+
+/**
+ * Set the ceiling on a voting room size at a venue. Platform admins only: the
+ * router puts requirePlatformScope in front, so a venue's owner, an operator
+ * there, or any brand admin gets the router's 404. The owner chose this
+ * (decision cards 2026-11-26: a ceiling the host does not pick; "Permit limit,
+ * else 500"):
+ *   { "room_kind": "indoor",  "room_cap": N }    N = the building's fire-marshal capacity (required)
+ *   { "room_kind": "outdoor", "room_cap": N }    N = the permit's attendance limit
+ *   { "room_kind": "outdoor", "room_cap": null } no permit limit: the 500 default applies
+ * Any other field is refused. The ceiling binds a set's first open only; a
+ * room size already fixed is not touched (lib/vote-sets.ts ROOM_CEILING_SQL).
+ */
+export async function handlePutVenueRoomCeiling(
+  request: Request,
+  env: VenuesEnv,
+  venueId: string
+): Promise<Response> {
+  const reqId = rid();
+  const body = await readBody(request);
+  return guarded(request, reqId, async () => {
+    if (!VENUE_ID_RE.test(venueId))
+      return fail(request, reqId, 404, 'NOT_FOUND', 'Venue not found');
+    const venue = await env.DB.prepare('SELECT id FROM venues WHERE id = ?')
+      .bind(venueId)
+      .first<{ id: string }>();
+    if (!venue) return fail(request, reqId, 404, 'NOT_FOUND', 'Venue not found');
+    if (!body) return fail(request, reqId, 400, 'INVALID_BODY', 'Send a JSON object');
+    const extra = Object.keys(body).filter((k) => k !== 'room_kind' && k !== 'room_cap');
+    if (extra.length)
+      return fail(request, reqId, 400, 'UNKNOWN_FIELD', 'Send room_kind and room_cap only');
+    const kind = body.room_kind;
+    if (kind !== 'indoor' && kind !== 'outdoor')
+      return fail(request, reqId, 400, 'INVALID_ROOM_KIND', "room_kind is 'indoor' or 'outdoor'");
+    const cap = body.room_cap ?? null;
+    if (cap === null) {
+      if (kind === 'indoor')
+        return fail(
+          request,
+          reqId,
+          400,
+          'ROOM_CAP_NEEDED',
+          "An indoor venue needs its building's fire-marshal capacity as room_cap"
+        );
+    } else if (
+      typeof cap !== 'number' ||
+      !Number.isInteger(cap) ||
+      cap < ROOM_CAP_RANGE[0] ||
+      cap > ROOM_CAP_RANGE[1]
+    ) {
+      return fail(
+        request,
+        reqId,
+        400,
+        'INVALID_ROOM_CAP',
+        `room_cap is a whole number from ${ROOM_CAP_RANGE[0]} to ${ROOM_CAP_RANGE[1]}, or null outdoors`
+      );
+    }
+    await env.DB.prepare('UPDATE venues SET room_kind = ?, room_cap = ? WHERE id = ?')
+      .bind(kind, cap, venue.id)
+      .run();
+    return json(request, reqId, { ok: true, venue_id: venue.id, room_kind: kind, room_cap: cap });
   });
 }
 

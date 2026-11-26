@@ -176,7 +176,11 @@ async function seedEvent(id: string, brand: string, date: string | null) {
 const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
 
 /** Make the set and one song, open the set. Returns the song's id. */
-async function openNight(eventId = A1, playedBy: 'object' | 'team' = 'object'): Promise<string> {
+async function openNight(
+  eventId = A1,
+  playedBy: 'object' | 'team' = 'object',
+  extra: string[] = []
+): Promise<string> {
   expect((await call('POST', vp(eventId), A, { played_by: playedBy })).status).toBe(201);
   const song = await call('POST', vp(eventId, '/objects'), A, {
     kind: 'song',
@@ -184,6 +188,17 @@ async function openNight(eventId = A1, playedBy: 'object' | 'team' = 'object'): 
     ...(playedBy === 'team' ? { group_id: TEAM_1 } : {}),
   });
   expect(song.status).toBe(201);
+  // Everything is added before voting opens (OBJECTS_FIXED after).
+  for (const label of extra)
+    expect(
+      (
+        await call('POST', vp(eventId, '/objects'), A, {
+          kind: 'song',
+          label,
+          ...(playedBy === 'team' ? { group_id: TEAM_1 } : {}),
+        })
+      ).status
+    ).toBe(201);
   expect((await call('POST', vp(eventId, '/open'), A, { room_size: 200 })).status).toBe(200);
   return song.json.object.id as string;
 }
@@ -533,10 +548,12 @@ describe('5. the first open stamps the epoch and draws T and V, once', () => {
       '2099-06-01',
       OLD
     );
-    const songId = await openNight(OLD);
-    const fresh = (
-      await call('POST', vp(OLD, '/objects'), A, { kind: 'song', label: 'Never opened' })
-    ).json.object.id as string;
+    const songId = await openNight(OLD, 'object', ['Never opened']);
+    const fresh = (await tenv.DB.prepare(
+      `SELECT id FROM votable_objects WHERE event_id = ? AND label = 'Never opened'`
+    )
+      .bind(OLD)
+      .first<{ id: string }>())!.id;
     await call('POST', vp(OLD, `/objects/${songId}/open`), A, {});
     await call('POST', vp(OLD, `/objects/${songId}/close`), A, {});
     // The set stays open; the event moves into the past.
@@ -786,24 +803,27 @@ describe('6. after the first open, a song team cannot change', () => {
     ).toBe(200);
   });
 
-  test('once voting opens, a new object cannot take a name already in the set (no vote split)', async () => {
+  test('once voting opens, nothing can be added: no decoy, no second copy, no late favourite', async () => {
+    // Owner, 2026-11-26 (after CCR loops 1 to 3).
     await call('POST', vp(A1), A, {});
-    // Before the first open a repeat is the host's own business.
     expect(
       (await call('POST', vp(A1, '/objects'), A, { kind: 'song', label: 'Song A' })).status
     ).toBe(201);
     await call('POST', vp(A1, '/open'), A, { room_size: 200 });
-    const twin = await call('POST', vp(A1, '/objects'), A, { kind: 'song', label: '  song a ' });
-    expect(twin.status).toBe(409);
-    expect(twin.json.code).toBe('LABEL_TAKEN');
+    for (const label of ['  song a ', 'Song B']) {
+      const res = await call('POST', vp(A1, '/objects'), A, { kind: 'song', label });
+      expect(res.status).toBe(409);
+      expect(res.json.code).toBe('OBJECTS_FIXED');
+    }
+    // Closed and reopened, still fixed.
+    await call('POST', vp(A1, '/close'), A, {});
+    expect(
+      (await call('POST', vp(A1, '/objects'), A, { kind: 'song', label: 'Song C' })).json.code
+    ).toBe('OBJECTS_FIXED');
     const n = await tenv.DB.prepare(`SELECT COUNT(*) AS n FROM votable_objects WHERE event_id = ?`)
       .bind(A1)
       .first<{ n: number }>();
     expect(Number(n?.n)).toBe(1);
-    // A new name still joins while the event is live.
-    expect(
-      (await call('POST', vp(A1, '/objects'), A, { kind: 'song', label: 'Song B' })).status
-    ).toBe(201);
   });
 
   test('a team night needs a team on each object; an object night refuses one', async () => {

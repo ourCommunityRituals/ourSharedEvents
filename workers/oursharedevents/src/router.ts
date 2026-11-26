@@ -239,6 +239,7 @@
  *   DELETE /api/v2/admin/venues/:id/operators/:brand    → take a brand off the venue's list; its events stop counting (owner only, audited)
  *   GET    /api/v2/admin/venues/:id/rollup              → floored scans, taps and sponsors at the venue, per operator and in total (owner only)
  *   PUT    /api/v2/admin/events/:id/venue               → hold the event at a venue that lists its brand, or clear it (auth, audited)
+ *   PUT    /api/v2/admin/venues/:id/room-ceiling        → the voting room-size ceiling: indoor fire-marshal capacity or outdoor permit limit (platform admins only, audited; OSE-2234)
  *
  *   Admin Audit Log (auth required — OSE-212):
  *   GET    /api/v2/admin/audit-log          → paginated audit entries
@@ -357,6 +358,7 @@ import {
   handlePutVenueOperator,
   handleSetEventVenue,
   handleVenueRollup,
+  handlePutVenueRoomCeiling,
 } from './handlers/venues';
 import { handleAdminEventLivePage } from './handlers/live-monitor';
 import { handleAdminVoteScreenPage } from './handlers/vote-screen';
@@ -1328,6 +1330,19 @@ export async function route(
     const [, id, brand] = venueOperatorMatch;
     return _venueCall(reqId, deny, 'UNLIST_VENUE_OPERATOR', id, () =>
       handleDeleteVenueOperator(request, env, id, brand)
+    );
+  }
+  // PUT /api/v2/admin/venues/:id/room-ceiling — OSE-2234 (owner, 2026-11-26): a
+  // ceiling on a voting room size that no host sets. Platform admins only; any
+  // other caller gets the 404 of a route that does not exist.
+  const venueCeilingMatch = pathname.match(/^\/api\/v2\/admin\/venues\/([^/]+)\/room-ceiling$/);
+  if (venueCeilingMatch && method === 'PUT') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny =
+      (await requireAdmin(request, env, reqId)) ?? (await requirePlatformScope(request, env));
+    const id = venueCeilingMatch[1];
+    return _venueCall(reqId, deny, 'SET_VENUE_ROOM_CEILING', id, () =>
+      handlePutVenueRoomCeiling(request, env, id)
     );
   }
   const venueRollupMatch = pathname.match(/^\/api\/v2\/admin\/venues\/([^/]+)\/rollup$/);

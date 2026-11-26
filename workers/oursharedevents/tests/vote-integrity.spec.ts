@@ -9,14 +9,15 @@
  *     for a stamp from this minute or the one before, made for this code's
  *     token under the pepper. No stamp, an old stamp, a future stamp, another
  *     code's stamp, a tampered seal or no pepper: no pass, and the scan stands.
- *   - THE ROOM SIZE: the first open needs it (10 to 50000, a whole number),
- *     writes it once, a reopen keeps it, and the database refuses any change
- *     to it after (trigger vote_sets_room_size_fixed).
+ *   - THE ROOM SIZE: the first open needs it (10 to 50000, a whole number,
+ *     under the platform's ceiling: the venue's room_cap, else 500), writes it
+ *     once, and a second open, a reopen and final keep it. No trigger (D1,
+ *     migration 0025): the T0 gate votes-never-who holds every write to it.
  *   - THE ROOM CHECK AT FINAL (lib/vote-results.ts ROOM_CHECK_UPDATE): more
  *     distinct voters than the room size flags the night; as many or fewer
  *     does not; the outcome and the winner are the same either way.
- *   - THE FLAG IS ONE-WAY in the database itself (trigger
- *     vote_sets_flood_one_way), whatever code runs.
+ *   - THE FLAGS ARE ONE-WAY: no app path clears flood_seen or burst_seen
+ *     (and the T0 gate holds every statement sets them only to 1).
  *   - The room screen reloads well inside one stamp's life.
  *
  * Staging twins: bruno/ose-api/25. Vote pass at scan (OSE-2133), scan 50 (the
@@ -28,7 +29,7 @@
  */
 
 import { env } from 'cloudflare:test';
-import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, test, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { handleQrScan, type QrScanEnv } from '../src/handlers/qr-scan';
 import { signAnonId } from '../src/lib/anonymous-id';
 import {
@@ -39,6 +40,7 @@ import {
   openVoteSet,
   readVoteSet,
   reopenVoteSet,
+  ROOM_CEILING_DEFAULT,
 } from '../src/lib/vote-sets';
 import { VOTING_ON } from '../src/lib/voting-switch';
 import {
@@ -267,19 +269,84 @@ describe('the room size', () => {
     expect(opened).toMatchObject({ value: { room_size: 40, opened: true } });
   });
 
-  test('SECURITY | it is fixed: a reopen keeps it, and the database refuses any change', async () => {
+  test('SECURITY | it is fixed: a second open, a reopen and final keep it', async () => {
     await ok(openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 40));
+    // A second open with another size is refused and changes nothing.
+    expect(await openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 400)).toMatchObject({ ok: false });
     await ok(closeVoteSet(tenv.DB, EV, nowIso()));
+    expect(await openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 400)).toMatchObject({ ok: false });
     await ok(reopenVoteSet(tenv.DB, EV, PEPPER, nowIso()));
     expect((await setRow(EV))?.room_size).toBe(40);
-    // A host who wants to hide padding after the night cannot raise it, by any path.
-    await expect(
-      run(`UPDATE vote_sets SET room_size = 400 WHERE event_id = ?`, EV)
-    ).rejects.toThrow(/room_size is fixed/);
-    await expect(
-      run(`UPDATE vote_sets SET room_size = NULL WHERE event_id = ?`, EV)
-    ).rejects.toThrow(/room_size is fixed/);
+    await ok(closeVoteSet(tenv.DB, EV, nowIso()));
+    await ok(adminFinalizeVoteSet(tenv.DB, EV, nowIso()));
     expect((await setRow(EV))?.room_size).toBe(40);
+    // No statement in the code base writes it without "room_size IS NULL":
+    // the T0 gate votes-never-who, rule 5 (no trigger: migration 0025).
+  });
+});
+
+describe('the room size has a ceiling the host cannot set (owner, 2026-11-26)', () => {
+  beforeEach(async () => {
+    await run(`UPDATE events SET host_venue_id = NULL WHERE id IN (?, ?)`, EV, EV_2);
+  });
+
+  async function atVenue(eventId: string, kind: string | null, cap: number | null) {
+    const venueId = `ven_${eventId
+      .replace(/[^a-f0-9]/g, '')
+      .padEnd(32, 'a')
+      .slice(0, 32)}`;
+    await run(
+      `INSERT OR REPLACE INTO venues (id, brand_id, name, room_kind, room_cap) VALUES (?, 'vi-brand', 'Hall', ?, ?)`,
+      venueId,
+      kind,
+      cap
+    );
+    await run(`UPDATE events SET host_venue_id = ? WHERE id = ?`, venueId, eventId);
+  }
+
+  test('SECURITY | no venue: 500 at most; over it is refused and nothing opens', async () => {
+    expect(ROOM_CEILING_DEFAULT).toBe(500);
+    const over = await openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 501);
+    expect(over).toMatchObject({ ok: false, code: 'ROOM_SIZE_OVER_CEILING' });
+    expect((over as { error: string }).error).toContain('500');
+    expect(await setRow(EV)).toMatchObject({ room_size: null });
+    await ok(openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 500));
+  });
+
+  test('SECURITY | indoors: the fire-marshal capacity is the ceiling, even below 500', async () => {
+    await atVenue(EV, 'indoor', 120);
+    expect(await openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 121)).toMatchObject({
+      code: 'ROOM_SIZE_OVER_CEILING',
+    });
+    await ok(openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 120));
+  });
+
+  test('outdoors: the permit limit, which may be above 500; with no permit limit, 500', async () => {
+    await atVenue(EV, 'outdoor', 2000);
+    await ok(openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 2000));
+    await atVenue(EV_2, 'outdoor', null);
+    expect(await openVoteSet(tenv.DB, EV_2, PEPPER, nowIso(), 501)).toMatchObject({
+      code: 'ROOM_SIZE_OVER_CEILING',
+    });
+    await ok(openVoteSet(tenv.DB, EV_2, PEPPER, nowIso(), 500));
+  });
+
+  test('SECURITY | the ceiling is in the open statement itself, not only in the code before it', async () => {
+    // A stale read: the code sees no venue (500), the statement sees 120.
+    const real = tenv.DB.prepare.bind(tenv.DB);
+    let swapped = false;
+    const spy = vi.spyOn(tenv.DB, 'prepare').mockImplementation((sql: string) => {
+      if (!swapped && /SELECT v\.room_cap AS cap/.test(sql)) {
+        swapped = true;
+        return real(`SELECT NULL AS cap WHERE ? IS NOT NULL`);
+      }
+      return real(sql);
+    });
+    await atVenue(EV, 'indoor', 120);
+    const res = await openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 300);
+    spy.mockRestore();
+    expect(res).toMatchObject({ ok: false, code: 'ROOM_SIZE_OVER_CEILING' });
+    expect(await setRow(EV)).toMatchObject({ room_size: null });
   });
 });
 
@@ -304,9 +371,8 @@ describe('the room check at final', () => {
     const out: Record<string, Awaited<ReturnType<typeof setRow>>> = {};
     for (const [id, room] of [
       [EV, 10],
-      [EV_2, 5000],
+      [EV_2, 400],
     ] as const) {
-      await ok(openVoteSet(tenv.DB, id, PEPPER, nowIso(), room));
       const song = await ok(
         createVotable(tenv.DB, id, {
           kind: 'song',
@@ -316,6 +382,7 @@ describe('the room check at final', () => {
           sort: 0,
         })
       );
+      await ok(openVoteSet(tenv.DB, id, PEPPER, nowIso(), room));
       const objectId = (song as unknown as { value: { id: string } }).value.id;
       // 15 voters (above any V) and a lead of 15 (above any T): a won night.
       await run(`UPDATE vote_tallies SET up_count = 15 WHERE object_id = ?`, objectId);
@@ -330,8 +397,8 @@ describe('the room check at final', () => {
 
   test('a set opened before the room size existed is not checked', async () => {
     await ok(openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 10));
-    // As a set opened by the older Worker: no room size. The trigger allows
-    // only null to null, so the row is remade without it.
+    // As a set opened by the older Worker: no room size, so the row is
+    // remade without it.
     const before = await setRow(EV);
     await run(`DELETE FROM vote_sets WHERE event_id = ?`, EV);
     await run(
@@ -346,30 +413,26 @@ describe('the room check at final', () => {
   });
 });
 
-describe('the flag is one-way in the database', () => {
-  test('SECURITY | once set, no write turns it back to 0, whatever code runs', async () => {
+describe('the flags are one-way: no app path clears them', () => {
+  test('SECURITY | a close, a reopen and final keep both flags', async () => {
     await ok(openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 10));
-    await run(`UPDATE vote_sets SET flood_seen = 1 WHERE event_id = ?`, EV);
-    await expect(run(`UPDATE vote_sets SET flood_seen = 0 WHERE event_id = ?`, EV)).rejects.toThrow(
-      /one-way/
-    );
-    expect((await setRow(EV))?.flood_seen).toBe(1);
-    // Setting it to 1 again is fine (the flood write and the room check may both run).
-    await run(`UPDATE vote_sets SET flood_seen = 1 WHERE event_id = ?`, EV);
-  });
-
-  test("SECURITY | the host's burst alarm is one-way too: no write clears it", async () => {
-    await ok(openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 10));
-    await run(`UPDATE vote_sets SET burst_seen = 1 WHERE event_id = ?`, EV);
-    await expect(run(`UPDATE vote_sets SET burst_seen = 0 WHERE event_id = ?`, EV)).rejects.toThrow(
-      /burst_seen is one-way/
-    );
+    await run(`UPDATE vote_sets SET flood_seen = 1, burst_seen = 1 WHERE event_id = ?`, EV);
+    await ok(closeVoteSet(tenv.DB, EV, nowIso()));
+    await ok(reopenVoteSet(tenv.DB, EV, PEPPER, nowIso()));
+    await ok(closeVoteSet(tenv.DB, EV, nowIso()));
+    await ok(adminFinalizeVoteSet(tenv.DB, EV, nowIso()));
+    const row = await tenv.DB.prepare(
+      `SELECT flood_seen, burst_seen FROM vote_sets WHERE event_id = ?`
+    )
+      .bind(EV)
+      .first<{ flood_seen: number; burst_seen: number }>();
+    expect(row).toEqual({ flood_seen: 1, burst_seen: 1 });
+    // Each flag is a 0-or-1 column; any other value is refused by its CHECK.
     await expect(
       run(`UPDATE vote_sets SET burst_seen = 2 WHERE event_id = ?`, EV)
     ).rejects.toThrow();
-    const row = await tenv.DB.prepare(`SELECT burst_seen FROM vote_sets WHERE event_id = ?`)
-      .bind(EV)
-      .first<{ burst_seen: number }>();
-    expect(row?.burst_seen).toBe(1);
+    await expect(
+      run(`UPDATE vote_sets SET flood_seen = 2 WHERE event_id = ?`, EV)
+    ).rejects.toThrow();
   });
 });

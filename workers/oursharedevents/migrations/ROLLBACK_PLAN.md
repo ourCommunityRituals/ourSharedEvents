@@ -132,18 +132,17 @@ DROP TABLE IF EXISTS vote_access_passes;
 -- 2026-11-26): vote_sets.flood_seen, a one-way flag set by the room check at
 -- final (public: the result may be padded), vote_sets.burst_seen, a one-way
 -- flag set by the per-minute alarm (the host's only), and vote_sets.room_size,
--- the room size the host gave at the first open; plus three triggers,
--- vote_sets_flood_one_way and vote_sets_burst_one_way (neither flag goes back
--- to 0) and vote_sets_room_size_fixed (the room size never changes once set).
--- Additive: three columns (defaults 0, null and 0) and three triggers. No row
--- is written or rewritten.
--- THE ROLLBACK IS: revert the Worker and LEAVE THE COLUMNS AND TRIGGERS. The
--- older Worker never reads or writes any of these columns, so the triggers never
--- fire for it; a flag or room size already set stays in its row and shows
--- again when this Worker returns. Note: the older Worker opens a set with no
--- room size (null), and such a set is not room-checked at final. SQLite
--- cannot drop a column with a CHECK; leave them. Do not drop the triggers:
--- they are what stop a host from clearing a flag or raising a room size.
+-- the room size the host gave at the first open; and on venues, room_kind and
+-- room_cap, the room-size ceiling only a platform admin sets. No trigger (0025):
+-- the T0 gate votes-never-who keeps the flags one-way and the room size fixed.
+-- Additive: five columns (defaults 0, null, 0, null, null). No row is written
+-- or rewritten.
+-- THE ROLLBACK IS: revert the Worker and LEAVE THE COLUMNS. The older Worker
+-- never reads or writes any of these columns; a flag, room size or ceiling
+-- already set stays in its row and shows again when this Worker returns. Note:
+-- the older Worker opens a set with no room size (null) and no ceiling, and
+-- such a set is not room-checked at final. SQLite cannot drop a column with a
+-- CHECK; leave them.
 
 -- 0121: brand_addons (OSE-2232, the paid add-ons the platform has turned on
 -- for a brand; today only 'skins'). Additive: one new table, no index, no

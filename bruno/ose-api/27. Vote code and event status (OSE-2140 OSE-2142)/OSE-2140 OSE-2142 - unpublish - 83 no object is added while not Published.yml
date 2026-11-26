@@ -23,7 +23,7 @@ runtime:
     - type: after-response
       code: |-
         const b = res.getBody() || {};
-        test('OSE-2140 OSE-2142 | unpublish: 409 EVENT_NOT_PUBLISHED', function () { expect(res.getStatus()).to.eql(409); expect(b.code).to.eql('EVENT_NOT_PUBLISHED'); });
+        test('OSE-2140 OSE-2142 OSE-2234 | unpublish: 409 OBJECTS_FIXED (a set that has opened takes no object at all)', function () { expect(res.getStatus()).to.eql(409); expect(b.code).to.eql('OBJECTS_FIXED'); });
 
 settings:
   encodeUrl: true
