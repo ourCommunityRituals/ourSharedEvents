@@ -27,7 +27,19 @@ runtime:
         const base = bru.getEnvVar('baseUrl');
         test('DEC13 give: 201 with an id and a link', function () { expect(res.getStatus()).to.eql(201); expect(p.id).to.match(/^vap_[0-9a-f]{32}$/); });
         test('DEC13 give: the link is this site\'s /access page, the token in the fragment only', function () { expect(String(p.url).indexOf(base + '/access#')).to.eql(0); expect(String(p.url).slice((base + '/access#').length)).to.match(/^[A-Za-z0-9_-]{43}$/); });
-        test('DEC13 give: no-store, no cookie', function () { expect(String(res.getHeader('cache-control'))).to.contain('no-store'); expect(res.getHeader('set-cookie')).to.be.undefined; });
+        // The edge in front of staging may set its own cookies (__cf*, _cf*, cf_*,
+        // as folder 26 notes); only a cookie of the Worker fails here. Names are
+        // logged, never a value.
+        var cookieNames = [];
+        [].concat(res.getHeader('set-cookie') || []).forEach(function (h) {
+          String(h).split(/,(?=\s*[A-Za-z0-9_.-]+=)/).forEach(function (c) {
+            var name = c.split('=')[0].trim();
+            if (name) cookieNames.push(name);
+          });
+        });
+        var workerCookies = cookieNames.filter(function (n) { return !/^(__cf|_cf|cf_)/i.test(n); });
+        console.log('DEC13 give cookie names: ' + (cookieNames.join(',') || '(none)'));
+        test('DEC13 give: no-store, and no cookie of the Worker', function () { expect(String(res.getHeader('cache-control'))).to.contain('no-store'); expect(workerCookies).to.eql([]); });
         bru.setVar('accessPassId', p.id || 'missing-pass');
         bru.setVar('accessPassToken', String(p.url || '').split('#')[1] || '');
 
