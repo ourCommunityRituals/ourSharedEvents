@@ -28,7 +28,7 @@
  *
  * WHAT IS KEPT. A boolean on vote_sets. No time (the write does not touch
  * updated_at), no count, no address, no cookie, no k and no pass, in the key,
- * the value or any log line. The one log line names the event and nothing else;
+ * the value or any log line. The one log line (written by `/q`, not here) names the event and nothing else;
  * the log host stamps it with its own time, so the operator's logs (never the
  * database) know roughly when the flag tripped.
  *
@@ -103,9 +103,9 @@ export async function noteVotePassMinted(env: VoteFloodEnv, eventId: string): Pr
     const res = await env.DB.prepare(MARK_FLOOD_SQL).bind(eventId).run();
     if (flagged.size >= FLAGGED_MAX) flagged.clear();
     flagged.add(eventId);
-    const wrote = (res.meta?.changes ?? 0) > 0;
-    if (wrote) console.warn(JSON.stringify({ type: 'VOTE_FLOOD_SEEN', event_id: eventId }));
-    return wrote;
+    // No log line here: the caller logs, so this function forwards no
+    // parameter into a console call (the log-redaction gate's wrapper rule).
+    return (res.meta?.changes ?? 0) > 0;
   } catch {
     // Detection never blocks a vote, and the line would name nothing useful.
     return false;

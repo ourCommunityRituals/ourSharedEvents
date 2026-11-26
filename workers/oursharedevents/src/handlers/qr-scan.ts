@@ -325,7 +325,10 @@ export async function handleQrScan(
       // OSE-2234: count the pass toward the event's flood alarm. Detection
       // only: it never throws and never changes this answer. With a context it
       // runs after the answer, so a slow binding or D1 never delays the vote.
-      const noted = noteVotePassMinted(env, eventId);
+      const noted = noteVotePassMinted(env, eventId).then((wrote) => {
+        // The one flood line: the event id and nothing else (OSE-2234).
+        if (wrote) console.warn(JSON.stringify({ type: 'VOTE_FLOOD_SEEN', event_id: eventId }));
+      });
       if (ctx) ctx.waitUntil(noted);
       else await noted;
     }
