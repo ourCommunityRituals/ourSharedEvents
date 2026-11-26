@@ -3,8 +3,10 @@
  *
  * THE OWNER'S RULING. The map was drawn with no JavaScript (hex-map standard
  * rule 10). On 2026-11-18 the owner chose "a small script on the map only" so
- * the map can be pinched, scrolled and dragged. This is that script, and the
- * only one the map carries. It keeps the other half of rule 10: it makes no
+ * the map can be pinched, scrolled and dragged. This is that script. The only
+ * other one the map carries is its tooltip (lib/map-tip-script.ts, owner
+ * 2026-11-25), which names an area or a place clear of the pointer or finger
+ * and keeps the same bans. It keeps the other half of rule 10: it makes no
  * request of any kind (no fetch, no image, no tile). It changes the drawing the
  * server already sent: its `viewBox`, the size its text and lines are set at,
  * and one mark it adds. Once the visitor asks where they are, it also writes

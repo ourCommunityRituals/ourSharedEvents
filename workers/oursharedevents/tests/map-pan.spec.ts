@@ -17,6 +17,7 @@ import { describe, expect, it } from 'vitest';
 import { cellToLatLng, gridDisk, latLngToCell } from 'h3-js';
 import { renderAttendeeMap } from '../src/lib/attendee-map';
 import { PAN_SCRIPT } from '../src/lib/map-pan-script';
+import { TIP_SCRIPT } from '../src/lib/map-tip-script';
 import { PAN_STYLE } from '../src/lib/map-pan-style';
 import { LABEL_STYLE } from '../src/lib/map-label-style';
 import { cellsKey } from '../src/lib/street-map';
@@ -50,10 +51,12 @@ const withStreets = (lang: 'en' | 'es' = 'en') =>
   }).html;
 
 describe('the map script | what the page carries', () => {
-  it('with a street map: one script, the buttons hidden until it runs, their styles', () => {
+  it('with a street map: one zoom script (and the tooltip script), the buttons hidden until it runs, their styles', () => {
     const html = withStreets();
     expect(html.split(PAN_SCRIPT).length - 1).toBe(1);
-    expect(html.match(/<script/g)).toHaveLength(1);
+    // The map's tooltip (lib/map-tip-script.ts, owner 2026-11-25) is the other one.
+    expect(html.split(TIP_SCRIPT).length - 1).toBe(1);
+    expect(html.match(/<script/g)).toHaveLength(2);
     expect(html).toContain('<figure class="amap" data-testid="amap" data-pan>');
     expect(html).toMatch(/<div class="amap-ctl" data-testid="amap-ctl" hidden /);
     expect(html).toContain(LABEL_STYLE);
@@ -68,9 +71,11 @@ describe('the map script | what the page carries', () => {
     expect(html).toContain('<p aria-live="polite" data-testid="amap-you-status"></p>');
   });
 
-  it('with no street map: no script, no buttons, no frame, as before', () => {
+  it('with no street map: no zoom script, no buttons, no frame, as before', () => {
     const html = renderAttendeeMap(items, { now: NOW, area: gate }).html;
-    expect(html).not.toContain('<script');
+    // Only the tooltip's script (lib/map-tip-script.ts): the hexagons still name themselves.
+    expect(html.split(TIP_SCRIPT).join('')).not.toContain('<script');
+    expect(html).not.toContain(PAN_SCRIPT);
     expect(html).not.toContain('amap-ctl');
     expect(html).not.toContain('data-pan');
     expect(html).not.toContain('data-x0');
@@ -201,7 +206,7 @@ describe('the map script | exact markup (mutation run of 2026-11-18)', () => {
     }).html;
     expect(drawn).toContain(`<figure class="amap" data-testid="amap" data-zoom="${A7}" data-pan>`);
     expect(drawn).toMatch(/<\/svg><div class="amap-ctl"/);
-    expect(drawn.endsWith(PAN_SCRIPT)).toBe(true);
+    expect(drawn.endsWith(PAN_SCRIPT + TIP_SCRIPT)).toBe(true);
   });
 });
 

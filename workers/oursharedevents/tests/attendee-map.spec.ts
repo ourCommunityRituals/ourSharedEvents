@@ -34,6 +34,7 @@ import {
 import LANDING_HTML from '../src/templates/landing.html';
 import { CORRIDOR_READY_MIN_EVENTS } from '../src/lib/corridor-readiness';
 import { STREET_STYLE, cellsKey } from '../src/lib/street-map';
+import { TIP_SCRIPT } from '../src/lib/map-tip-script';
 
 const NOW = Date.parse('2026-09-13T00:00:00.000Z');
 const inDays = (n: number) => new Date(NOW + n * 86_400_000).toISOString();
@@ -238,8 +239,10 @@ describe('attendee map | shape', () => {
     expect(out.html).toContain('aria-labelledby="amap-caption"');
     expect(out.html).toContain('never a street address');
     expect(out.html).toContain('the filters above change the list, not the map');
-    // <figcaption> is the figure's last child (HTML content model).
-    expect(out.html.trim()).toMatch(/<\/figcaption>\s*<\/figure>$/);
+    // <figcaption> is the figure's last child (HTML content model); only the
+    // map's tooltip script (lib/map-tip-script.ts) follows the figure.
+    expect(out.html.trim()).toMatch(/<\/figcaption>\s*<\/figure><script>/);
+    expect(out.html.trim().endsWith(`</figure>${TIP_SCRIPT}`)).toBe(true);
   });
 
   it('escapes event names and ids', () => {
@@ -763,7 +766,8 @@ describe('attendee map | area names, order and shading, edge by edge', () => {
     expect(out.html).not.toContain('amap-area-link');
     expect(out.html).not.toContain('Tap a hexagon');
     expect(out.html).not.toContain('data-testid="amap-credit"');
-    expect(out.html).toMatch(/<\/figcaption>\s*<\/figure>$/);
+    expect(out.html).toMatch(/<\/figcaption>\s*<\/figure><script>/);
+    expect(out.html.endsWith(`</figure>${TIP_SCRIPT}`)).toBe(true);
     expect(out.html).not.toContain(STREET_STYLE);
     expect(out.html).not.toContain('Supported by');
     expect(renderAttendeeMap(many(G - 1, { startDateISO: soon })).state).toBe('thin');
