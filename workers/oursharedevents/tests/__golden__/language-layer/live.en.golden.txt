@@ -40,11 +40,7 @@
     @keyframes ose-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
     h1 { font-size: 1.875rem; margin: 0 0 0.5rem; line-height: 1.2; }
     h2 { font-size: 1.125rem; margin: 1.5rem 0 0.5rem; color: var(--ose-text); }
-    .ose-card { background: var(--ose-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-    /* Owner 2026-11-26: the page reads as cards, like the rest of the platform.
-       A card's first heading sits at its top edge; the header card has no trailing gap. */
-    .ose-card > h2:first-child { margin-top: 0; }
-    .ose-hero .ose-meta { margin-bottom: 0.25rem; }
+    .ose-card { background: var(--ose-card); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
     .ose-venue-map { width: 100%; max-width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
     .ose-geo-link { color: var(--ose-accent); text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; min-height: 44px; }
     .ose-geo-link:hover { text-decoration: underline; }
@@ -157,7 +153,7 @@
     <nav aria-label="Site" data-testid="event-nav" style="display:flex;flex-wrap:wrap;gap:0 1.25rem;margin:0"><a href="/events" data-testid="event-nav-events-live" style="color:var(--ose-accent);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;min-height:44px">&larr; All events</a><span aria-current="page" data-testid="event-nav-event" style="color:inherit;font-weight:700;display:inline-flex;align-items:center;min-height:44px">Event page</span><a href="/events/evt_golden/poster?kind=digital" data-testid="event-nav-poster" style="color:var(--ose-accent);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;min-height:44px">Poster</a></nav>
   </div>
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main-live">
-    <header class="ose-card ose-hero" data-testid="event-header-live">
+    <header class="ose-card" data-testid="event-header-live">
       <span class="ose-live-badge" data-testid="event-live-badge" aria-label="Event is live now">
         <span class="ose-live-dot" aria-hidden="true"></span>Live now
       </span>

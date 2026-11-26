@@ -1529,12 +1529,8 @@ ${buildOgMeta({ lang, title, description: whatShort, url: esc(shareUrl), twitter
     .ose-skip:focus { inset-inline-start: 1rem; top: 1rem; background: var(--ose-accent); color: var(--on-accent); padding: 0.5rem 1rem; border-radius: 4px; }
     h1 { font-size: 1.875rem; margin: 0 0 0.5rem; line-height: 1.2; }
     h2 { font-size: 1.125rem; margin: 1.5rem 0 0.5rem; color: var(--ose-text); }
-    .ose-meta { color: var(--ose-muted); font-size: 0.95rem; margin-bottom: 1.5rem; }
-    .ose-card { background: var(--ose-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-    /* Owner 2026-11-26: the page reads as cards, like the rest of the platform.
-       A card's first heading sits at its top edge; the header card has no trailing gap. */
-    .ose-card > h2:first-child { margin-top: 0; }
-    .ose-hero .ose-meta { margin-bottom: 0.25rem; }
+    .ose-meta { color: var(--ose-muted); font-size: 0.95rem; margin-bottom: 4px; }
+    .ose-card { background: var(--ose-card); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
     .ose-venue-map { width: 100%; max-width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
     .ose-geo-link { color: var(--ose-accent); text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; min-height: 44px; }
     .ose-geo-link:hover { text-decoration: underline; }
@@ -1566,7 +1562,7 @@ ${SPONSOR_LIST_CSS}
       : renderEventTopbar(nav, lang, eventPagePath(row.id, row.slug), opts?.pageQuery, nonce);
   })()}
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main">
-    <header class="ose-card ose-hero" data-testid="event-header">
+    <header class="ose-card" data-testid="event-header">
       <h1 id="event-title" data-testid="event-title">${isolateTyped(lang, title)}</h1>
       ${renderEventTypeMeta(row, 'event-type', lang)}
       ${startHuman ? `<p class="ose-meta" data-testid="event-when">${esc(startHuman)}${countdown.html}</p>${countdown.script}` : ''}
@@ -1743,11 +1739,7 @@ ${buildSearchMeta(row, shareUrl)}
     @keyframes ose-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
     h1 { font-size: 1.875rem; margin: 0 0 0.5rem; line-height: 1.2; }
     h2 { font-size: 1.125rem; margin: 1.5rem 0 0.5rem; color: var(--ose-text); }
-    .ose-card { background: var(--ose-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
-    /* Owner 2026-11-26: the page reads as cards, like the rest of the platform.
-       A card's first heading sits at its top edge; the header card has no trailing gap. */
-    .ose-card > h2:first-child { margin-top: 0; }
-    .ose-hero .ose-meta { margin-bottom: 0.25rem; }
+    .ose-card { background: var(--ose-card); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
     .ose-venue-map { width: 100%; max-width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
     .ose-geo-link { color: var(--ose-accent); text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; min-height: 44px; }
     .ose-geo-link:hover { text-decoration: underline; }
@@ -1780,7 +1772,7 @@ ${SPONSOR_LIST_CSS}
     nonce
   )}
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main-live">
-    <header class="ose-card ose-hero" data-testid="event-header-live">
+    <header class="ose-card" data-testid="event-header-live">
       <span class="ose-live-badge" data-testid="event-live-badge" aria-label="${msg(lang, 'live.badgeLabel')}">
         <span class="ose-live-dot" aria-hidden="true"></span>${msg(lang, 'live.badge')}
       </span>
@@ -2045,7 +2037,7 @@ ${buildSearchMeta(row, shareUrl)}
     .ose-phase-chip { display: inline-block; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ose-muted); background: var(--ose-card); border-radius: 999px; padding: 4px 12px; margin-bottom: 0.75rem; }
     h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
     .ose-when { color: var(--ose-muted); margin: 0 0 1.25rem; }
-    .ose-card { background: var(--ose-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; margin: 0 0 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    .ose-card { background: var(--ose-card); border-radius: 8px; padding: 1rem 1.25rem; margin: 0 0 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
     .ose-card h2 { font-size: 1rem; margin: 0 0 0.5rem; }
     .ose-card p { margin: 0 0 0.5rem; }
     .ose-recap-row { margin: 0 0 0.6rem; }
