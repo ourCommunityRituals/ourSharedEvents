@@ -170,6 +170,19 @@
          </div>
          </section>
 
+    
+
+    <section class="ose-choices" data-testid="event-choices" aria-label="How would you like to take part?">
+    <div class="ose-choice">
+      <a class="ose-choice-btn ose-choice-primary" data-testid="event-checkin" href="/events/evt_golden/checkin" aria-describedby="choice-note-first">Check in at this event</a>
+      <p class="ose-choice-note" id="choice-note-first">Counted, never named.</p>
+    </div>
+    <div class="ose-choice">
+      <a class="ose-choice-btn" data-testid="event-choice-register" href="/events/evt_golden/register" aria-describedby="choice-note-register">Register</a>
+      <p class="ose-choice-note" id="choice-note-register">Asks for your name and email.</p>
+    </div>
+  </section>
+
     <section class="card card--sectioned ose-section" data-testid="event-where-live" aria-labelledby="where-heading-live">
            <h2 class="card-header" id="where-heading-live">Where</h2>
            <div class="card-body">
@@ -192,19 +205,6 @@
            <p>The Parish Council</p>
          </div>
          </section>
-
-    
-
-    <section class="ose-choices" data-testid="event-choices" aria-label="How would you like to take part?">
-    <div class="ose-choice">
-      <a class="ose-choice-btn ose-choice-primary" data-testid="event-checkin" href="/events/evt_golden/checkin" aria-describedby="choice-note-first">Check in at this event</a>
-      <p class="ose-choice-note" id="choice-note-first">Counted, never named.</p>
-    </div>
-    <div class="ose-choice">
-      <a class="ose-choice-btn" data-testid="event-choice-register" href="/events/evt_golden/register" aria-describedby="choice-note-register">Register</a>
-      <p class="ose-choice-note" id="choice-note-register">Asks for your name and email.</p>
-    </div>
-  </section>
 
     <div class="ose-event-actions" data-testid="event-actions">
   <button class="ose-share-btn" data-testid="share-btn" type="button" data-share-url="https://oursharedevents.com/events/evt_golden" data-share-title="Parish Spring Fundraiser">Share this event</button>

@@ -117,10 +117,14 @@ describe('OSE-1518 three plain choices (before the event)', () => {
     expect(tag(html, 'event-choice-checkin')).toContain('href="/events/evt_1518_links/checkin"');
   });
 
-  test('the choices follow the facts and come before Share and Add to calendar, which come before Why', async () => {
+  test('the choices follow What and come before Where; Share and Add to calendar come later, before Why', async () => {
     await seed({ id: 'evt_1518_order' });
     const html = await page('/events/evt_1518_order');
-    expect(tid(html, 'event-where'), 'facts first').toBeLessThan(tid(html, 'event-choices'));
+    // Owner 2026-11-26: the main action sits on the first phone screen.
+    expect(tid(html, 'event-what'), 'What first').toBeLessThan(tid(html, 'event-choices'));
+    expect(tid(html, 'event-choices'), 'choices before Where').toBeLessThan(
+      tid(html, 'event-where')
+    );
     expect(tid(html, 'event-choices'), 'choices before the share pair').toBeLessThan(
       tid(html, 'event-actions')
     );

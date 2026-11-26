@@ -1567,6 +1567,31 @@ ${SPONSOR_LIST_CSS}
         : ''
     }
 
+    ${(() => {
+      // HOW MUCH — the event's own price (display only; #6 inert_monetization
+      // holds — no charge logic). Sits right before the CTA: cost is the last
+      // fact a recipient weighs before the ask. Order (owner 2026-11-26, first
+      // phone screen): What → How much → CTA → Where → Who, so Register shows on
+      // the first screen and the price is never hidden below it.
+      const howMuch = formatEventPrice(row, lang);
+      return howMuch === null
+        ? ''
+        : `<section class="card card--sectioned ose-section" data-testid="event-how-much" aria-labelledby="how-much-heading">
+           <h2 class="card-header" id="how-much-heading">${msg(lang, 'section.howMuch')}</h2>
+           <div class="card-body">
+           <p>${esc(howMuch)}</p>
+         </div>
+         </section>`;
+    })()}
+
+    <!-- Counts are POST-EVENT only (founder decision 2026-09-04). An attendee
+       deciding whether to come is not shown how many others already did:
+       live tallies are social proof, a growth tactic, and the platform counts
+       the room for the host, sponsor and report — never to persuade the room.
+       The post-event recap card keeps its counts (OSE-657 keepsake). -->
+
+    ${renderEventChoices(row, formContext, 'pre', lang, preview)}
+
     ${
       // OSE-2012: every event says how people take part, so the card always shows.
       `<section class="card card--sectioned ose-section" data-testid="event-where" aria-labelledby="where-heading">
@@ -1592,29 +1617,6 @@ ${SPONSOR_LIST_CSS}
          </section>`
         : ''
     }
-
-    ${(() => {
-      // HOW MUCH — the event's own price (display only; #6 inert_monetization
-      // holds — no charge logic). Sits right before the CTA: cost is the last
-      // fact a recipient weighs before the ask (order: What → Where → Who → How much → CTA).
-      const howMuch = formatEventPrice(row, lang);
-      return howMuch === null
-        ? ''
-        : `<section class="card card--sectioned ose-section" data-testid="event-how-much" aria-labelledby="how-much-heading">
-           <h2 class="card-header" id="how-much-heading">${msg(lang, 'section.howMuch')}</h2>
-           <div class="card-body">
-           <p>${esc(howMuch)}</p>
-         </div>
-         </section>`;
-    })()}
-
-    <!-- Counts are POST-EVENT only (founder decision 2026-09-04). An attendee
-       deciding whether to come is not shown how many others already did:
-       live tallies are social proof, a growth tactic, and the platform counts
-       the room for the host, sponsor and report — never to persuade the room.
-       The post-event recap card keeps its counts (OSE-657 keepsake). -->
-
-    ${renderEventChoices(row, formContext, 'pre', lang, preview)}
 
     ${renderEventActions(row, shareUrl, nonce, lang, { inert: preview, stallsHref: opts?.stallsHref })}
 
@@ -1790,6 +1792,23 @@ ${SPONSOR_LIST_CSS}
         : ''
     }
 
+    ${(() => {
+      // HOW MUCH — mirrors the pre-event render so the order is identical across
+      // phases (What → How much → CTA → Where → Who). Display only; #6
+      // inert_monetization holds — no charge logic.
+      const howMuch = formatEventPrice(row, lang);
+      return howMuch === null
+        ? ''
+        : `<section class="card card--sectioned ose-section" data-testid="event-how-much-live" aria-labelledby="how-much-heading-live">
+           <h2 class="card-header" id="how-much-heading-live">${msg(lang, 'section.howMuch')}</h2>
+           <div class="card-body">
+           <p>${esc(howMuch)}</p>
+         </div>
+         </section>`;
+    })()}
+
+    ${renderEventChoices(row, formContext, 'live', lang, false)}
+
     ${
       // OSE-2012: every event says how people take part, so the card always shows.
       `<section class="card card--sectioned ose-section" data-testid="event-where-live" aria-labelledby="where-heading-live">
@@ -1813,23 +1832,6 @@ ${SPONSOR_LIST_CSS}
          </section>`
         : ''
     }
-
-    ${(() => {
-      // HOW MUCH — mirrors the pre-event render so the order is identical across
-      // phases (What → Where → Who → How much → CTA). Display only; #6
-      // inert_monetization holds — no charge logic.
-      const howMuch = formatEventPrice(row, lang);
-      return howMuch === null
-        ? ''
-        : `<section class="card card--sectioned ose-section" data-testid="event-how-much-live" aria-labelledby="how-much-heading-live">
-           <h2 class="card-header" id="how-much-heading-live">${msg(lang, 'section.howMuch')}</h2>
-           <div class="card-body">
-           <p>${esc(howMuch)}</p>
-         </div>
-         </section>`;
-    })()}
-
-    ${renderEventChoices(row, formContext, 'live', lang, false)}
 
     ${renderEventActions(row, shareUrl, nonce, lang, { stallsHref: opts?.stallsHref })}
 

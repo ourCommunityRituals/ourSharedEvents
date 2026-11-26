@@ -2,9 +2,12 @@
  * Public event section order lock (pre-event).
  *
  * The pre-event page presents the event as a logical invitation. Order:
- *   WHAT → WHERE → WHO → HOW MUCH → CTA → WHY → HOW
- * front-loading the facts a recipient decides on (what/where/who/cost), then
- * the ask (share + RSVP), with WHY/HOW as the deeper detail below the CTA. This
+ *   WHAT → HOW MUCH → CTA → WHERE → WHO → WHY → HOW
+ * Owner 2026-11-26 (first phone screen): the main action sits on the first
+ * screen, so Register follows WHAT. The price comes before the ask, never
+ * below it (no hidden cost). WHERE and WHO follow the ask, and WHY/HOW stay
+ * the deeper detail. The earlier order (WHAT → WHERE → WHO → HOW MUCH → CTA)
+ * put Register below the first phone screen. That order
  * SUPERSEDES the earlier OSE-655 funnel sequence ("WHO leads WHERE — the
  * conversion engine leads location"): the platform is a discovery map, not a
  * persuasion funnel, so the invitation leads with the event's facts. See
@@ -78,8 +81,8 @@ async function seedDescriptionOnly(id: string): Promise<void> {
 
 beforeAll(applyMigrations);
 
-describe('pre-event section order (WHAT → WHERE → WHO → HOW MUCH → CTA → WHY → HOW)', () => {
-  test('facts then the ask — WHO before cost, CTA before WHY/HOW', async () => {
+describe('pre-event section order (WHAT → HOW MUCH → CTA → WHERE → WHO → WHY → HOW)', () => {
+  test('what and cost, then the ask, then where/who, then WHY/HOW', async () => {
     const id = 'evt_funnel_order';
     await seedFull(id);
     const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
@@ -96,18 +99,20 @@ describe('pre-event section order (WHAT → WHERE → WHO → HOW MUCH → CTA �
     ]) {
       expect(at(t), `${t} must render`).toBeGreaterThan(-1);
     }
-    // WHAT → WHERE → WHO → HOW MUCH → CTA(rsvp) → WHY → HOW
-    expect(at('event-what'), 'WHAT leads').toBeLessThan(at('event-where'));
-    expect(at('event-where'), 'WHERE before WHO').toBeLessThan(at('event-who'));
-    expect(at('event-who'), 'WHO before HOW MUCH').toBeLessThan(at('event-how-much'));
+    // WHAT → HOW MUCH → CTA(rsvp) → WHERE → WHO → WHY → HOW
+    expect(at('event-what'), 'WHAT leads').toBeLessThan(at('event-how-much'));
     expect(
       at('event-how-much'),
-      'HOW MUCH before the CTA — cost is the last fact weighed before the ask'
+      'HOW MUCH before the CTA — the price is never hidden below the ask'
     ).toBeLessThan(at('event-rsvp'));
     expect(
       at('event-rsvp'),
-      'the CTA precedes WHY/HOW — deeper detail sits below the ask'
-    ).toBeLessThan(at('event-why'));
+      'the CTA precedes WHERE — Register stays on the first phone screen'
+    ).toBeLessThan(at('event-where'));
+    expect(at('event-where'), 'WHERE before WHO').toBeLessThan(at('event-who'));
+    expect(at('event-who'), 'WHO before WHY — deeper detail sits below').toBeLessThan(
+      at('event-why')
+    );
     expect(at('event-why'), 'WHY before HOW').toBeLessThan(at('event-how'));
     // fixed price renders as a compact dollar string
     expect(html).toContain('$10');

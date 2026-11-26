@@ -140,6 +140,24 @@
          </div>
          </section>
 
+    
+
+    <!-- Counts are POST-EVENT only (founder decision 2026-09-04). An attendee
+       deciding whether to come is not shown how many others already did:
+       live tallies are social proof, a growth tactic, and the platform counts
+       the room for the host, sponsor and report — never to persuade the room.
+       The post-event recap card keeps its counts (OSE-657 keepsake). -->
+
+    <section class="ose-choices" data-testid="event-choices" aria-label="¿Cómo quieres participar?">
+    <div class="ose-choice">
+      <a class="ose-choice-btn ose-choice-primary" data-testid="event-rsvp" data-preview-inert="true" aria-disabled="true" aria-describedby="choice-note-first">Inscribirse</a>
+      <p class="ose-choice-note" id="choice-note-first">Pide tu nombre y correo.</p>
+    </div>
+    <div class="ose-choice">
+      <a class="ose-choice-btn" data-testid="event-choice-checkin" data-preview-inert="true" aria-disabled="true">Cuenta conmigo, de forma anónima</a>
+    </div>
+  </section>
+
     <section class="card card--sectioned ose-section" data-testid="event-where" aria-labelledby="where-heading">
            <h2 class="card-header" id="where-heading">Dónde</h2>
            <div class="card-body">
@@ -164,24 +182,6 @@
            
          </div>
          </section>
-
-    
-
-    <!-- Counts are POST-EVENT only (founder decision 2026-09-04). An attendee
-       deciding whether to come is not shown how many others already did:
-       live tallies are social proof, a growth tactic, and the platform counts
-       the room for the host, sponsor and report — never to persuade the room.
-       The post-event recap card keeps its counts (OSE-657 keepsake). -->
-
-    <section class="ose-choices" data-testid="event-choices" aria-label="¿Cómo quieres participar?">
-    <div class="ose-choice">
-      <a class="ose-choice-btn ose-choice-primary" data-testid="event-rsvp" data-preview-inert="true" aria-disabled="true" aria-describedby="choice-note-first">Inscribirse</a>
-      <p class="ose-choice-note" id="choice-note-first">Pide tu nombre y correo.</p>
-    </div>
-    <div class="ose-choice">
-      <a class="ose-choice-btn" data-testid="event-choice-checkin" data-preview-inert="true" aria-disabled="true">Cuenta conmigo, de forma anónima</a>
-    </div>
-  </section>
 
     <div class="ose-event-actions" data-testid="event-actions">
   <button class="ose-share-btn" data-testid="share-btn" type="button" disabled aria-disabled="true" data-preview-inert="true">Compartir este evento</button>
