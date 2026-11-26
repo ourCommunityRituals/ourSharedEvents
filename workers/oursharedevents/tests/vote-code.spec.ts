@@ -283,11 +283,9 @@ describe('OSE-2140 | the room has its own vote code', () => {
     await openNight();
     const code = await makeCode();
     // The URL carries this minute's stamp (the rotating code).
-    expect(code.url).toMatch(
-      new RegExp(
-        `^${ORIGIN.replace(/\./g, '\\.')}/q/${code.token}\\?type=vote&w=\\d+\\.[0-9a-f]{32}$`
-      )
-    );
+    const prefix = `${ORIGIN}/q/${code.token}?type=vote&w=`;
+    expect(code.url.startsWith(prefix)).toBe(true);
+    expect(code.url.slice(prefix.length)).toMatch(/^\d+\.[0-9a-f]{32}$/);
     expect(code.token).toMatch(/^qrt_[0-9a-f]{32}$/);
     const res = await scan(code.token);
     const loc = new URL(res.headers.get('Location') ?? '');
