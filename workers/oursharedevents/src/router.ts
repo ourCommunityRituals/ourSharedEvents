@@ -709,7 +709,8 @@ export async function route(
     outcome: 'success' | 'denied',
     resourceType?: string,
     resourceId?: string,
-    brandId?: string | null
+    brandId?: string | null,
+    details?: Record<string, unknown>
   ): void {
     ctx.waitUntil(
       logAdminAction(env, {
@@ -721,6 +722,7 @@ export async function route(
         outcome,
         ip: _ip,
         brand_id: brandId ?? null,
+        ...(details ? { details } : {}),
       })
     );
   }
@@ -1288,7 +1290,20 @@ export async function route(
           .catch(() => null)) as { id?: unknown } | null;
         if (typeof body?.id === 'string') id = body.id;
       }
-      _audit(reqId, action, outcome, 'venue', id);
+      // A room-limit change keeps its old and new values (OSE-2234, CCR loop 4).
+      let details: Record<string, unknown> | undefined;
+      if (action === 'SET_VENUE_ROOM_CEILING' && outcome === 'success') {
+        const b = (await res
+          .clone()
+          .json()
+          .catch(() => null)) as {
+          room_kind?: unknown;
+          room_cap?: unknown;
+          was?: unknown;
+        } | null;
+        if (b) details = { room_kind: b.room_kind, room_cap: b.room_cap, was: b.was };
+      }
+      _audit(reqId, action, outcome, 'venue', id, undefined, details);
     }
     return res;
   };

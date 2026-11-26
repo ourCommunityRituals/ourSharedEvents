@@ -372,12 +372,18 @@ describe('the voting room-size ceiling: set by the platform only (OSE-2234, owne
     expect(res.status).toBe(200);
     expect(await row()).toEqual({ room_kind: 'indoor', room_cap: 120 });
     const audit = await env.DB.prepare(
-      `SELECT outcome FROM admin_audit_log
+      `SELECT outcome, details FROM admin_audit_log
         WHERE action = 'SET_VENUE_ROOM_CEILING' AND resource_id = ? ORDER BY created_at DESC LIMIT 1`
     )
       .bind(venue)
-      .first<{ outcome: string }>();
+      .first<{ outcome: string; details: string | null }>();
     expect(audit?.outcome).toBe('success');
+    // The old and new values are kept, so a raised limit can be traced later.
+    expect(JSON.parse(audit?.details ?? 'null')).toEqual({
+      room_kind: 'indoor',
+      room_cap: 120,
+      was: { room_kind: null, room_cap: null },
+    });
   });
 
   test('indoors needs a number; outdoors takes a permit limit or none; anything else is refused', async () => {
@@ -407,6 +413,37 @@ describe('the voting room-size ceiling: set by the platform only (OSE-2234, owne
     expect(await row()).toEqual({ room_kind: 'outdoor', room_cap: 2000 });
     expect(await put({ room_kind: 'outdoor', room_cap: null })).toMatchObject({ status: 200 });
     expect(await row()).toEqual({ room_kind: 'outdoor', room_cap: null });
+  });
+
+  test("SECURITY | a host cannot shed the venue's room limit by moving or clearing the venue (CCR loop 4)", async () => {
+    const ceil = (v: string, body: unknown) =>
+      call('PUT', `/api/v2/admin/venues/${v}/room-ceiling`, PLATFORM_ADMIN, body);
+    const move = (v: string | null) =>
+      call('PUT', '/api/v2/admin/events/vn-e-bar/venue', BAR_ADMIN, { venue_id: v });
+    expect((await ceil(venue, { room_kind: 'indoor', room_cap: 80 })).status).toBe(200);
+    expect(await hostOf('vn-e-bar')).toBe(venue);
+    // A second venue of the bar's, with no limit set by the platform.
+    const made = await call('POST', '/api/v2/admin/venues', BAR_ADMIN, {
+      brand_id: BAR,
+      name: 'The Corner Tap Patio',
+    });
+    expect(made.status).toBe(201);
+    const patio = ((await made.json()) as { id: string }).id;
+    for (const target of [null, patio]) {
+      const res = await move(target);
+      expect(res.status, String(target)).toBe(409);
+      expect(((await res.json()) as { code: string }).code).toBe('VENUE_ROOM_LIMIT_KEPT');
+      expect(await hostOf('vn-e-bar')).toBe(venue);
+    }
+    // Once the platform sets the patio's limit, the move is allowed.
+    expect((await ceil(patio, { room_kind: 'outdoor', room_cap: 300 })).status).toBe(200);
+    expect((await move(patio)).status).toBe(200);
+    expect(await hostOf('vn-e-bar')).toBe(patio);
+    // And back, and an event at a venue with no limit moves freely (the control).
+    expect((await move(venue)).status).toBe(200);
+    expect((await ceil(venue, { room_kind: 'outdoor', room_cap: null })).status).toBe(200);
+    expect((await move(null)).status).toBe(200);
+    expect(await hostOf('vn-e-bar')).toBeNull();
   });
 
   test('an unknown venue is 404 for the platform too', async () => {

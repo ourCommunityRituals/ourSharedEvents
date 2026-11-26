@@ -7224,6 +7224,9 @@
           ROOM_SIZE_OUT_OF_RANGE: 'The room size must be from 10 to 50000.',
           LABEL_FIXED: 'A name cannot change once voting has opened, so votes stay with what was voted for.',
           OBJECTS_FIXED: 'Voting has opened, so nothing can be added. Add everything before opening voting.',
+          ORDER_FIXED: 'The order of the list cannot change once voting has opened.',
+          ROOM_SIZE_OVER_CEILING: 'That is more than this venue may hold. Use a smaller room size, or ask the platform to set the venue limit.',
+          ROOM_SIZE_MISSING: 'This vote was opened without a room size, so it cannot be reopened. Finish it, or start a new vote.',
         };
         return Object.prototype.hasOwnProperty.call(SAID, code) ? SAID[code] : 'Could not save. Nothing was changed. Try again.';
       };

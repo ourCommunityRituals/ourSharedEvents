@@ -121,6 +121,12 @@ const LABEL_FIXED = fail(
   'LABEL_FIXED',
   'A name is fixed once voting has opened, so votes stay with what was voted for'
 );
+/** The voter's list is ordered by sort, so a move to the top is fixed too (CCR loop 4). */
+const ORDER_FIXED = fail(
+  409,
+  'ORDER_FIXED',
+  'The order of the list is fixed once voting has opened, so no entry is moved to the top'
+);
 /**
  * Once voting has opened, the set's list of objects is fixed (owner,
  * 2026-11-26, after CCR loops 1 to 3): a host cannot add a decoy, a second
@@ -1045,6 +1051,8 @@ export async function updateVotable(
     return fail(409, 'TEAM_FIXED', 'A team is fixed once the vote set has opened');
   const changesLabel = patch.label !== undefined && patch.label !== current.label;
   if (changesLabel && set.opened) return LABEL_FIXED;
+  const changesOrder = patch.sort !== undefined && patch.sort !== current.sort;
+  if (changesOrder && set.opened) return ORDER_FIXED;
   if ('group_id' in patch) {
     const team = teamRule(set, patch.group_id ?? null);
     if (team) return team;
@@ -1062,7 +1070,8 @@ export async function updateVotable(
           AND set_id IN (SELECT id FROM vote_sets
                           WHERE event_id = ? AND is_final = 0
                             AND (pepper_epoch IS NULL
-                                 OR (votable_objects.group_id IS ? AND votable_objects.label = ?)))
+                                 OR (votable_objects.group_id IS ? AND votable_objects.label = ?
+                                     AND votable_objects.sort = ?)))
           AND (? IS NULL OR EXISTS (SELECT 1 FROM event_booths b
                                      WHERE b.id = ? AND b.event_id = votable_objects.event_id
                                        AND b.is_active = 1))`
@@ -1078,6 +1087,7 @@ export async function updateVotable(
       eventId,
       group,
       label,
+      sort,
       booth,
       booth
     )
@@ -1088,6 +1098,7 @@ export async function updateVotable(
     if (changesTeam && now?.opened)
       return fail(409, 'TEAM_FIXED', 'A team is fixed once the vote set has opened');
     if (changesLabel && now?.opened) return LABEL_FIXED;
+    if (changesOrder && now?.opened) return ORDER_FIXED;
     return NO_OBJECT;
   }
   const view = await readObject(db, eventId, objectId);

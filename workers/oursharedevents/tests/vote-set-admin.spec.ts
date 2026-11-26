@@ -779,8 +779,10 @@ describe('6. after the first open, a song team cannot change', () => {
     expect(res.status).toBe(409);
     expect(res.json.code).toBe('TEAM_FIXED');
     expect((await objectRow(id))?.group_id).toBe(TEAM_2);
-    // The order may still change; the team stays.
-    expect((await call('PUT', vp(A1, `/objects/${id}`), A, { sort: 3 })).status).toBe(200);
+    // The order is fixed too (CCR loop 4), and the team stays.
+    expect((await call('PUT', vp(A1, `/objects/${id}`), A, { sort: 3 })).json.code).toBe(
+      'ORDER_FIXED'
+    );
     expect((await objectRow(id))?.group_id).toBe(TEAM_2);
   });
 
@@ -797,10 +799,14 @@ describe('6. after the first open, a song team cannot change', () => {
     expect(res.status).toBe(409);
     expect(res.json.code).toBe('LABEL_FIXED');
     expect((await objectRow(id))?.label).toBe('Fixed name');
-    // The same name again, or only the order, still saves.
-    expect(
-      (await call('PUT', vp(A1, `/objects/${id}`), A, { label: 'Fixed name', sort: 2 })).status
-    ).toBe(200);
+    // The same name again still saves; a new place in the list does not
+    // (CCR loop 4: the voter's list is ordered by it, so no entry moves to the top).
+    expect((await call('PUT', vp(A1, `/objects/${id}`), A, { label: 'Fixed name' })).status).toBe(
+      200
+    );
+    const moved = await call('PUT', vp(A1, `/objects/${id}`), A, { sort: 2 });
+    expect(moved.status).toBe(409);
+    expect(moved.json.code).toBe('ORDER_FIXED');
   });
 
   test('once voting opens, nothing can be added: no decoy, no second copy, no late favourite', async () => {
@@ -929,7 +935,8 @@ describe('8. every change is audited, with no detail', () => {
 
   test('each write writes its row; a refusal is denied; a read writes none', async () => {
     const songId = await openNight(); // create, object create, open
-    await call('PUT', vp(A1, `/objects/${songId}`), A, { sort: 2 });
+    // A change still allowed once open (the order and the name are fixed).
+    await call('PUT', vp(A1, `/objects/${songId}`), A, { booth_id: null });
     await call('POST', vp(A1, `/objects/${songId}/open`), A, {});
     await call('POST', vp(A1, `/objects/${songId}/close`), A, {});
     await call('POST', vp(A1, `/objects/${songId}/reopen`), A, {});
