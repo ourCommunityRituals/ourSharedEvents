@@ -33,13 +33,13 @@ Every story is implemented from all six POVs simultaneously. CC reads all six an
 - Implements D1 queries (Phase 2)
 - Owns DB design, API contracts, auth, feature flags, testing pyramid
 
-**Latest** (newest 5 of 39 by the date in each title; full text in [role-state/backend-architect.md](role-state/backend-architect.md)):
+**Latest** (newest 5 of 40 by the date in each title; full text in [role-state/backend-architect.md](role-state/backend-architect.md)):
 
+- 2026-11-26: Stricter in-room voting (OSE-2234, migration 0122, then 0123 in a follow-up; PR #1562, merged by the owner 2026-11-26 08:09 UTC as `43fa82c`)
 - 2026-11-24: Weekly corridor flows to BigQuery (OSE-2216, the NCR map layers' history; boundary rules in OCR-docs #185 and #186, both merged; PR #1536, merged 2026-11-24 02:19 UTC as `4da6415`; staging chain T1–T4 green on `e2333f…
 - 2026-11-23: Sponsor kind of business (OSE-2207, migration 0116, `REQUIRED_DB_MIGRATION` = 116; PR #1518, merged 2026-11-23 16:48 UTC as `b0b8938`; staging chain T1–T4 green on `4bd8ba1`, a later `main` SHA that contains it, run 4…
 - 2026-11-23: One scan figure, from the poster rows (OSE-1784; PR #1528, merged 2026-11-23 as `d782e7e`)
 - 2026-11-23: Scans are counted on the code, never the phone (OSE-2214, owner 2026-11-23: "This should not be counting people, but traffic of the clicks"; ADR-024 option C for scans; PR #1531, merged 2026-11-23 as d266016)
-- 2026-11-22: Storytime type (OSE-2155, 2026-11-22, migration 0115, `REQUIRED_DB_MIGRATION` = 115; PR #1511 as `d3ca8cf`, staging chain green, run 45024684315)
 
 ### Lead FE Integration (FD)
 

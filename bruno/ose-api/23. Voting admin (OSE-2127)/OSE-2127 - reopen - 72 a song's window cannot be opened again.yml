@@ -1,11 +1,11 @@
 info:
-  name: OSE-2127 | close | close the song
+  name: OSE-2127 | reopen | a song's window cannot be opened again
   type: http
-  seq: 71
+  seq: 72
 
 http:
   method: POST
-  url: "{{baseUrl}}/api/v2/admin/events/{{voteNightId}}/votables/objects/{{voteSongId}}/close"
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteNightId}}/votables/objects/{{voteSongId}}/reopen"
   headers:
     - name: CF-Access-Client-Id
       value: "{{cfAccessClientId}}"
@@ -15,7 +15,7 @@ http:
       value: "application/json"
   body:
     type: json
-    data: "{}"
+    data: "{\"window_seconds\": 60}"
   auth: inherit
 
 runtime:
@@ -23,7 +23,7 @@ runtime:
     - type: after-response
       code: |-
         const b = res.getBody() || {};
-        test('OSE-2127 close: 200, closed', function () { expect(res.getStatus()).to.eql(200); expect(b.object.state).to.eql('closed'); expect(b.object.open_now).to.eql(false); });
+        test('OSE-2127 reopen: 409 WINDOW_FIXED, no second window for one song (owner card 2026-11-26)', function () { expect(res.getStatus()).to.eql(409); expect(b.code).to.eql('WINDOW_FIXED'); });
 
 settings:
   encodeUrl: true

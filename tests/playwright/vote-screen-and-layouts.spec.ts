@@ -20,6 +20,7 @@ import AxeBuilder from '@axe-core/playwright';
 
 const ADMIN_BEARER = process.env.OSE_ADMIN_BEARER || '';
 const AUTH = { Authorization: `Bearer ${ADMIN_BEARER}` };
+const BRAND = 'pw-vote-screen';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -34,6 +35,7 @@ test.describe('the host vote screen and page layouts', () => {
       headers: json,
       data: {
         attendance_mode: 'in_person',
+        brand_id: BRAND,
         title: `Vote screen night ${Date.now()}`,
         start_date: '2027-05-15',
         start_time: '19:00',
@@ -44,11 +46,24 @@ test.describe('the host vote screen and page layouts', () => {
     });
     expect(made.ok(), await made.text()).toBe(true);
     eventId = ((await made.json()) as { id: string }).id;
+    // Voting opens only on an event linked to its venue (owner card
+    // 2026-11-26, VENUE_NEEDED), and the shared public brand holds no venue,
+    // so the night has a brand of its own and a venue it owns.
+    const venue = await request.post('/api/v2/admin/venues', {
+      headers: json,
+      data: { brand_id: BRAND, name: 'Eagles Hall' },
+    });
+    expect(venue.status(), await venue.text()).toBe(201);
+    const linked = await request.put(`/api/v2/admin/events/${eventId}/venue`, {
+      headers: json,
+      data: { venue_id: ((await venue.json()) as { id: string }).id },
+    });
+    expect(linked.ok(), await linked.text()).toBe(true);
     // A look other than standard is the skins add-on; only the platform key
-    // turns it on. The key actor creates events in the 'root' brand.
+    // turns it on, for the night's brand.
     const addon = await request.put('/api/v2/admin/addons', {
       headers: json,
-      data: { brand_id: 'root', addon: 'skins', on: true },
+      data: { brand_id: BRAND, addon: 'skins', on: true },
     });
     expect(addon.ok(), await addon.text()).toBe(true);
     for (const status of ['ready', 'active']) {

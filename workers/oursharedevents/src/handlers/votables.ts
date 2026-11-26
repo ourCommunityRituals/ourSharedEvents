@@ -351,7 +351,8 @@ export async function handleVotables(
         const move = route.op.replace('-object', '') as ObjectMove;
         const kind = await votableKind(db, eventId, route.objectId ?? '');
         if (!kind) return refuse(request, NO_OBJECT);
-        const window = move === 'close' ? { ok: true as const, value: 0 } : parseWindow(body, kind);
+        // Only an open takes a window: close and reopen are refused as WINDOW_FIXED.
+        const window = move === 'open' ? parseWindow(body, kind) : { ok: true as const, value: 0 };
         if (!window.ok) return refuse(request, window);
         return answer(
           request,

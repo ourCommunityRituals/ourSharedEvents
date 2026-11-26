@@ -18,7 +18,7 @@ http:
       value: "application/json"
   body:
     type: json
-    data: "{\"attendance_mode\": \"in_person\", \"is_published\": false, \"data_class\": \"synthetic\", \"status\": \"active\", \"start_date\": \"2099-01-01\", \"start_time\": \"18:00\", \"timezone\": \"America/Chicago\", \"event_type_id\": \"etr-rec-bocce\", \"location\": \"OSE-2127 Hall\", \"title\": \"OSE-2127 vote night (staging, synthetic)\"}"
+    data: "{\"attendance_mode\": \"in_person\", \"brand_id\": \"ose-vote-staging\", \"is_published\": false, \"data_class\": \"synthetic\", \"status\": \"active\", \"start_date\": \"2099-01-01\", \"start_time\": \"18:00\", \"timezone\": \"America/Chicago\", \"event_type_id\": \"etr-rec-bocce\", \"location\": \"OSE-2127 Hall\", \"title\": \"OSE-2127 vote night (staging, synthetic)\"}"
   auth: inherit
 
 runtime:

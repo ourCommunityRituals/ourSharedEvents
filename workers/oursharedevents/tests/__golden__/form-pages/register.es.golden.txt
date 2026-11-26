@@ -305,7 +305,7 @@
       var items = cache.slice(0, 3).map(function(s) {
         var name = escAttr(s.title || s.name);
         // 0083: no logo → the OSE default; a failing logo swaps to it too.
-        var logo = '<img src="' + (s.logo_url && s.id ? '/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo' : '/sponsor-default-logo.svg') + '" alt="' + name + '" referrerpolicy="no-referrer" loading="lazy" data-hide-on-error="1" data-default-src="/sponsor-default-logo.svg" />';
+        var logo = '<img src="' + (s.logo_url && s.id ? '/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo' : '/sponsor-default-logo.svg') + '" alt="' + name + '" referrerpolicy="no-referrer" loading="lazy" width="120" height="32" data-hide-on-error="1" data-default-src="/sponsor-default-logo.svg" />';
         return '<span class="sponsor-item">' + logo + '<span class="sponsor-name">' + (rtl ? '<bdi>' + name + '</bdi>' : name) + '</span></span>';
       }).join('');
       thanks = '<div class="form-sponsor-thanks" data-testid="form-sponsor-thanks"><span class="thanks-label">' + "Evento con el apoyo de" + '</span><div class="sponsor-row">' + items + '</div></div>';
@@ -369,7 +369,7 @@
         var rtl = document.documentElement.dir === 'rtl';
         var items = banner.slice(0, 3).map(function(s) {
           var name = escAttr(s.title || s.name);
-          var logo = '<img src="' + (s.logo_url && s.id ? '/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo' : '/sponsor-default-logo.svg') + '" alt="' + name + '" referrerpolicy="no-referrer" loading="lazy" data-hide-on-error="1" data-default-src="/sponsor-default-logo.svg" />';
+          var logo = '<img src="' + (s.logo_url && s.id ? '/api/v2/sponsors/' + encodeURIComponent(s.id) + '/logo' : '/sponsor-default-logo.svg') + '" alt="' + name + '" referrerpolicy="no-referrer" loading="lazy" width="80" height="24" data-hide-on-error="1" data-default-src="/sponsor-default-logo.svg" />';
           return '<span class="sponsor-item">' + logo + '<span class="sponsor-name">' + (rtl ? '<bdi>' + name + '</bdi>' : name) + '</span></span>';
         }).join('');
         strip.innerHTML = '<span class="strip-label">' + "Con el apoyo de" + '</span>' + items;

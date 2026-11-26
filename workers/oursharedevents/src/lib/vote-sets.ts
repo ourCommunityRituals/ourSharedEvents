@@ -92,6 +92,12 @@ export const VOTE_WINDOW_DEFAULT_SECONDS: Record<VotableKind, number> = {
 export const VOTE_OBJECTS_MAX = 500;
 /** The nightly job makes final a set left this many days after its event (ADR-040 decision 4). */
 export const VOTE_FINAL_AFTER_DAYS = 7;
+/**
+ * A set is due for final this many days after it first opened, whatever the
+ * event's dates say (CCR loop 5): moving the end date forward cannot hold a
+ * result back for ever (decision 4, every set reaches final).
+ */
+export const VOTE_FINAL_AFTER_OPEN_DAYS = 30;
 /** Tallies are deleted this many days after final (decision 1). */
 export const VOTE_TALLY_KEEP_DAYS = 30;
 
@@ -121,6 +127,27 @@ const LABEL_FIXED = fail(
   409,
   'LABEL_FIXED',
   'A name is fixed once voting has opened, so votes stay with what was voted for'
+);
+/** A window runs its full length once open (owner, 2026-11-26): no close, no reopen. */
+const WINDOW_FIXED = fail(
+  409,
+  'WINDOW_FIXED',
+  'Once a window opens it runs its full length, so it cannot be closed early or reopened'
+);
+/**
+ * The stall an entry stands at is fixed once voting opens (CCR loop 5, L3): a
+ * move would send voters who walk up to that stall to vote on another entry.
+ */
+const BOOTH_FIXED = fail(
+  409,
+  'BOOTH_FIXED',
+  'Which stall an entry stands at cannot change once voting has opened'
+);
+/** The voter's list is ordered by sort, so a move to the top is fixed too (CCR loop 4). */
+const ORDER_FIXED = fail(
+  409,
+  'ORDER_FIXED',
+  'The order of the list is fixed once voting has opened, so no entry is moved to the top'
 );
 /**
  * Once voting has opened, the set's list of objects is fixed (owner,
@@ -478,6 +505,30 @@ export const ROOM_CEILING_DEFAULT = 500;
 const ROOM_CEILING_SQL = `COALESCE((SELECT v.room_cap FROM events e JOIN venues v ON v.id = e.host_venue_id
                                        WHERE e.id = ?), ${ROOM_CEILING_DEFAULT})`;
 
+/**
+ * Voting opens only on an event linked to its venue (owner card 2026-11-26,
+ * "Yes, require a linked venue"), so the ceiling is always the venue's: a
+ * building's fire-marshal capacity, or for an open field or park (an outdoor
+ * venue) its permit's limit, else ROOM_CEILING_DEFAULT. A host cannot dodge a
+ * venue's limit by leaving the event unlinked. One `?`: the event id.
+ */
+const VENUE_LINKED_SQL = `EXISTS (SELECT 1 FROM events e JOIN venues v ON v.id = e.host_venue_id
+                                  WHERE e.id = ?)`;
+
+const VENUE_NEEDED = fail(
+  409,
+  'VENUE_NEEDED',
+  'Link this event to its venue before opening voting (for an open field or park, an outdoor venue)'
+);
+
+async function venueLinked(db: D1Database, eventId: string): Promise<boolean> {
+  const row = await db
+    .prepare(`SELECT ${VENUE_LINKED_SQL} AS linked`)
+    .bind(eventId)
+    .first<{ linked: number }>();
+  return row?.linked === 1;
+}
+
 /** The ceiling for an event's room size, read for the refusal's words. */
 export async function roomCeiling(db: D1Database, eventId: string): Promise<number> {
   const row = await db
@@ -553,6 +604,17 @@ export async function openVoteSet(
       return fail(409, 'WRONG_STATE', `The vote set is ${set.state}`);
     return room;
   }
+  if (!(await venueLinked(db, eventId))) {
+    const set = await readVoteSet(db, eventId);
+    if (!set) return NO_SET;
+    if (set.final) return FINAL;
+    if (set.state !== 'draft' || set.opened)
+      return fail(409, 'WRONG_STATE', `The vote set is ${set.state}`);
+    // An event that is not live says so first, as it did before this rule.
+    const event = await eventRefusal(db, eventId);
+    if (event) return event;
+    return VENUE_NEEDED;
+  }
   const ceiling = await roomCeiling(db, eventId);
   if (room.value > ceiling) {
     const set = await readVoteSet(db, eventId);
@@ -569,11 +631,13 @@ export async function openVoteSet(
   const res = await db
     .prepare(
       `UPDATE vote_sets
-          SET state = 'open', pepper_epoch = ?, secret_margin = ?, secret_floor = ?, room_size = ?, updated_at = ?
+          SET state = 'open', pepper_epoch = ?, secret_margin = ?, secret_floor = ?, room_size = ?,
+              opened_at = ?, updated_at = ?
         WHERE event_id = ? AND state = 'draft' AND is_final = 0
           AND pepper_epoch IS NULL AND secret_margin IS NULL AND secret_floor IS NULL
-          AND room_size IS NULL
+          AND room_size IS NULL AND opened_at IS NULL
           AND ? <= ${ROOM_CEILING_SQL}
+          AND ${VENUE_LINKED_SQL}
           AND ${EVENT_LIVE}`
     )
     .bind(
@@ -582,8 +646,10 @@ export async function openVoteSet(
       floor,
       room.value,
       hourStamp(nowIso),
+      hourStamp(nowIso),
       eventId,
       room.value,
+      eventId,
       eventId,
       eventId
     )
@@ -601,13 +667,36 @@ export async function openVoteSet(
       !(await eventRefusal(db, eventId))
     )
       return overCeiling(now);
+    // The venue was unlinked between the read and the write.
+    if (
+      set &&
+      !set.final &&
+      set.state === 'draft' &&
+      !set.opened &&
+      !(await venueLinked(db, eventId))
+    )
+      return VENUE_NEEDED;
     return whySetRefused(db, eventId, ['draft']);
   }
   const set = await readVoteSet(db, eventId);
   return set ? { ok: true, value: set } : NO_SET;
 }
 
-/** Reopen: closed → open. The epoch, T and V are not touched. */
+async function anyWindowOpened(db: D1Database, eventId: string): Promise<boolean> {
+  const row = await db
+    .prepare(
+      `SELECT 1 AS hit FROM votable_objects o JOIN vote_sets s ON s.id = o.set_id
+        WHERE s.event_id = ? AND o.state <> 'draft' LIMIT 1`
+    )
+    .bind(eventId)
+    .first<{ hit: number }>();
+  return !!row;
+}
+
+/**
+ * Reopen: closed → open. The epoch, T and V are not touched. Refused once any
+ * object in the set has opened (WINDOWS_STARTED): a close is then the end.
+ */
 export async function reopenVoteSet(
   db: D1Database,
   eventId: string,
@@ -622,6 +711,9 @@ export async function reopenVoteSet(
           SET state = 'open', updated_at = ?
         WHERE event_id = ? AND state = 'closed' AND is_final = 0
           AND pepper_epoch IS NOT NULL AND pepper_epoch = ?
+          AND room_size IS NOT NULL
+          AND NOT EXISTS (SELECT 1 FROM votable_objects o
+                           WHERE o.set_id = vote_sets.id AND o.state <> 'draft')
           AND ${EVENT_LIVE}`
     )
     .bind(hourStamp(nowIso), eventId, epoch, eventId)
@@ -633,6 +725,23 @@ export async function reopenVoteSet(
   const why = await whySetRefused(db, eventId, ['closed']);
   if (why.code !== 'WRONG_STATE') return why;
   const set = await readVoteSet(db, eventId);
+  // A set an older Worker opened has no room size, so the room check at final
+  // could never run on it (CCR F9): it is not reopened.
+  if (set?.state === 'closed' && set.room_size === null)
+    return fail(
+      409,
+      'ROOM_SIZE_MISSING',
+      'This vote set was opened without a room size, so it cannot be reopened; finalize it or start a new one'
+    );
+  // A close that cut a running window is final for the night: reopening the
+  // set would hand the host a pause button on one entry (owner card
+  // 2026-11-26, "No: windows run their full length").
+  if (set?.state === 'closed' && (await anyWindowOpened(db, eventId)))
+    return fail(
+      409,
+      'WINDOWS_STARTED',
+      'Voting windows have already run in this set, so once closed it stays closed; finalize it'
+    );
   if (set?.state === 'closed')
     return fail(
       409,
@@ -664,7 +773,12 @@ export function closeVoteSetUnlessPublished(db: D1Database, eventId: string): D1
     .bind(eventId, eventId);
 }
 
-/** Close: open → closed. Allowed after the event, so a host can always stop voting. */
+/**
+ * Close: open → closed. Allowed after the event, so a host can always stop
+ * voting. It is an emergency stop for the whole set, not a pause: once any
+ * window has opened, the set cannot reopen (WINDOWS_STARTED), so a host cannot
+ * use it to cut one entry's window and carry on with the rest.
+ */
 export async function closeVoteSet(
   db: D1Database,
   eventId: string,
@@ -727,7 +841,10 @@ const FINALIZABLE = {
  * no object window in that time. `set` names the vote set in the statement,
  * and `e` the event row. It takes the three bound values in DUE_BINDS.
  */
-const DUE_WINDOW = (set: string) => `((COALESCE(e.end_date, e.start_date) IS NOT NULL
+const DUE_WINDOW = (
+  set: string
+) => `((${set}.opened_at IS NOT NULL AND datetime(${set}.opened_at) < datetime('now', ?))
+   OR (COALESCE(e.end_date, e.start_date) IS NOT NULL
       AND substr(COALESCE(e.end_date, e.start_date), 1, 10) < date('now', ?))
    OR (COALESCE(e.end_date, e.start_date) IS NULL
       AND ${set}.updated_at < datetime('now', ?)
@@ -735,6 +852,7 @@ const DUE_WINDOW = (set: string) => `((COALESCE(e.end_date, e.start_date) IS NOT
                        WHERE o.set_id = ${set}.id
                          AND o.closes_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now', ?))))`;
 const DUE_BINDS = [
+  `-${VOTE_FINAL_AFTER_OPEN_DAYS} days`,
   `-${VOTE_FINAL_AFTER_DAYS} days`,
   `-${VOTE_FINAL_AFTER_DAYS} days`,
   `-${VOTE_FINAL_AFTER_DAYS} days`,
@@ -1024,8 +1142,8 @@ export async function createVotable(
 }
 
 /**
- * Change an object's label, sort, booth or team. A team, and the label, change
- * only before the first open (2026-11-26): once votes can be cast, renaming
+ * Change an object's label, sort, booth or team. All four change only before
+ * the first open (2026-11-26; the order and booth since CCR loop 5): once votes can be cast, renaming
  * a song or stall would move its votes to a different name, a way for a host
  * to push a result up or down. Fix a typo before opening voting.
  */
@@ -1045,6 +1163,10 @@ export async function updateVotable(
     return fail(409, 'TEAM_FIXED', 'A team is fixed once the vote set has opened');
   const changesLabel = patch.label !== undefined && patch.label !== current.label;
   if (changesLabel && set.opened) return LABEL_FIXED;
+  const changesOrder = patch.sort !== undefined && patch.sort !== current.sort;
+  if (changesOrder && set.opened) return ORDER_FIXED;
+  const changesBooth = 'booth_id' in patch && (patch.booth_id ?? null) !== current.booth_id;
+  if (changesBooth && set.opened) return BOOTH_FIXED;
   if ('group_id' in patch) {
     const team = teamRule(set, patch.group_id ?? null);
     if (team) return team;
@@ -1062,7 +1184,8 @@ export async function updateVotable(
           AND set_id IN (SELECT id FROM vote_sets
                           WHERE event_id = ? AND is_final = 0
                             AND (pepper_epoch IS NULL
-                                 OR (votable_objects.group_id IS ? AND votable_objects.label = ?)))
+                                 OR (votable_objects.group_id IS ? AND votable_objects.label = ?
+                                     AND votable_objects.sort = ? AND votable_objects.booth_id IS ?)))
           AND (? IS NULL OR EXISTS (SELECT 1 FROM event_booths b
                                      WHERE b.id = ? AND b.event_id = votable_objects.event_id
                                        AND b.is_active = 1))`
@@ -1078,6 +1201,8 @@ export async function updateVotable(
       eventId,
       group,
       label,
+      sort,
+      booth,
       booth,
       booth
     )
@@ -1088,6 +1213,8 @@ export async function updateVotable(
     if (changesTeam && now?.opened)
       return fail(409, 'TEAM_FIXED', 'A team is fixed once the vote set has opened');
     if (changesLabel && now?.opened) return LABEL_FIXED;
+    if (changesOrder && now?.opened) return ORDER_FIXED;
+    if (changesBooth && now?.opened) return BOOTH_FIXED;
     return NO_OBJECT;
   }
   const view = await readObject(db, eventId, objectId);
@@ -1128,20 +1255,20 @@ export function parseWindow(body: unknown, kind: VotableKind): VoteResult<number
   return { ok: true, value: raw as number };
 }
 
-/** Kinds of the object-state change, for the audit action and the allowed start state. */
+/** Kinds of the object-state change. Only `open` is ever done (WINDOW_FIXED). */
 export type ObjectMove = 'open' | 'reopen' | 'close';
-/** The states each move starts from. A reopen also re-arms an open object whose window ran out. */
-const MOVE_FROM: Record<ObjectMove, VotableView['state'][]> = {
-  open: ['draft'],
-  reopen: ['closed', 'open'],
-  close: ['open'],
-};
 
 /**
- * Open (draft → open), reopen (closed → open) or close (open → closed) one
- * object. Opening needs the set open, not final, and the event live; it sets
- * `closes_at` to now plus the window. Closing needs only that the set is not
- * final.
+ * Open one object (draft → open). It needs the set open, not final, the event
+ * live, and the window length every other opened object of its kind in this set
+ * already ran with; it sets `closes_at` to now plus the window.
+ *
+ * Owner, decision card 2026-11-26 ("No: windows run their full length"): a
+ * window, once open, runs to its end. No host may close one early (a smear) or
+ * reopen one (a boost), so `close` and `reopen` are refused as WINDOW_FIXED.
+ * The host still chooses when each object opens. And because a longer window
+ * would favour one entry, all objects of one kind in a set run the same length
+ * (WINDOW_LENGTH_FIXED, CCR loop 5).
  */
 export async function moveVotable(
   db: D1Database,
@@ -1151,65 +1278,72 @@ export async function moveVotable(
   windowSeconds: number,
   nowIso: string
 ): Promise<VoteResult<VotableView>> {
-  const from = MOVE_FROM[move];
-  let changes = 0;
-  if (move === 'close') {
-    const res = await db
-      .prepare(
-        `UPDATE votable_objects SET state = 'closed', updated_at = ?
-          WHERE id = ? AND event_id = ? AND state = 'open'
-            AND set_id IN (SELECT id FROM vote_sets WHERE event_id = ? AND is_final = 0)`
-      )
-      .bind(hourStamp(nowIso), objectId, eventId, eventId)
-      .run();
-    changes = res.meta?.changes ?? 0;
-  } else {
-    const seconds = Math.min(
-      Math.max(windowSeconds, VOTE_WINDOW_MIN_SECONDS),
-      VOTE_WINDOW_MAX_SECONDS
-    );
-    const closesAt = new Date(Date.now() + seconds * 1000).toISOString();
-    const res = await db
-      .prepare(
-        `UPDATE votable_objects SET state = 'open', closes_at = ?, updated_at = ?
-          WHERE id = ? AND event_id = ?
-            AND (state = ? OR (state = 'closed' AND ? = 'reopen')
-                 OR (state = 'open' AND ? = 'reopen' AND closes_at IS NOT NULL AND closes_at <= ?))
-            AND set_id IN (SELECT s.id FROM vote_sets s
-                            WHERE s.event_id = ? AND s.is_final = 0 AND s.state = 'open'
-                              AND ${EVENT_LIVE})`
-      )
-      .bind(
-        closesAt,
-        hourStamp(nowIso),
-        objectId,
-        eventId,
-        move === 'open' ? 'draft' : 'closed',
-        move,
-        move,
-        nowIso,
-        eventId,
-        eventId
-      )
-      .run();
-    changes = res.meta?.changes ?? 0;
-  }
-  if (changes === 0) {
+  if (move !== 'open') {
+    // A missing object or a final set says so first, as every other write does.
     const set = await readVoteSet(db, eventId);
     const obj = set ? await readObject(db, eventId, objectId) : null;
     if (!set || !obj) return NO_OBJECT;
     if (set.final) return FINAL;
-    const expired = obj.state === 'open' && !obj.open_now && obj.closes_at !== null;
-    if (!from.includes(obj.state) || (move === 'reopen' && obj.state === 'open' && !expired))
-      return fail(409, 'WRONG_STATE', `The object is ${obj.state}`);
+    return WINDOW_FIXED;
+  }
+  const seconds = Math.min(
+    Math.max(windowSeconds, VOTE_WINDOW_MIN_SECONDS),
+    VOTE_WINDOW_MAX_SECONDS
+  );
+  const closesAt = new Date(Date.now() + seconds * 1000).toISOString();
+  const res = await db
+    .prepare(
+      `UPDATE votable_objects SET state = 'open', closes_at = ?, window_seconds = ?, updated_at = ?
+        WHERE id = ? AND event_id = ? AND state = 'draft' AND window_seconds IS NULL
+          AND NOT EXISTS (SELECT 1 FROM votable_objects o
+                           WHERE o.set_id = votable_objects.set_id
+                             AND o.kind = votable_objects.kind
+                             AND o.window_seconds IS NOT NULL AND o.window_seconds <> ?)
+          AND set_id IN (SELECT s.id FROM vote_sets s
+                          WHERE s.event_id = ? AND s.is_final = 0 AND s.state = 'open'
+                            AND ${EVENT_LIVE})`
+    )
+    .bind(closesAt, seconds, hourStamp(nowIso), objectId, eventId, seconds, eventId, eventId)
+    .run();
+  if ((res.meta?.changes ?? 0) === 0) {
+    const set = await readVoteSet(db, eventId);
+    const obj = set ? await readObject(db, eventId, objectId) : null;
+    if (!set || !obj) return NO_OBJECT;
+    if (set.final) return FINAL;
+    if (obj.state !== 'draft') return WINDOW_FIXED;
     if (set.state !== 'open')
       return fail(409, 'VOTE_SET_NOT_OPEN', 'Open the vote set before an object in it');
     const event = await eventRefusal(db, eventId);
     if (event) return event;
+    const used = await kindWindow(db, eventId, objectId);
+    if (used !== null && used !== seconds)
+      return fail(
+        409,
+        'WINDOW_LENGTH_FIXED',
+        `Every entry of this kind in the vote set runs for ${used} seconds, so this one does too`
+      );
     return NO_OBJECT;
   }
   const view = await readObject(db, eventId, objectId);
   return view ? { ok: true, value: view } : NO_OBJECT;
+}
+
+/** The window length an opened object of the same kind in the same set ran with, or null. */
+async function kindWindow(
+  db: D1Database,
+  eventId: string,
+  objectId: string
+): Promise<number | null> {
+  const row = await db
+    .prepare(
+      `SELECT o.window_seconds AS w FROM votable_objects o
+         JOIN votable_objects me ON me.set_id = o.set_id AND me.kind = o.kind
+        WHERE me.id = ? AND me.event_id = ? AND o.window_seconds IS NOT NULL
+        LIMIT 1`
+    )
+    .bind(objectId, eventId)
+    .first<{ w: number }>();
+  return row ? row.w : null;
 }
 
 // ── The nightly job ──────────────────────────────────────────────────────────

@@ -31,6 +31,7 @@
  */
 
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
+import { linkVenue } from './helpers/link-venue';
 import { describe, test, expect, beforeAll, afterEach, vi } from 'vitest';
 import { handleQrScan, qrScanTarget, type QrScanEnv } from '../src/handlers/qr-scan';
 import { route, type RouterEnv } from '../src/router';
@@ -116,6 +117,7 @@ async function seedEvent(id: string): Promise<void> {
   )
     .bind(DEPLOYMENT(id), id, TOKEN[id])
     .run();
+  await linkVenue(tenv.DB, id);
 }
 
 const nowIso = () => new Date().toISOString();
@@ -524,7 +526,11 @@ describe('OSE-2133 | /q issues the vote pass', () => {
     expect(/location|redirect/i.test(all)).toBe(false);
   });
 
-  test('OSE-2133 | REGRESSION | every other code kind keeps qrScanTarget, with the switch on and a set open', async () => {
+  test('OSE-2133 | SECURITY | the vote code with any other type is a copy: the vote page, no pass, nothing set (CCR loop 5, L2)', async () => {
+    // The room screen only ever shows the vote code with type=vote, so the same
+    // code with the type cut or changed is a copied link: like a stale stamp it
+    // counts nothing, mints no pass and sets no cookie (it once fell through to
+    // qrScanTarget and wrote a scan row).
     for (const type of [
       null,
       'register',
@@ -537,8 +543,9 @@ describe('OSE-2133 | /q issues the vote pass', () => {
     ]) {
       const res = await scan(OPEN, { cookie: COOKIE, type });
       expect(res.status, String(type)).toBe(302);
-      expect(res.headers.get('Location'), String(type)).toBe(todays(OPEN, type));
+      expect(res.headers.get('Location'), String(type)).toBe(`${ORIGIN}/events/${OPEN}/vote`);
       expect(passOf(res), String(type)).toBeNull();
+      expect(res.headers.get('Set-Cookie'), String(type)).toBeNull();
     }
   });
 

@@ -100,7 +100,7 @@ describe('QA-1: Migration idempotency', () => {
     // + 2 (venues, venue_operators — migration 0120, OSE-2221) = 51.
     // + 1 (brand_addons — migration 0121, OSE-2232) = 52.
     // + 5 (vote_access_passes, vote_crowd_sets, vote_crowd_tallies, vote_crowd_receipts,
-    //      vote_crowd_participants — migration 0123, ADR-040 decision 13) = 57.
+    //      vote_crowd_participants — migration 0124, ADR-040 decision 13) = 57.
     expect(names).toHaveLength(57);
   });
 
@@ -143,7 +143,7 @@ describe('QA-1: Migration idempotency', () => {
     const indexes = await env.DB.prepare(
       "SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%'"
     ).all();
-    expect(indexes.results).toHaveLength(95); // +1 (0123: idx_vote_access_passes_set) +3 (0120: idx_venues_brand, idx_venue_operators_brand, idx_events_host_venue) +1 (0118: idx_brand_parents_parent) +1 (0113: idx_poster_deployments_one_vote_code) +2 (0112: idx_sponsor_business_created_by, idx_campaigns_created_by) +2 (0111: idx_votable_objects_event_id, idx_votable_objects_set_group) +1 (0110: idx_events_campaign_id) +2 (0109: idx_event_booths_event_id, idx_poster_deployments_booth_id) +2 (0104: idx_events_venue_canonical, idx_events_event_correlation) +1 (0101: idx_snr_event_anon_bucket) +1 (0092: idx_anon_id_returns_pepper_epoch) +2 (0075) +1 (0076: idx_event_type_registry_category) +1 (0087: idx_scan_cell_aggregates_event_cell) +1 (0088: idx_admin_audit_log_brand_created) +1 (0089: idx_snr_country_nonnull) +2 (0090: idx_anon_id_returns_last_seen, idx_anon_id_returns_computed_at)
+    expect(indexes.results).toHaveLength(95); // +1 (0124: idx_vote_access_passes_set) +3 (0120: idx_venues_brand, idx_venue_operators_brand, idx_events_host_venue) +1 (0118: idx_brand_parents_parent) +1 (0113: idx_poster_deployments_one_vote_code) +2 (0112: idx_sponsor_business_created_by, idx_campaigns_created_by) +2 (0111: idx_votable_objects_event_id, idx_votable_objects_set_group) +1 (0110: idx_events_campaign_id) +2 (0109: idx_event_booths_event_id, idx_poster_deployments_booth_id) +2 (0104: idx_events_venue_canonical, idx_events_event_correlation) +1 (0101: idx_snr_event_anon_bucket) +1 (0092: idx_anon_id_returns_pepper_epoch) +2 (0075) +1 (0076: idx_event_type_registry_category) +1 (0087: idx_scan_cell_aggregates_event_cell) +1 (0088: idx_admin_audit_log_brand_created) +1 (0089: idx_snr_country_nonnull) +2 (0090: idx_anon_id_returns_last_seen, idx_anon_id_returns_computed_at)
   });
 });
 

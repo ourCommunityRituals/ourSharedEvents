@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0122; the entries below do not cover every migration after 0083, see the note at 0104)
+- `DB` — main / anonymous public surface (highest migration: 0124; the entries below do not cover every migration after 0083, see the note at 0104)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -110,7 +110,7 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
--- 0123: vote_access_passes and the Online Pick tables vote_crowd_sets,
+-- 0124: vote_access_passes and the Online Pick tables vote_crowd_sets,
 -- vote_crowd_tallies, vote_crowd_receipts, vote_crowd_participants (OSE ADR-040
 -- decision 13). Additive: five new tables, one index, no column. THE ROLLBACK
 -- IS: revert the Worker and LEAVE THE TABLES. The older Worker never reads

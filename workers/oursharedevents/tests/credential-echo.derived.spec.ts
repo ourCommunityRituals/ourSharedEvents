@@ -80,6 +80,7 @@
  */
 
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
+import { linkVenue } from './helpers/link-venue';
 import { describe, test, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 
 const fault = vi.hoisted(() => ({
@@ -1018,6 +1019,7 @@ describe('the vote pass rides only in the fragment of the /q redirect', () => {
     )
       .bind(`pd-${EVENT}`, EVENT, CODE)
       .run();
+    await linkVenue(E.DB, EVENT);
     const made = await createVoteSet(E.DB, EVENT, 'object');
     const opened = await openVoteSet(
       E.DB,

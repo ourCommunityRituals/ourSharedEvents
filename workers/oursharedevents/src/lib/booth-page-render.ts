@@ -78,7 +78,7 @@ function renderSponsor(s: BoothPageSponsor): string {
   const title = esc(sponsorTitle(s));
   const logo = s.has_logo
     ? `<img src="${esc(`/api/v2/sponsors/${encodeURIComponent(s.id)}/logo?slot=sidebar`)}" alt="" ` +
-      `loading="lazy" decoding="async" referrerpolicy="no-referrer" data-testid="booth-sponsor-logo">`
+      `width="200" height="72" loading="lazy" decoding="async" referrerpolicy="no-referrer" data-testid="booth-sponsor-logo">`
     : '';
   const inner = `<span class="sponsor-panel-id">${logo}<span class="sponsor-panel-name">${title}</span></span>`;
   const site = s.website_url ?? '';

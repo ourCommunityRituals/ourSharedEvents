@@ -93,7 +93,7 @@ const PASS_PREFIX = 'vp1.';
 /** The Online Pick's pass. Another prefix and another seal: never a room pass. */
 const CROWD_PREFIX = 'vc1.';
 
-/** An Access Pass id, as vote_access_passes stores it (migration 0123). */
+/** An Access Pass id, as vote_access_passes stores it (migration 0124). */
 const ACCESS_ID = /^vap_[0-9a-f]{32}$/;
 /** The only keys a pass's JSON may carry; anything more is not one of ours. */
 const WIRE_KEYS: ReadonlySet<string> = new Set(['e', 'x', 'p', 'k', 'a']);
@@ -431,6 +431,14 @@ export async function issueVotePass(
   if (!env.ANON_ID_HASH_PEPPER) return null;
   if (!(await voteCodeMayMint(env.DB, eventId, deploymentId))) return null;
   return mintVotePass(env.ANON_ID_HASH_PEPPER, cookie, eventId, nowMs);
+}
+
+/**
+ * Where a vote code with a stale stamp lands (CCR F7): the voter page with no
+ * pass, which says "Scan the code on the screen again." (SCAN_AGAIN_WORDS).
+ */
+export function staleVotePageTarget(origin: string, eventId: string): string {
+  return `${origin}/events/${encodeURIComponent(eventId)}/vote`;
 }
 
 /** Where a vote code lands with a pass: the voter page, the pass in the fragment only. */

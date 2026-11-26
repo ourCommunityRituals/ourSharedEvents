@@ -1,0 +1,44 @@
+info:
+  name: OSE-2234 | rainy | brand | a brand admin cannot set a venue room limit
+  type: http
+  seq: 163
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/venues/{{voteNightVenueId}}/room-ceiling"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{ciBrandClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{ciBrandClientSecret}}"
+    - name: X-Test-No-Auth
+      value: "1"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"room_kind\": \"indoor\", \"room_cap\": 50000}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // OSE-1800: the CI service actor (a brand admin of ci-brand, never platform).
+        // Inert until the owner creates the Access service token and adds its secrets.
+        // Until then this request is skipped and logs NOT RUN; it records no passing test.
+        if (!bru.getEnvVar('ciBrandClientId') || !bru.getEnvVar('ciBrandClientSecret')) {
+          console.log('NOT RUN (no ciBrand Access service token on this environment)');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2234 rainy: brand: 404, only the platform sets a room limit', function () { expect(res.getStatus()).to.eql(404); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

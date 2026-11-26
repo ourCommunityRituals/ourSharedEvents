@@ -31,6 +31,7 @@
  */
 
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
+import { linkVenue } from './helpers/link-venue';
 import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { route, type RouterEnv } from '../src/router';
 import { pepperEpoch } from '../src/lib/anon-id-hash';
@@ -171,6 +172,7 @@ async function seedEvent(id: string, brand: string, date: string | null) {
     date,
     date
   );
+  await linkVenue(tenv.DB, id);
 }
 
 const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
@@ -555,7 +557,6 @@ describe('5. the first open stamps the epoch and draws T and V, once', () => {
       .bind(OLD)
       .first<{ id: string }>())!.id;
     await call('POST', vp(OLD, `/objects/${songId}/open`), A, {});
-    await call('POST', vp(OLD, `/objects/${songId}/close`), A, {});
     // The set stays open; the event moves into the past.
     await run(
       `UPDATE events SET start_date = ?, end_date = ? WHERE id = ?`,
@@ -564,14 +565,14 @@ describe('5. the first open stamps the epoch and draws T and V, once', () => {
       OLD
     );
     for (const [tail, code] of [
-      [`/objects/${songId}/reopen`, 'EVENT_OVER'],
+      [`/objects/${songId}/reopen`, 'WINDOW_FIXED'],
       [`/objects/${fresh}/open`, 'EVENT_OVER'],
     ] as const) {
       const res = await call('POST', vp(OLD, tail), A, { window_seconds: 60 });
       expect(res.status, tail).toBe(409);
       expect(res.json.code, tail).toBe(code);
     }
-    expect((await objectRow(songId))?.state).toBe('closed');
+    expect((await objectRow(songId))?.state).toBe('open');
     expect((await objectRow(fresh))?.state).toBe('draft');
     expect((await call('POST', vp(OLD, '/close'), A, {})).status).toBe(200);
     const re = await call('POST', vp(OLD, '/reopen'), A, {});
@@ -607,21 +608,76 @@ describe('5. the first open stamps the epoch and draws T and V, once', () => {
 });
 
 describe('4. reopen is allowed before final, refused after final, even after a date change', () => {
-  test('before final: close and reopen the set and an object', async () => {
-    const songId = await openNight();
-    expect((await call('POST', vp(A1, `/objects/${songId}/open`), A, {})).status).toBe(200);
-    expect((await call('POST', vp(A1, `/objects/${songId}/close`), A, {})).status).toBe(200);
-    expect((await call('POST', vp(A1, `/objects/${songId}/reopen`), A, {})).status).toBe(200);
+  test('before final: a set no window has run in closes and reopens', async () => {
+    await openNight();
     expect((await call('POST', vp(A1, '/close'), A, {})).status).toBe(200);
     const re = await call('POST', vp(A1, '/reopen'), A, {});
     expect(re.status).toBe(200);
     expect(re.json.set).toMatchObject({ state: 'open', opened: true, final: false });
   });
 
+  test('SECURITY | a window runs its full length: no close, no reopen of an object (owner card 2026-11-26)', async () => {
+    const songId = await openNight();
+    expect((await call('POST', vp(A1, `/objects/${songId}/open`), A, {})).status).toBe(200);
+    const before = await objectRow(songId);
+    for (const move of ['close', 'reopen', 'open']) {
+      const res = await call('POST', vp(A1, `/objects/${songId}/${move}`), A, {
+        window_seconds: 60,
+      });
+      expect(res.status, move).toBe(409);
+      expect(res.json.code, move).toBe('WINDOW_FIXED');
+    }
+    expect(await objectRow(songId)).toEqual(before);
+    // Run out, it is not re-armed either: a second window would be a boost.
+    await run(
+      `UPDATE votable_objects SET closes_at = '2020-01-01T00:00:00.000Z' WHERE id = ?`,
+      songId
+    );
+    const re = await call('POST', vp(A1, `/objects/${songId}/reopen`), A, { window_seconds: 60 });
+    expect(re.json.code).toBe('WINDOW_FIXED');
+    expect((await objectRow(songId))?.closes_at).toBe('2020-01-01T00:00:00.000Z');
+  });
+
+  test('SECURITY | once a window has run, a closed set stays closed: no pause button (WINDOWS_STARTED)', async () => {
+    const songId = await openNight();
+    await call('POST', vp(A1, `/objects/${songId}/open`), A, {});
+    expect((await call('POST', vp(A1, '/close'), A, {})).status).toBe(200);
+    const re = await call('POST', vp(A1, '/reopen'), A, {});
+    expect(re.status).toBe(409);
+    expect(re.json.code).toBe('WINDOWS_STARTED');
+    expect((await setRow(A1))?.state).toBe('closed');
+  });
+
+  test('SECURITY | every object of one kind runs the same window: no longer window for a favourite', async () => {
+    const songId = await openNight(A1, 'object', ['Song two', 'Song three']);
+    const others = (await all(
+      `SELECT id FROM votable_objects WHERE event_id = ? AND id <> ? ORDER BY label`,
+      A1,
+      songId
+    )) as { id: string }[];
+    expect(
+      (await call('POST', vp(A1, `/objects/${songId}/open`), A, { window_seconds: 90 })).status
+    ).toBe(200);
+    const longer = await call('POST', vp(A1, `/objects/${others[0].id}/open`), A, {
+      window_seconds: 600,
+    });
+    expect(longer.status).toBe(409);
+    expect(longer.json.code).toBe('WINDOW_LENGTH_FIXED');
+    expect(longer.json.error).toContain('90');
+    expect((await objectRow(others[0].id))?.state).toBe('draft');
+    // The default is no way round it either: the length is the one already run.
+    expect((await call('POST', vp(A1, `/objects/${others[1].id}/open`), A, {})).json.code).toBe(
+      'WINDOW_LENGTH_FIXED'
+    );
+    const same = await call('POST', vp(A1, `/objects/${others[0].id}/open`), A, {
+      window_seconds: 90,
+    });
+    expect(same.status).toBe(200);
+  });
+
   test('after final (as S5 will set it): no reopen, no new object, no change, no object open', async () => {
     const songId = await openNight();
     await call('POST', vp(A1, `/objects/${songId}/open`), A, {});
-    await call('POST', vp(A1, `/objects/${songId}/close`), A, {});
     await call('POST', vp(A1, '/close'), A, {});
     await makeFinalAsS5Would(A1);
     const before = await setRow(A1);
@@ -713,17 +769,25 @@ describe('an object window is set by the server', () => {
     expect(closes - t0).toBeLessThanOrEqual(140_000);
     expect(res.json.object).toMatchObject({ state: 'open', open_now: true });
 
-    await call('POST', vp(A1, `/objects/${songId}/close`), A, {});
-    const def = await call('POST', vp(A1, `/objects/${songId}/reopen`), A, {});
+    // The default follows the kind (another set: one kind runs one length).
+    await run(
+      `UPDATE events SET start_date = '2099-06-01', end_date = '2099-06-01' WHERE id = ?`,
+      A2
+    );
+    const other = await openNight(A2);
+    const def = await call('POST', vp(A2, `/objects/${other}/open`), A, {});
     const span = Date.parse(def.json.object.closes_at) - Date.now();
     expect(span).toBeGreaterThan((VOTE_WINDOW_DEFAULT_SECONDS.song - 10) * 1000);
     expect(span).toBeLessThanOrEqual(VOTE_WINDOW_DEFAULT_SECONDS.song * 1000);
+  });
 
-    await call('POST', vp(A1, `/objects/${songId}/close`), A, {});
+  test('a window outside the bounds is refused at open, and nothing opens', async () => {
+    const songId = await openNight();
     for (const w of [VOTE_WINDOW_MAX_SECONDS + 1, 5, 1.5, '60'])
       expect(
-        (await call('POST', vp(A1, `/objects/${songId}/reopen`), A, { window_seconds: w })).status
+        (await call('POST', vp(A1, `/objects/${songId}/open`), A, { window_seconds: w })).status
       ).toBe(400);
+    expect((await objectRow(songId))?.state).toBe('draft');
   });
 
   test("an entry's window defaults to the whole event, as a stall's (OSE-2224)", async () => {
@@ -738,21 +802,6 @@ describe('an object window is set by the server', () => {
     const span = Date.parse(res.json.object.closes_at) - t0;
     expect(span).toBeGreaterThan((VOTE_WINDOW_MAX_SECONDS - 10) * 1000);
     expect(span).toBeLessThanOrEqual((VOTE_WINDOW_MAX_SECONDS + 5) * 1000);
-  });
-
-  test('a reopen of an object still open is refused; once its window ran out, it re-arms', async () => {
-    const songId = await openNight();
-    await call('POST', vp(A1, `/objects/${songId}/open`), A, { window_seconds: 60 });
-    expect((await call('POST', vp(A1, `/objects/${songId}/reopen`), A, {})).status).toBe(409);
-    await run(
-      `UPDATE votable_objects SET closes_at = '2020-01-01T00:00:00.000Z' WHERE id = ?`,
-      songId
-    );
-    const list = await call('GET', vp(A1), A);
-    expect(list.json.objects[0]).toMatchObject({ state: 'open', open_now: false });
-    const re = await call('POST', vp(A1, `/objects/${songId}/reopen`), A, { window_seconds: 60 });
-    expect(re.status).toBe(200);
-    expect(re.json.object.open_now).toBe(true);
   });
 
   test('closing the set leaves no object open_now', async () => {
@@ -779,9 +828,43 @@ describe('6. after the first open, a song team cannot change', () => {
     expect(res.status).toBe(409);
     expect(res.json.code).toBe('TEAM_FIXED');
     expect((await objectRow(id))?.group_id).toBe(TEAM_2);
-    // The order may still change; the team stays.
-    expect((await call('PUT', vp(A1, `/objects/${id}`), A, { sort: 3 })).status).toBe(200);
+    // The order is fixed too (CCR loop 4), and the team stays.
+    expect((await call('PUT', vp(A1, `/objects/${id}`), A, { sort: 3 })).json.code).toBe(
+      'ORDER_FIXED'
+    );
     expect((await objectRow(id))?.group_id).toBe(TEAM_2);
+  });
+
+  test('SECURITY | the stall an entry stands at is fixed once voting opens (BOOTH_FIXED, CCR loop 5)', async () => {
+    for (const [id, num, name] of [
+      ['booth_vts_fix1', '7', 'North'],
+      ['booth_vts_fix2', '8', 'South'],
+    ])
+      await run(
+        `INSERT INTO event_booths (id, event_id, number, name, is_active) VALUES (?, ?, ?, ?, 1)`,
+        id,
+        A1,
+        num,
+        name
+      );
+    await call('POST', vp(A1), A, {});
+    const entry = await call('POST', vp(A1, '/objects'), A, { kind: 'entry', label: 'Float one' });
+    const id = entry.json.object.id as string;
+    // Before the first open the stall can be set and changed.
+    expect(
+      (await call('PUT', vp(A1, `/objects/${id}`), A, { booth_id: 'booth_vts_fix1' })).status
+    ).toBe(200);
+    expect((await call('POST', vp(A1, '/open'), A, { room_size: 200 })).status).toBe(200);
+    for (const booth of ['booth_vts_fix2', null]) {
+      const res = await call('PUT', vp(A1, `/objects/${id}`), A, { booth_id: booth });
+      expect(res.status, String(booth)).toBe(409);
+      expect(res.json.code, String(booth)).toBe('BOOTH_FIXED');
+    }
+    expect((await objectRow(id))?.booth_id).toBe('booth_vts_fix1');
+    // Sending the stall it already has is no change, and is not refused.
+    expect(
+      (await call('PUT', vp(A1, `/objects/${id}`), A, { booth_id: 'booth_vts_fix1' })).status
+    ).toBe(200);
   });
 
   test('a name is fixed once voting opens: a rename would move votes to another name', async () => {
@@ -797,10 +880,14 @@ describe('6. after the first open, a song team cannot change', () => {
     expect(res.status).toBe(409);
     expect(res.json.code).toBe('LABEL_FIXED');
     expect((await objectRow(id))?.label).toBe('Fixed name');
-    // The same name again, or only the order, still saves.
-    expect(
-      (await call('PUT', vp(A1, `/objects/${id}`), A, { label: 'Fixed name', sort: 2 })).status
-    ).toBe(200);
+    // The same name again still saves; a new place in the list does not
+    // (CCR loop 4: the voter's list is ordered by it, so no entry moves to the top).
+    expect((await call('PUT', vp(A1, `/objects/${id}`), A, { label: 'Fixed name' })).status).toBe(
+      200
+    );
+    const moved = await call('PUT', vp(A1, `/objects/${id}`), A, { sort: 2 });
+    expect(moved.status).toBe(409);
+    expect(moved.json.code).toBe('ORDER_FIXED');
   });
 
   test('once voting opens, nothing can be added: no decoy, no second copy, no late favourite', async () => {
@@ -929,13 +1016,13 @@ describe('8. every change is audited, with no detail', () => {
 
   test('each write writes its row; a refusal is denied; a read writes none', async () => {
     const songId = await openNight(); // create, object create, open
-    await call('PUT', vp(A1, `/objects/${songId}`), A, { sort: 2 });
+    // A change still allowed once open (the order and the name are fixed).
+    await call('PUT', vp(A1, `/objects/${songId}`), A, { booth_id: null });
     await call('POST', vp(A1, `/objects/${songId}/open`), A, {});
-    await call('POST', vp(A1, `/objects/${songId}/close`), A, {});
-    await call('POST', vp(A1, `/objects/${songId}/reopen`), A, {});
-    await call('POST', vp(A1, '/close'), A, {});
-    await call('POST', vp(A1, '/reopen'), A, {});
+    await call('POST', vp(A1, `/objects/${songId}/close`), A, {}); // refused: WINDOW_FIXED
     await call('POST', vp(A1, '/finalize'), A, {}); // refused: VOTE_SET_OPEN
+    await call('POST', vp(A1, '/close'), A, {});
+    await call('POST', vp(A1, '/reopen'), A, {}); // refused: WINDOWS_STARTED
     await call('GET', vp(A1), A);
     const rows = await all(
       `SELECT action, outcome, details, brand_id FROM admin_audit_log
@@ -948,11 +1035,10 @@ describe('8. every change is audited, with no detail', () => {
       'VOTE_SET_OPEN:success',
       'VOTABLE_UPDATE:success',
       'VOTABLE_OPEN:success',
-      'VOTABLE_CLOSE:success',
-      'VOTABLE_REOPEN:success',
-      'VOTE_SET_CLOSE:success',
-      'VOTE_SET_REOPEN:success',
+      'VOTABLE_CLOSE:denied',
       'VOTE_SET_FINALIZE:denied',
+      'VOTE_SET_CLOSE:success',
+      'VOTE_SET_REOPEN:denied',
     ]);
     for (const r of rows) {
       expect(r.details).toBeNull();
@@ -1029,6 +1115,27 @@ describe('10. every set reaches final: the nightly job', () => {
     expect(audit).toEqual([
       { action: 'VOTE_SET_FINAL', actor: 'system:lifecycle', details: null, brand_id: BRAND_A },
     ]);
+  });
+
+  test('SECURITY | moving the end date forward cannot hold a result back: final 30 days after the first open (CCR loop 5)', async () => {
+    // The event stays "in the future": the host kept pushing the end date.
+    await run(
+      `UPDATE events SET start_date = ?, end_date = ? WHERE id = ?`,
+      '2099-06-01',
+      '2099-06-01',
+      OLD
+    );
+    await openNight(OLD);
+    const stamp = (days: number) =>
+      new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 13) + ':00:00Z';
+    // 29 days after the first open: not yet.
+    await run(`UPDATE vote_sets SET opened_at = ? WHERE event_id = ?`, stamp(29), OLD);
+    await runVoteFinalJob({ DB: tenv.DB });
+    expect((await setRow(OLD))?.is_final).toBe(0);
+    // 31 days: made final, whatever the event's dates say.
+    await run(`UPDATE vote_sets SET opened_at = ? WHERE event_id = ?`, stamp(31), OLD);
+    await runVoteFinalJob({ DB: tenv.DB });
+    expect((await setRow(OLD))?.is_final).toBe(1);
   });
 
   test('a set that never opened is made final 7 days after its event', async () => {

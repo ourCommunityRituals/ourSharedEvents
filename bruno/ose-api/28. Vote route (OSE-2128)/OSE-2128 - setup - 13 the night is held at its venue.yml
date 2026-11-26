@@ -1,11 +1,11 @@
 info:
-  name: OSE-2127 | close | close the vote set again
+  name: OSE-2128 | setup | the night is held at its venue
   type: http
-  seq: 82
+  seq: 13
 
 http:
-  method: POST
-  url: "{{baseUrl}}/api/v2/admin/events/{{voteNightId}}/votables/close"
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteRouteNightId}}/venue"
   headers:
     - name: CF-Access-Client-Id
       value: "{{cfAccessClientId}}"
@@ -15,7 +15,7 @@ http:
       value: "application/json"
   body:
     type: json
-    data: "{}"
+    data: "{\"venue_id\": \"{{voteRouteNightVenueId}}\"}"
   auth: inherit
 
 runtime:
@@ -23,7 +23,7 @@ runtime:
     - type: after-response
       code: |-
         const b = res.getBody() || {};
-        test('OSE-2127 close: 200', function () { expect(res.getStatus()).to.eql(200); expect(b.set.state).to.eql('closed'); });
+        test('OSE-2128 setup: the night is linked to its venue, so voting can open', function () { expect(res.getStatus()).to.eql(200); expect(b.venue_id).to.eql(bru.getVar('voteRouteNightVenueId')); });
 
 settings:
   encodeUrl: true

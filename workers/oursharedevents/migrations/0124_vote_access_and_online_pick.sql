@@ -1,4 +1,4 @@
--- Migration 0123: the Access Pass and the Online Pick (OSE ADR-040 decision 13,
+-- Migration 0124: the Access Pass and the Online Pick (OSE ADR-040 decision 13,
 -- the proposal in OCR-docs PR #200; owner, 2026-11-26).
 --
 -- 1. vote_access_passes. A host gives an Access Pass so someone who cannot be
@@ -26,7 +26,7 @@
 -- column; vote_crowd_sets keeps the hour it was changed, as vote_sets does.
 --
 -- Rollback: revert the Worker and leave the tables (they hold nothing about a
--- person). See ROLLBACK_PLAN.md, 0123.
+-- person). See ROLLBACK_PLAN.md, 0124.
 
 CREATE TABLE IF NOT EXISTS vote_access_passes (
   id          TEXT    PRIMARY KEY CHECK (id GLOB 'vap_*' AND length(id) = 36 AND substr(id, 5) NOT GLOB '*[^0-9a-f]*'),

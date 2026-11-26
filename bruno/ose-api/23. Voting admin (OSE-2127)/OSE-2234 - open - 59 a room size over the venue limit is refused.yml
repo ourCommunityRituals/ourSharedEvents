@@ -1,0 +1,36 @@
+info:
+  name: OSE-2234 | open | a room size over the venue limit is refused
+  type: http
+  seq: 59
+
+# The night's venue has no room limit set, so the 500 default is its ceiling
+# (owner, decision cards 2026-11-26). Nothing opens; 60 opens it at 200.
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteNightId}}/votables/open"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"room_size\": 501}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2234 open: 400 ROOM_SIZE_OVER_CEILING, the venue has no limit set so 500 holds', function () { expect(res.getStatus()).to.eql(400); expect(b.code).to.eql('ROOM_SIZE_OVER_CEILING'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

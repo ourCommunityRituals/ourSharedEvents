@@ -78,7 +78,7 @@ const SCAN_TABLES = [
   'vote_receipts', // one keyed receipt per browser per object
   'vote_participants', // one keyed marker per browser per set
   'vote_team_markers', // one keyed marker per browser per team (Q16)
-  // 0123 (OSE ADR-040 decision 13): the Access Pass and the Online Pick, held to
+  // 0124 (OSE ADR-040 decision 13): the Access Pass and the Online Pick, held to
   // the same hour rule as the room's tables.
   'vote_access_passes', // one row per Access Pass a host gives; an HMAC lookup, never the token
   'vote_crowd_sets', // the Online Pick's switch, T, V and result, one per set
@@ -185,7 +185,7 @@ const ALLOWLIST: Record<string, AllowEntry> = {
       "The 0111 default is strftime('%Y-%m-%d %H:00:00', 'now'): the hour an object was made, by an admin or N1, never a voter's time.",
   },
 
-  // 0123 (OSE ADR-040 decision 13): the Access Pass and the Online Pick.
+  // 0124 (OSE ADR-040 decision 13): the Access Pass and the Online Pick.
   'vote_access_passes.created_at': {
     kinds: ['coarse-clock'],
     reason:
@@ -194,7 +194,7 @@ const ALLOWLIST: Record<string, AllowEntry> = {
   'vote_crowd_sets.updated_at': {
     kinds: ['coarse-clock'],
     reason:
-      "The 0123 default is strftime('%Y-%m-%d %H:00:00', 'now'), and lib/vote-crowd.ts writes hourStamp when a host turns the Online Pick on or off. A host's act, never a voter's time.",
+      "The 0124 default is strftime('%Y-%m-%d %H:00:00', 'now'), and lib/vote-crowd.ts writes hourStamp when a host turns the Online Pick on or off. A host's act, never a voter's time.",
   },
 
   // Forms side: the owner rules on these under D4 (truncate, drop, or keep with a

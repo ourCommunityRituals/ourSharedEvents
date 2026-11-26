@@ -30,6 +30,7 @@ runtime:
         var status = res.getStatus();
         var edge = status === 403 && (res.getHeader('cf-mitigated') || '').length > 0;
         if (edge) { test('EDGE: the scan was challenged before the Worker ran (OSE-939); nothing below was checked', function () { expect(edge).to.equal(true); }); }
+        if (edge && String(bru.getEnvVar('edgeStrict')) === '1') { test('EDGE (strict, OSE-2022): the scan reached the Worker, not an edge challenge', function () { expect('edge challenge').to.eql('the Worker'); }); }
         var loc = String(res.getHeader('location') || '');
         var hashAt = loc.indexOf('#');
         var beforeHash = hashAt < 0 ? loc : loc.slice(0, hashAt);

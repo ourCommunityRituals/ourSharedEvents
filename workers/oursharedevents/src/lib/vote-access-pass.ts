@@ -5,7 +5,7 @@
  *
  * FROM THE VOTER'S SIDE FIRST. A voter asks the host any way they like and
  * never gives a reason. Nothing here asks for one, stores one, or has a place
- * to type one: the table (migration 0123) has no name, note, reason or
+ * to type one: the table (migration 0124) has no name, note, reason or
  * recipient column. The pass opens the same voter page as the room's code,
  * with the same buttons, and the vote is a normal Room Pick vote with the same
  * weight. The word is "Access Pass".

@@ -254,9 +254,9 @@ export async function handlePutVenueRoomCeiling(
   return guarded(request, reqId, async () => {
     if (!VENUE_ID_RE.test(venueId))
       return fail(request, reqId, 404, 'NOT_FOUND', 'Venue not found');
-    const venue = await env.DB.prepare('SELECT id FROM venues WHERE id = ?')
+    const venue = await env.DB.prepare('SELECT id, room_kind, room_cap FROM venues WHERE id = ?')
       .bind(venueId)
-      .first<{ id: string }>();
+      .first<{ id: string; room_kind: string | null; room_cap: number | null }>();
     if (!venue) return fail(request, reqId, 404, 'NOT_FOUND', 'Venue not found');
     if (!body) return fail(request, reqId, 400, 'INVALID_BODY', 'Send a JSON object');
     const extra = Object.keys(body).filter((k) => k !== 'room_kind' && k !== 'room_cap');
@@ -292,7 +292,15 @@ export async function handlePutVenueRoomCeiling(
     await env.DB.prepare('UPDATE venues SET room_kind = ?, room_cap = ? WHERE id = ?')
       .bind(kind, cap, venue.id)
       .run();
-    return json(request, reqId, { ok: true, venue_id: venue.id, room_kind: kind, room_cap: cap });
+    // The old and new values ride in the reply so the router's audit row can
+    // keep both (CCR loop 4): a raised limit is reconstructable later.
+    return json(request, reqId, {
+      ok: true,
+      venue_id: venue.id,
+      room_kind: kind,
+      room_cap: cap,
+      was: { room_kind: venue.room_kind, room_cap: venue.room_cap },
+    });
   });
 }
 
@@ -395,6 +403,30 @@ async function countingSets(
 }
 
 /**
+ * The voting room-size ceiling (OSE-2234, owner 2026-11-26) comes from the
+ * event's venue, and with no venue or an unset venue it is 500. So a host
+ * could lift a platform-set limit by clearing the venue, or by moving to a
+ * venue the platform has not set, and then open voting with a bigger room
+ * (CCR loop 4). An event at a venue with a room limit moves only to another
+ * venue whose room limit the platform has set. Held in the one statement: its
+ * one `?` is the new venue id, or null to clear.
+ */
+const CEILING_KEPT_SQL = `(
+  (SELECT v.room_cap FROM venues v WHERE v.id = events.host_venue_id) IS NULL
+  OR (SELECT n.room_cap FROM venues n WHERE n.id = ?) IS NOT NULL
+)`;
+
+function ceilingLocked(request: Request, reqId: string): Response {
+  return fail(
+    request,
+    reqId,
+    409,
+    'VENUE_ROOM_LIMIT_KEPT',
+    "This event's venue has a room limit set by the platform, so it can move only to another venue with a room limit set; ask the platform"
+  );
+}
+
+/**
  * The event in the path is proved in the caller's brand scope by the router's
  * guardAdminObjectScope before this runs. This holds it at a venue that counts
  * its brand, or clears it (`venue_id: null`).
@@ -419,9 +451,12 @@ export async function handleSetEventVenue(
       .first<{ id: string; brand_id: string | null }>();
     if (!event) return fail(request, reqId, 404, 'NOT_FOUND', 'Event not found');
     if (venueId === null) {
-      await env.DB.prepare('UPDATE events SET host_venue_id = NULL WHERE id = ?')
-        .bind(event.id)
+      const cleared = await env.DB.prepare(
+        `UPDATE events SET host_venue_id = NULL WHERE id = ? AND ${CEILING_KEPT_SQL}`
+      )
+        .bind(event.id, null)
         .run();
+      if ((cleared.meta?.changes ?? 0) === 0) return ceilingLocked(request, reqId);
       return json(request, reqId, { ok: true, event_id: event.id, venue_id: null });
     }
     const brand = event.brand_id ?? '';
@@ -448,9 +483,12 @@ export async function handleSetEventVenue(
         'This brand is not listed on the platform at that venue; ask the venue to list it'
       );
     }
-    await env.DB.prepare('UPDATE events SET host_venue_id = ? WHERE id = ?')
-      .bind(venue.id, event.id)
+    const moved = await env.DB.prepare(
+      `UPDATE events SET host_venue_id = ? WHERE id = ? AND ${CEILING_KEPT_SQL}`
+    )
+      .bind(venue.id, event.id, venue.id)
       .run();
+    if ((moved.meta?.changes ?? 0) === 0) return ceilingLocked(request, reqId);
     return json(request, reqId, { ok: true, event_id: event.id, venue_id: venue.id });
   });
 }

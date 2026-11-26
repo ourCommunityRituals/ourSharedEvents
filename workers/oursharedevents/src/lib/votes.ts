@@ -41,7 +41,7 @@ export const VOTE_TABLES = [
   'vote_receipts',
   'vote_participants',
   'vote_team_markers',
-  // ADR-040 decision 13 (migration 0123): the Access Pass and the Online Pick.
+  // ADR-040 decision 13 (migration 0124): the Access Pass and the Online Pick.
   // The Online Pick's own tables; no statement names one of these and a room
   // counter or marker table (the T0 gate, "channels never mix").
   'vote_access_passes',

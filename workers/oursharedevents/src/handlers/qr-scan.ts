@@ -51,10 +51,15 @@ import { getOrCreateAnonId, setAnonCookie, type AnonCookieValue } from '../lib/a
 import { scanHourOf, takePosterHourPlace } from '../lib/poster-hour-cap';
 import { enqueueOrWriteScan, scanDedupKey, type ScanMessage } from '../lib/scan-buffer';
 import { scanNodeKey } from '../lib/scan-node-key';
-import { issueVotePass, mintCrowdPass, votePageTarget, VOTE_CODE_TYPE } from '../lib/vote-pass';
+import {
+  issueVotePass,
+  mintCrowdPass,
+  staleVotePageTarget,
+  votePageTarget,
+  VOTE_CODE_TYPE,
+} from '../lib/vote-pass';
 import { noteCrowdPassMinted, onlinePickMayMint } from '../lib/vote-crowd';
-import { votingEnabled } from '../lib/voting-switch';
-import type { VotingSwitchEnv } from '../lib/voting-switch';
+import { votingEnabled, type VotingSwitchEnv } from '../lib/voting-switch';
 import { noteVotePassMinted, type VoteFloodLimiter } from '../lib/vote-flood';
 import { voteCodeStampOk } from '../lib/vote-code-window';
 
@@ -197,6 +202,32 @@ export async function handleQrScan(
   const url = new URL(request.url);
   const isVoteCode = deployment.is_vote_code === 1;
 
+  // CCR F7 and F12 (OSE-2234): with voting on, a vote scan whose stamp is not
+  // this minute's or the last (a photo, a shared link, an old tab) counts
+  // nothing and sets nothing: no row, no hour marker, no cookie. The voter
+  // lands on the vote page with no pass, which says to scan the code on the
+  // screen again, so an honest voter is told rather than dropped silently.
+  // With no pepper no stamp can be checked and no pass can exist, so that
+  // scan keeps today's answer (the event page) rather than "scan again".
+  // A vote code with its `type=vote` cut off (CCR loop 5, L2) is the same: the
+  // room screen never shows that URL, so it is a copy, and it counts nothing.
+  if (
+    isVoteCode &&
+    votingEnabled(env) &&
+    !!env.ANON_ID_HASH_PEPPER &&
+    (url.searchParams.get('type') !== VOTE_CODE_TYPE ||
+      !(await voteCodeStampOk(env.ANON_ID_HASH_PEPPER, qrToken, url.searchParams.get('w'), nowMs)))
+  ) {
+    console.log(JSON.stringify({ type: 'SCAN_NOT_COUNTED', reason: 'vote_code_changed' }));
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: staleVotePageTarget(url.origin, eventId),
+        'Cache-Control': 'no-store',
+      },
+    });
+  }
+
   // OSE-2214 (owner, 2026-11-23; ADR-024 option C for scans): OSE counts the
   // traffic on the code, never the phone. A poster code neither reads nor sets
   // the ose_anon cookie, keeps no per-phone marker and stores no phone id:
@@ -317,9 +348,9 @@ export async function handleQrScan(
   // only. A failure here (a D1 blip reading the set) mints none and the
   // visitor keeps today's redirect; the line names the failure, nothing else.
   // The rotating code (lib/vote-code-window.ts): a pass needs this minute's
-  // stamp, or the last minute's, from the room screen. A photo of the code goes
-  // stale within two minutes; a stale or missing stamp mints no pass, and the
-  // scan stands as any other code's.
+  // stamp, or the last minute's, from the room screen. A stale or missing
+  // stamp was answered above with no row; the check is kept here too so a pass
+  // can never be minted without it.
   if (
     voterId &&
     scanStored &&

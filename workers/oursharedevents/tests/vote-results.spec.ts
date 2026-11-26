@@ -29,6 +29,7 @@
  */
 
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
+import { linkVenue } from './helpers/link-venue';
 import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { route, type RouterEnv } from '../src/router';
 import { runVoteFinalJob } from '../src/lib/vote-sets';
@@ -110,6 +111,7 @@ async function seedEvent(id: string, date: string) {
     date,
     date
   );
+  await linkVenue(tenv.DB, id);
 }
 
 /** A set with these songs, opened. Returns the song ids in order. */

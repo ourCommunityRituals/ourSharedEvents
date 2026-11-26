@@ -28,6 +28,7 @@
  */
 
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
+import { linkVenue } from './helpers/link-venue';
 import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { route, type RouterEnv } from '../src/router';
 import { PUBLIC_PAGE_MAX, PUBLIC_READ_MAX } from '../src/lib/public-read-limit';
@@ -149,6 +150,7 @@ async function seedEvent(id: string, status: string) {
     id,
     status
   );
+  await linkVenue(tenv.DB, id);
 }
 
 /** Make the set, add songs, open the set; returns each song's id by label. */
@@ -354,15 +356,21 @@ describe('2. the answer is an allowlist: id, kind, label, and nothing else', () 
 // ── 3. Open now only ─────────────────────────────────────────────────────────
 
 describe('3. only what is open now is listed', () => {
-  test('a draft object is not listed; it is once it opens; closed, it is not; reopened, it is', async () => {
+  test('a draft object is not listed; it is once it opens; a close or reopen is refused; closed by hand, it is not', async () => {
     const ids = await night(NIGHT, ['Song one', 'Song two']);
     expect(await labels(NIGHT)).toEqual([]); // both still draft
     await openSong(NIGHT, ids['Song two']);
     expect(await labels(NIGHT)).toEqual(['Song two']); // Song one is a draft
-    expect((await admin('POST', NIGHT, `/objects/${ids['Song two']}/close`)).status).toBe(200);
+    // A window runs its full length (owner card 2026-11-26): no host close or reopen.
+    for (const move of ['close', 'reopen']) {
+      const r = await admin('POST', NIGHT, `/objects/${ids['Song two']}/${move}`);
+      expect(r.status, move).toBe(409);
+      expect(r.json.code, move).toBe('WINDOW_FIXED');
+      expect(await labels(NIGHT), move).toEqual(['Song two']);
+    }
+    // A row closed before this rule (or by hand) is not listed.
+    await run(`UPDATE votable_objects SET state = 'closed' WHERE id = ?`, ids['Song two']);
     expect(await labels(NIGHT)).toEqual([]);
-    expect((await admin('POST', NIGHT, `/objects/${ids['Song two']}/reopen`)).status).toBe(200);
-    expect(await labels(NIGHT)).toEqual(['Song two']);
   });
 
   test('an object whose window has passed is not listed, to the second', async () => {
@@ -404,7 +412,10 @@ describe('3. only what is open now is listed', () => {
       ids['Song one']
     );
     expect(await labels(NIGHT)).toEqual([]);
-    expect((await admin('POST', NIGHT, '/reopen')).status).toBe(200);
+    // A window ran, so the host cannot reopen the set (WINDOWS_STARTED); set
+    // open again by hand, the song is listed: the set's state alone hid it.
+    expect((await admin('POST', NIGHT, '/reopen')).json.code).toBe('WINDOWS_STARTED');
+    await run(`UPDATE vote_sets SET state = 'open' WHERE event_id = ?`, NIGHT);
     expect(await labels(NIGHT)).toEqual(['Song one']);
   });
 

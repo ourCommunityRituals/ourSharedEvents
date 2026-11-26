@@ -86,7 +86,7 @@ const ITEM_OPEN = '<li class="ose-sponsor-item" data-testid="sponsor-item">';
 const LIST_OPEN = '<ul class="ose-sponsor-list" data-testid="sponsor-list">';
 const one = (item: string) => `${LIST_OPEN}${ITEM_OPEN}${item}</li></ul>`;
 const thumb = (id: string, alt: string) =>
-  `<img class="ose-sponsor-thumb" data-testid="sponsor-thumb" src="/api/v2/sponsors/${id}/logo?slot=sidebar" alt="${alt}" loading="lazy" decoding="async">`;
+  `<img class="ose-sponsor-thumb" data-testid="sponsor-thumb" src="/api/v2/sponsors/${id}/logo?slot=sidebar" alt="${alt}" width="160" height="64" loading="lazy" decoding="async">`;
 const site = (href: string, inner: string, extra = '') =>
   `<a href="${href}" class="ose-sponsor-link" rel="noopener noreferrer nofollow"${extra}>${inner}</a>`;
 const card = (id: string, inner: string, extra = '') =>

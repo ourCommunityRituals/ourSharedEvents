@@ -6,7 +6,7 @@
  * TWO CHANNELS, NEVER MIXED. The Online Pick rides on the room set's objects
  * (the same ids, the same open windows) but writes only its own tables:
  * vote_crowd_sets, vote_crowd_tallies, vote_crowd_receipts and
- * vote_crowd_participants (migration 0123). Its voter key and its pass seal are
+ * vote_crowd_participants (migration 0124). Its voter key and its pass seal are
  * its own HKDF labels (lib/vote-pass.ts), so a crowd pass never opens as a room
  * pass. No statement in this file names a room counter or marker table, and no
  * room statement names a crowd table: the T0 gate

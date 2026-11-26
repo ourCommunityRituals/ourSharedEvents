@@ -23,7 +23,7 @@ runtime:
         const rows = (b.entries || []).filter(function (r) { return r.resource_id === night || r.resource_id === fin; });
         const actions = rows.map(function (r) { return r.action + ':' + r.outcome; });
         test('OSE-2127 audit: 200', function () { expect(res.getStatus()).to.eql(200); });
-        test('OSE-2127 audit: each write is logged', function () { ['VOTE_SET_CREATE:success', 'VOTE_SET_CREATE:denied', 'VOTABLE_CREATE:success', 'VOTABLE_CREATE:denied', 'VOTE_SET_OPEN:success', 'VOTE_SET_OPEN:denied', 'VOTABLE_OPEN:success', 'VOTABLE_OPEN:denied', 'VOTABLE_CLOSE:success', 'VOTABLE_REOPEN:success', 'VOTE_SET_CLOSE:success', 'VOTE_SET_REOPEN:success', 'VOTE_SET_FINALIZE:success', 'VOTE_SET_FINALIZE:denied'].forEach(function (a) { expect(actions).to.include(a); }); });
+        test('OSE-2127 audit: each write is logged', function () { ['VOTE_SET_CREATE:success', 'VOTE_SET_CREATE:denied', 'VOTABLE_CREATE:success', 'VOTABLE_CREATE:denied', 'VOTE_SET_OPEN:success', 'VOTE_SET_OPEN:denied', 'VOTABLE_OPEN:success', 'VOTABLE_OPEN:denied', 'VOTABLE_CLOSE:denied', 'VOTABLE_REOPEN:denied', 'VOTE_SET_CLOSE:success', 'VOTE_SET_REOPEN:denied', 'VOTE_SET_FINALIZE:success', 'VOTE_SET_FINALIZE:denied'].forEach(function (a) { expect(actions).to.include(a); }); });
         test('OSE-2127 audit: no row carries a detail', function () { rows.filter(function (r) { return /^VOT/.test(r.action); }).forEach(function (r) { expect(r.details == null || r.details === '').to.eql(true); }); });
 
 settings:

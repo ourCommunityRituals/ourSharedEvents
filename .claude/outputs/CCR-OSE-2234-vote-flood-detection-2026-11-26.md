@@ -9,7 +9,7 @@ cumulative_score: 41
 system_score: 75
 unresolved: { regulatory: 0, security_critical: 0, critical: 0, high: 0, medium: 3, low: 5 }
 pr: 1562
-subject_sha: '04a906e9b07e2e17f29970ada066d128e66ab33e'
+subject_sha: '04a906e9b07e2e17f29970ada066d128e66ab33e' # pragma: allowlist secret (a git commit id, not a secret)
 ---
 
 # CCR: stricter in-room voting (OSE-2234, PR #1562)
