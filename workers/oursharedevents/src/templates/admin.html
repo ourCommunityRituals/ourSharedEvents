@@ -7225,7 +7225,12 @@
           LABEL_FIXED: 'A name cannot change once voting has opened, so votes stay with what was voted for.',
           OBJECTS_FIXED: 'Voting has opened, so nothing can be added. Add everything before opening voting.',
           ORDER_FIXED: 'The order of the list cannot change once voting has opened.',
+          BOOTH_FIXED: 'Which stall an entry stands at cannot change once voting has opened.',
           ROOM_SIZE_OVER_CEILING: 'That is more than this venue may hold. Use a smaller room size, or ask the platform to set the venue limit.',
+          WINDOW_FIXED: 'Once its voting opens it runs to the end, so it cannot be closed early or opened again.',
+          WINDOWS_STARTED: 'Voting already ran here, so once closed it stays closed. Finish the vote to see the result.',
+          WINDOW_LENGTH_FIXED: 'Everything of this kind gets the same voting time, so this one does too.',
+          VENUE_NEEDED: 'Link this event to its venue first. For a park or open field, add it as an outdoor venue.',
           ROOM_SIZE_MISSING: 'This vote was opened without a room size, so it cannot be reopened. Finish it, or start a new vote.',
         };
         return Object.prototype.hasOwnProperty.call(SAID, code) ? SAID[code] : 'Could not save. Nothing was changed. Try again.';
@@ -7259,7 +7264,7 @@
         if (!set) return 'Voting is not set up for this event.';
         if (set.final) return 'Voting is over and the results are final.';
         if (set.state === 'open') return 'Voting is open.';
-        if (set.state === 'closed') return 'Voting is closed. You can reopen it while the event is on.';
+        if (set.state === 'closed') return 'Voting is closed.';
         return 'Voting is set up, not open yet.';
       };
       /** OSE-2127: fill the card from { set, objects }, or say the vote could not be read. */
@@ -7342,13 +7347,10 @@
           at('vote-row-label').textContent = String(o.label);
           at('vote-row-kind').textContent = window.votesKindWord(o.kind);
           at('vote-row-state').textContent = window.voteRowState(o);
-          var expired = o.state === 'open' && !o.open_now;
           var keep = [];
-          if (set && set.state === 'open' && !set.final) {
-            if (o.state === 'draft') keep = ['open'];
-            else if (o.state === 'open' && o.open_now) keep = ['close'];
-            else if (o.state === 'closed' || expired) keep = ['reopen'];
-          } else if (set && !set.final && o.state === 'open' && o.open_now) keep = ['close'];
+          // A window runs its full length once open (owner, 2026-11-26): the
+          // only move a host has is to open a draft.
+          if (set && set.state === 'open' && !set.final && o.state === 'draft') keep = ['open'];
           Array.prototype.slice.call(row.querySelectorAll('[data-testid="vote-row-actions"] button')).forEach(function (btn) {
             var move = btn.getAttribute('data-move');
             if (keep.indexOf(move) === -1) { btn.remove(); return; }

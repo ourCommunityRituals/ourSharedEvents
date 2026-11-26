@@ -30,6 +30,11 @@
  *          D1's remote runner cannot take one, migration 0025);
  *        - room_size (OSE-2234) is set only by a write whose WHERE says
  *          `room_size IS NULL`, so it is written once and never changed;
+ *          opened_at the same, with `opened_at IS NULL` (CCR loop 5);
+ *        - a write to votable_objects that sets state (other than 'closed')
+ *          or a non-null closes_at says `state = 'draft'`, and window_seconds
+ *          is set only under `window_seconds IS NULL`: a window runs its full
+ *          length, once (owner card 2026-11-26);
  *        - pepper_epoch and played_by are set only by a write whose WHERE says
  *          the column IS NULL (stamped once, never restamped);
  *        - secret_margin and secret_floor are set to a value only by a write
@@ -419,7 +424,7 @@ function flagProblems(raw: string, sqlComments = true): string[] {
       for (const part of splitTop(setPart.replace(/\bRETURNING\b.*$/i, ''))) {
         if (
           /^\(/.test(part) &&
-          /\b(?:is_final|is_void|flood_seen|burst_seen|pepper_epoch|played_by|room_size)\b/i.test(
+          /\b(?:is_final|is_void|flood_seen|burst_seen|pepper_epoch|played_by|room_size|opened_at)\b/i.test(
             part
           )
         )
@@ -451,7 +456,7 @@ function flagProblems(raw: string, sqlComments = true): string[] {
         // room_size (OSE-2234): written once, by the first open, so it needs a
         // "room_size IS NULL" guard; D1's remote runner cannot take a trigger
         // (migration 0025), so this gate is what holds it fixed.
-        for (const col of ['pepper_epoch', 'played_by', 'room_size']) {
+        for (const col of ['pepper_epoch', 'played_by', 'room_size', 'opened_at']) {
           if (
             new RegExp(`^${col}\\s*=`, 'i').test(part) &&
             !new RegExp(`\\b${col}\\s+IS\\s+NULL\\b`, 'i').test(where)
@@ -466,6 +471,27 @@ function flagProblems(raw: string, sqlComments = true): string[] {
       );
     if (obj && !/\bis_final\s*=\s*0\b/i.test(sql))
       out.push('writes votable_objects without an "is_final = 0" guard on its set');
+    // A window runs its full length (owner card 2026-11-26): an object is put
+    // into 'open', or given a closes_at, only from draft, and its window length
+    // is written once. Nothing re-arms or stretches a window that has run.
+    const objUpd = sql.match(/\bUPDATE(?:\s+OR\s+\w+)?\s+votable_objects\b\s+SET\s+(.*)$/i);
+    if (objUpd) {
+      const [setPart, where = ''] = objUpd[1].split(/\bWHERE\b/i);
+      if (/\$\{/.test(setPart))
+        out.push('sets votable_objects columns this gate cannot read (${...})');
+      for (const part of splitTop(setPart.replace(/\bRETURNING\b.*$/i, ''))) {
+        if (/^\(/.test(part) && /\b(?:state|closes_at|window_seconds)\b/i.test(part))
+          out.push(`sets an object's window in a tuple: ${part}`);
+        const opens = /^state\s*=/i.test(part) && !/^state\s*=\s*'closed'$/i.test(part);
+        const arms = /^closes_at\s*=/i.test(part) && !/^closes_at\s*=\s*NULL$/i.test(part);
+        if ((opens || arms) && !/\bstate\s*=\s*'draft'/i.test(where))
+          out.push(
+            `opens or re-arms an object's window without a "state = 'draft'" guard: ${part}`
+          );
+        if (/^window_seconds\s*=/i.test(part) && !/\bwindow_seconds\s+IS\s+NULL\b/i.test(where))
+          out.push('window_seconds is set without a "window_seconds IS NULL" guard');
+      }
+    }
   }
   return out;
 }
@@ -1005,6 +1031,15 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
       'UPDATE vote_sets SET room_size = ? WHERE id = ?',
       'UPDATE vote_sets SET room_size = 50000 WHERE event_id = ? AND is_final = 0',
       "UPDATE vote_sets SET (room_size, state) = (?, 'open') WHERE id = ? AND room_size IS NULL",
+      // CCR loop 5: the first-open hour (the 30-day final backstop) is written once.
+      'UPDATE vote_sets SET opened_at = ? WHERE id = ?',
+      "UPDATE vote_sets SET opened_at = datetime('now') WHERE event_id = ? AND is_final = 0",
+      // Owner card 2026-11-26: a window runs its full length, once.
+      "UPDATE votable_objects SET state = 'open', closes_at = ? WHERE id = ? AND state = 'closed' AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)",
+      'UPDATE votable_objects SET closes_at = ? WHERE id = ? AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)',
+      'UPDATE votable_objects SET state = ? WHERE id = ? AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)',
+      "UPDATE votable_objects SET window_seconds = ? WHERE id = ? AND state = 'draft' AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)",
+      "UPDATE votable_objects SET (state, closes_at) = ('open', ?) WHERE id = ? AND state = 'draft' AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)",
     ];
     expect(reopen.filter((sql) => flagProblems(sql).length === 0)).toEqual([]);
     // A shell line: its --command flag is not a SQL comment.
@@ -1021,12 +1056,15 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
       "UPDATE vote_sets SET state = 'open', pepper_epoch = ?, secret_margin = ?, secret_floor = ? WHERE id = ? AND is_final = 0 AND pepper_epoch IS NULL",
       "UPDATE vote_sets SET state = 'open' WHERE event_id = ? AND state = 'closed' AND is_final = 0",
       "UPDATE vote_sets SET state = 'closed' WHERE event_id = ? AND state = 'open'",
-      "UPDATE votable_objects SET state = 'open' WHERE id = ? AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)",
+      "UPDATE votable_objects SET state = 'open' WHERE id = ? AND state = 'draft' AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)",
+      "UPDATE votable_objects SET state = 'open', closes_at = ?, window_seconds = ? WHERE id = ? AND state = 'draft' AND window_seconds IS NULL AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)",
+      "UPDATE votable_objects SET state = 'closed', closes_at = NULL WHERE set_id = ? AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)",
       'INSERT INTO vote_sets (id, event_id) VALUES (?, ?)',
       'SELECT is_final FROM vote_sets WHERE id = ?',
       'UPDATE vote_sets SET flood_seen = 1 WHERE event_id = ? AND flood_seen = 0 AND is_final = 0',
       'UPDATE vote_sets SET burst_seen = 1 WHERE event_id = ? AND burst_seen = 0 AND is_final = 0',
       "UPDATE vote_sets SET state = 'open', pepper_epoch = ?, room_size = ? WHERE id = ? AND is_final = 0 AND pepper_epoch IS NULL AND room_size IS NULL",
+      "UPDATE vote_sets SET state = 'open', pepper_epoch = ?, room_size = ?, opened_at = ? WHERE id = ? AND is_final = 0 AND pepper_epoch IS NULL AND room_size IS NULL AND opened_at IS NULL",
     ];
     expect(fine.filter((sql) => flagProblems(sql).length > 0)).toEqual([]);
 

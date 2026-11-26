@@ -1,11 +1,11 @@
 info:
-  name: OSE-2127 | reopen | reopen the song
+  name: OSE-2127 | setup | the night is held at its venue
   type: http
-  seq: 72
+  seq: 13
 
 http:
-  method: POST
-  url: "{{baseUrl}}/api/v2/admin/events/{{voteNightId}}/votables/objects/{{voteSongId}}/reopen"
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteNightId}}/venue"
   headers:
     - name: CF-Access-Client-Id
       value: "{{cfAccessClientId}}"
@@ -15,7 +15,7 @@ http:
       value: "application/json"
   body:
     type: json
-    data: "{\"window_seconds\": 60}"
+    data: "{\"venue_id\": \"{{voteNightVenueId}}\"}"
   auth: inherit
 
 runtime:
@@ -23,7 +23,7 @@ runtime:
     - type: after-response
       code: |-
         const b = res.getBody() || {};
-        test('OSE-2127 reopen: 200, open again', function () { expect(res.getStatus()).to.eql(200); expect(b.object.state).to.eql('open'); });
+        test('OSE-2127 setup: the night is linked to its venue, so voting can open', function () { expect(res.getStatus()).to.eql(200); expect(b.venue_id).to.eql(bru.getVar('voteNightVenueId')); });
 
 settings:
   encodeUrl: true

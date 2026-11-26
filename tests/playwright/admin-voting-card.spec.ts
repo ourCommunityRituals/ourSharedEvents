@@ -8,8 +8,9 @@
  *
  *   1. Set up voting; a label with an email address is refused at its field;
  *      a song is added and listed.
- *   2. Open voting, open the song ("Open until …"), close it, reopen it, close
- *      voting, reopen voting. The summary follows each step.
+ *   2. Open voting, open the song ("Open until …"); the song has no Close or
+ *      Reopen (a window runs its full length); close voting, and a reopen is
+ *      refused once a window has run. The summary follows each step.
  *   3. The card never shows a count: no "vote" or "votes" next to a number.
  *   4. At 375px: no sideways scroll, every control 44px or more, every field's
  *      text 16px or more, and axe finds nothing serious, light and dark.
@@ -33,6 +34,7 @@ import AxeBuilder from '@axe-core/playwright';
 
 const ADMIN_BEARER = process.env.OSE_ADMIN_BEARER || '';
 const AUTH = { Authorization: `Bearer ${ADMIN_BEARER}` };
+const VOTE_BRAND = 'pw-vote-night';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -45,6 +47,7 @@ test.describe('admin: the Voting card', () => {
       headers: { ...AUTH, 'Content-Type': 'application/json' },
       data: {
         attendance_mode: 'in_person',
+        brand_id: VOTE_BRAND,
         title: `Vote night ${Date.now()}`,
         start_date: '2027-05-15',
         start_time: '19:00',
@@ -56,7 +59,30 @@ test.describe('admin: the Voting card', () => {
     expect(res.ok(), await res.text()).toBe(true);
     eventId = ((await res.json()) as { id?: string }).id ?? '';
     expect(eventId).not.toBe('');
+    await linkVenue(request, eventId);
   });
+
+  /**
+   * Voting opens only on an event linked to its venue (owner card 2026-11-26,
+   * VENUE_NEEDED). The shared public brand holds no venue, so the events here
+   * get a brand of their own and a venue it owns.
+   */
+  async function linkVenue(
+    request: import('@playwright/test').APIRequestContext,
+    id: string
+  ): Promise<void> {
+    const venue = await request.post('/api/v2/admin/venues', {
+      headers: { ...AUTH, 'Content-Type': 'application/json' },
+      data: { brand_id: VOTE_BRAND, name: 'Eagles Hall' },
+    });
+    expect(venue.status(), await venue.text()).toBe(201);
+    const venueId = ((await venue.json()) as { id: string }).id;
+    const linked = await request.put(`/api/v2/admin/events/${id}/venue`, {
+      headers: { ...AUTH, 'Content-Type': 'application/json' },
+      data: { venue_id: venueId },
+    });
+    expect(linked.status(), await linked.text()).toBe(200);
+  }
 
   async function makeEvent(
     request: import('@playwright/test').APIRequestContext,
@@ -67,6 +93,7 @@ test.describe('admin: the Voting card', () => {
       headers: { ...AUTH, 'Content-Type': 'application/json' },
       data: {
         attendance_mode: 'in_person',
+        brand_id: VOTE_BRAND,
         title,
         status,
         is_published: false,
@@ -78,7 +105,9 @@ test.describe('admin: the Voting card', () => {
       },
     });
     expect(res.ok(), await res.text()).toBe(true);
-    return ((await res.json()) as { id: string }).id;
+    const id = ((await res.json()) as { id: string }).id;
+    await linkVenue(request, id);
+    return id;
   }
 
   async function selectEvent(page: Page, id: string): Promise<void> {
@@ -218,7 +247,9 @@ test.describe('admin: the Voting card', () => {
     );
   });
 
-  test('open, close and reopen voting and the song; the summary follows', async ({ page }) => {
+  test('open voting and the song, then close voting for good; the summary follows', async ({
+    page,
+  }) => {
     await openCard(page);
     // The song cannot open before voting does: its only button appears once voting is open.
     await expect(rows(page).first().getByTestId('vote-row-open')).toHaveCount(0);
@@ -238,18 +269,18 @@ test.describe('admin: the Voting card', () => {
 
     await rows(page).first().getByTestId('vote-row-open').click();
     await expect(rows(page).first().getByTestId('vote-row-state')).toHaveText(/^Open until /);
-    await rows(page).first().getByTestId('vote-row-close').click();
-    await expect(rows(page).first().getByTestId('vote-row-state')).toHaveText('Closed');
-    await rows(page).first().getByTestId('vote-row-reopen').click();
-    await expect(rows(page).first().getByTestId('vote-row-state')).toHaveText(/^Open until /);
+    // A window runs its full length (owner, 2026-11-26): no Close, no Reopen on the row.
+    await expect(rows(page).first().getByTestId('vote-row-close')).toHaveCount(0);
+    await expect(rows(page).first().getByTestId('vote-row-reopen')).toHaveCount(0);
 
+    // Closing voting is an emergency stop: once a window has run it stays closed.
     await page.getByTestId('votes-close').click();
-    await expect(summary(page)).toHaveText(
-      'Voting is closed. You can reopen it while the event is on.'
-    );
+    await expect(summary(page)).toHaveText('Voting is closed.');
     await page.getByTestId('votes-reopen').click();
-    await expect(summary(page)).toHaveText('Voting is open.');
-    await expect(page.getByTestId('votes-msg')).toHaveText('Voting is open again.');
+    await expect(page.getByTestId('votes-msg')).toHaveText(
+      'Voting already ran here, so once closed it stays closed. Finish the vote to see the result.'
+    );
+    await expect(summary(page)).toHaveText('Voting is closed.');
   });
 
   test('a write that ends after another event is selected leaves the new card alone', async ({

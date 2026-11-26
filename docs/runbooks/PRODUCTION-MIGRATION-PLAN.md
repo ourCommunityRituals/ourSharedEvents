@@ -2,7 +2,7 @@
 
 Written 2026-10-07 for the first production deploy (launch 2026-10-24).
 
-Covers: main 0078–0122, forms 0015–0018.
+Covers: main 0078–0123, forms 0015–0018.
 
 This is a plan to read, not a script to run. **You do not apply these by hand.** The
 `T1 Deploy → Production` job applies them, in order, before it deploys the Worker.
@@ -11,7 +11,7 @@ This is a plan to read, not a script to run. **You do not apply these by hand.**
 
 | Database                          | Production is at | This build needs | To apply |
 | --------------------------------- | ---------------- | ---------------- | -------- |
-| Main (`ocr-db-production`)        | 77               | 122              | 45       |
+| Main (`ocr-db-production`)        | 77               | 123              | 46       |
 | Forms (`ocr-forms-db-production`) | 14 (see note)    | 18               | 4        |
 
 - The main level was read on 2026-10-01 and again in the two days before this was written.
@@ -128,7 +128,7 @@ its counts were not taken first. They were read on staging the next day (run 436
 events, 60 of them with no place at all, 3 of those on the public list. Its per-status breakdown was
 replaced by one count on 2026-11-15 so the file fits the strict rule.
 
-## Main database, 0078 to 0122
+## Main database, 0078 to 0123
 
 "Rows" answers: does it write or remove rows that already exist?
 
@@ -179,6 +179,7 @@ replaced by one count on 2026-11-15 so the file fits the strict rule.
 | `0120_venues.sql`                                         | Adds `venues`, `venue_operators` and `events.host_venue_id`, so a venue owner sees the activity there (OSE-2221). Writes no row.                                                                                                                         | No   |
 | `0121_brand_addons.sql`                                   | Adds `brand_addons`, the paid add-ons the platform has turned on for a brand (OSE-2232: skins). Writes no row.                                                                                                                                           | No   |
 | `0122_vote_integrity.sql`                                 | Adds `vote_sets.flood_seen` and `vote_sets.burst_seen` (one-way flags), `vote_sets.room_size` (fixed once set) and `venues.room_kind` / `venues.room_cap` (the platform's room-size ceiling), held by the T0 gate, no trigger (OSE-2234). Writes no row. | No   |
+| `0123_vote_windows.sql`                                   | Adds `vote_sets.opened_at` (the first-open hour, for the 30-day final backstop) and `votable_objects.window_seconds` (one window length per kind per set), each written once and held by the T0 gate, no trigger (OSE-2234). Writes no row.              | No   |
 
 ## Forms database, 0015 to 0018
 
@@ -422,7 +423,7 @@ The deploy job does the first three itself and goes red if any fails.
 
    Both say `No migrations to apply`.
 
-2. **The level.** Expected: `0122_vote_integrity.sql` and `122`;
+2. **The level.** Expected: `0123_vote_windows.sql` and `123`;
    then `0018_registration_email_encrypted.sql` and `18`.
 
    ```bash

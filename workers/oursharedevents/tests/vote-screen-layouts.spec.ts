@@ -31,6 +31,7 @@
  */
 
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
+import { linkVenue } from './helpers/link-venue';
 import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { route, type RouterEnv } from '../src/router';
 import { skinLayout } from '../src/lib/layout-skins';
@@ -134,6 +135,7 @@ beforeEach(async () => {
     BRAND,
     NIGHT
   );
+  await linkVenue(tenv.DB, NIGHT);
 });
 
 async function makeCode(): Promise<string> {

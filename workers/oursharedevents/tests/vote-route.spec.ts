@@ -27,6 +27,7 @@
  */
 
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
+import { linkVenue } from './helpers/link-venue';
 import { describe, test, expect, beforeAll, beforeEach, vi, afterEach } from 'vitest';
 import { route, type RouterEnv } from '../src/router';
 import { mintVotePass, voterKey } from '../src/lib/vote-pass';
@@ -152,6 +153,7 @@ async function seedEvent(id: string, brand: string) {
     `Vote route fixture ${id}`,
     id
   );
+  await linkVenue(tenv.DB, id);
 }
 
 /** A set with songs, the set open and every song open. Returns the song ids. */
@@ -268,10 +270,17 @@ describe('a vote counts once per voter per object', () => {
     const [a] = await openNight(N1);
     const p = await pass(N1);
     await vote(N1, { object_id: a, side: 'up', pass: p });
-    await admin('POST', vp(N1, `/objects/${a}/close`), {});
-    await admin('POST', vp(N1, '/close'));
-    await admin('POST', vp(N1, '/reopen'));
-    await admin('POST', vp(N1, `/objects/${a}/reopen`), {});
+    // A host can no longer close and reopen a window (WINDOW_FIXED,
+    // WINDOWS_STARTED), so the close and reopen are written by hand: the
+    // receipt must hold even if a window ever re-arms.
+    await run(`UPDATE votable_objects SET state = 'closed' WHERE id = ?`, a);
+    await run(`UPDATE vote_sets SET state = 'closed' WHERE event_id = ?`, N1);
+    await run(`UPDATE vote_sets SET state = 'open' WHERE event_id = ?`, N1);
+    await run(
+      `UPDATE votable_objects SET state = 'open', closes_at = ? WHERE id = ?`,
+      new Date(Date.now() + 600_000).toISOString(),
+      a
+    );
     const again = await vote(N1, { object_id: a, side: 'up', pass: p });
     expect(again.status).toBe(200);
     expect((await tallyOf(a)).up_count).toBe(1);
@@ -485,7 +494,7 @@ describe('a vote only lands on an open object of this event', () => {
 
   test('closed, past closes_at, or final: refused [check outside the batch]', async () => {
     const [a, b, c] = await openNight(N1, ['One', 'Two', 'Three']);
-    await admin('POST', vp(N1, `/objects/${a}/close`), {});
+    await run(`UPDATE votable_objects SET state = 'closed' WHERE id = ?`, a);
     await run(
       `UPDATE votable_objects SET closes_at = ? WHERE id = ?`,
       new Date(Date.now() - 1000).toISOString(),

@@ -18,7 +18,7 @@ runtime:
         }
     - type: after-response
       code: |-
-        test('OSE-2135 on: after the close the list is empty', function () { expect(res.getStatus()).to.eql(200); expect(res.getBody()).to.eql({ objects: [] }); });
+        test('OSE-2135 on: after the refused close the song is still listed', function () { expect(res.getStatus()).to.eql(200); expect((res.getBody() || {}).objects).to.have.length(1); });
 
 settings:
   encodeUrl: true

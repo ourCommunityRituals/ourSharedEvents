@@ -207,12 +207,14 @@ export async function handleQrScan(
   // screen again, so an honest voter is told rather than dropped silently.
   // With no pepper no stamp can be checked and no pass can exist, so that
   // scan keeps today's answer (the event page) rather than "scan again".
+  // A vote code with its `type=vote` cut off (CCR loop 5, L2) is the same: the
+  // room screen never shows that URL, so it is a copy, and it counts nothing.
   if (
     isVoteCode &&
     votingEnabled(env) &&
     !!env.ANON_ID_HASH_PEPPER &&
-    url.searchParams.get('type') === VOTE_CODE_TYPE &&
-    !(await voteCodeStampOk(env.ANON_ID_HASH_PEPPER, qrToken, url.searchParams.get('w'), nowMs))
+    (url.searchParams.get('type') !== VOTE_CODE_TYPE ||
+      !(await voteCodeStampOk(env.ANON_ID_HASH_PEPPER, qrToken, url.searchParams.get('w'), nowMs)))
   ) {
     console.log(JSON.stringify({ type: 'SCAN_NOT_COUNTED', reason: 'vote_code_changed' }));
     return new Response(null, {

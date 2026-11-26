@@ -22,7 +22,7 @@ runtime:
   scripts:
     - type: after-response
       code: |-
-        test('OSE-2135 close: the song closes', function () { expect(res.getStatus()).to.eql(200); });
+        test('OSE-2135 close: refused, WINDOW_FIXED: a window runs its full length (owner card 2026-11-26)', function () { expect(res.getStatus()).to.eql(409); expect((res.getBody() || {}).code).to.eql('WINDOW_FIXED'); });
 
 settings:
   encodeUrl: true
