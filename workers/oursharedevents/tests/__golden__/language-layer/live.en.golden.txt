@@ -40,7 +40,11 @@
     @keyframes ose-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
     h1 { font-size: 1.875rem; margin: 0 0 0.5rem; line-height: 1.2; }
     h2 { font-size: 1.125rem; margin: 1.5rem 0 0.5rem; color: var(--ose-text); }
-    .ose-card { background: var(--ose-card); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    .ose-card { background: var(--ose-card); border: 1px solid var(--border); border-radius: 8px; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    /* Owner 2026-11-26: the page reads as cards, like the rest of the platform.
+       A card's first heading sits at its top edge; the header card has no trailing gap. */
+    .ose-card > h2:first-child { margin-top: 0; }
+    .ose-hero .ose-meta { margin-bottom: 0.25rem; }
     .ose-venue-map { width: 100%; max-width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
     .ose-geo-link { color: var(--ose-accent); text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; min-height: 44px; }
     .ose-geo-link:hover { text-decoration: underline; }
@@ -115,15 +119,13 @@
     .ose-never-who-body p { margin: 0 0 0.5rem; }
     .ose-never-who-body a { color: var(--accent); }
 
-    .ose-sponsor-label { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); margin: 0 0 0.25rem; }
-    .ose-sponsor-list { list-style: none; margin: 0; padding: 0; }
-    .ose-sponsor-item { display: flex; align-items: center; min-height: 44px; border-bottom: 1px solid var(--border); }
-    .ose-sponsor-item:last-child { border-bottom: none; }
-    .ose-sponsor-link { color: var(--accent); font-weight: 600; display: inline-flex; align-items: center; min-height: 44px; }
-    .ose-sponsor-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    .ose-sponsor-link[data-thumb] { display: inline-flex; align-items: center; min-height: 44px; padding: 0.25rem 0; }
-    .ose-sponsor-thumb { display: block; height: 64px; width: auto; max-width: 160px; object-fit: contain; }
-    .ose-sponsor-name { color: var(--text); font-weight: 600; }
+    .ose-sponsor-strip { margin: 0 0 1rem; }
+    .ose-sponsor-label { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); margin: 0 0 0.5rem; }
+    .ose-sponsor-list { list-style: none; margin: 0; padding: 0; gap: 0.75rem; }
+    .ose-sponsor-art { position: relative; display: flex; align-items: center; justify-content: center; padding: 0.75rem 1rem; text-align: center; }
+    .ose-sponsor-art > img { position: absolute; inset: 12px; width: calc(100% - 24px); height: calc(100% - 24px); object-fit: contain; }
+    .ose-sponsor-art > .sponsor-panel-name { font-size: 1.375rem; }
+    .sponsor-panel-main:has(> .ose-sponsor-art:last-child) + .sponsor-panel-text { padding-top: 10px; }
     .ose-section p { margin: 0; }
     /* OSE-655: WHO host photo (the conversion engine gets a face) + WHAT video
        link-out. Circular avatar; tasteful, mobile-first, 44px tap target on the link. */
@@ -155,7 +157,7 @@
     <nav aria-label="Site" data-testid="event-nav" style="display:flex;flex-wrap:wrap;gap:0 1.25rem;margin:0"><a href="/events" data-testid="event-nav-events-live" style="color:var(--ose-accent);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;min-height:44px">&larr; All events</a><span aria-current="page" data-testid="event-nav-event" style="color:inherit;font-weight:700;display:inline-flex;align-items:center;min-height:44px">Event page</span><a href="/events/evt_golden/poster?kind=digital" data-testid="event-nav-poster" style="color:var(--ose-accent);text-decoration:none;font-weight:600;display:inline-flex;align-items:center;min-height:44px">Poster</a></nav>
   </div>
   <main id="main" role="main" aria-labelledby="event-title" data-testid="event-main-live">
-    <header data-testid="event-header-live">
+    <header class="ose-card ose-hero" data-testid="event-header-live">
       <span class="ose-live-badge" data-testid="event-live-badge" aria-label="Event is live now">
         <span class="ose-live-dot" aria-hidden="true"></span>Live now
       </span>

@@ -34,7 +34,7 @@
     .ose-phase-chip { display: inline-block; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ose-muted); background: var(--ose-card); border-radius: 999px; padding: 4px 12px; margin-bottom: 0.75rem; }
     h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
     .ose-when { color: var(--ose-muted); margin: 0 0 1.25rem; }
-    .ose-card { background: var(--ose-card); border-radius: 8px; padding: 1rem 1.25rem; margin: 0 0 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+    .ose-card { background: var(--ose-card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; margin: 0 0 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
     .ose-card h2 { font-size: 1rem; margin: 0 0 0.5rem; }
     .ose-card p { margin: 0 0 0.5rem; }
     .ose-recap-row { margin: 0 0 0.6rem; }
@@ -112,15 +112,13 @@
     .ose-never-who-body p { margin: 0 0 0.5rem; }
     .ose-never-who-body a { color: var(--accent); }
 
-    .ose-sponsor-label { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); margin: 0 0 0.25rem; }
-    .ose-sponsor-list { list-style: none; margin: 0; padding: 0; }
-    .ose-sponsor-item { display: flex; align-items: center; min-height: 44px; border-bottom: 1px solid var(--border); }
-    .ose-sponsor-item:last-child { border-bottom: none; }
-    .ose-sponsor-link { color: var(--accent); font-weight: 600; display: inline-flex; align-items: center; min-height: 44px; }
-    .ose-sponsor-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    .ose-sponsor-link[data-thumb] { display: inline-flex; align-items: center; min-height: 44px; padding: 0.25rem 0; }
-    .ose-sponsor-thumb { display: block; height: 64px; width: auto; max-width: 160px; object-fit: contain; }
-    .ose-sponsor-name { color: var(--text); font-weight: 600; }
+    .ose-sponsor-strip { margin: 0 0 1rem; }
+    .ose-sponsor-label { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); margin: 0 0 0.5rem; }
+    .ose-sponsor-list { list-style: none; margin: 0; padding: 0; gap: 0.75rem; }
+    .ose-sponsor-art { position: relative; display: flex; align-items: center; justify-content: center; padding: 0.75rem 1rem; text-align: center; }
+    .ose-sponsor-art > img { position: absolute; inset: 12px; width: calc(100% - 24px); height: calc(100% - 24px); object-fit: contain; }
+    .ose-sponsor-art > .sponsor-panel-name { font-size: 1.375rem; }
+    .sponsor-panel-main:has(> .ose-sponsor-art:last-child) + .sponsor-panel-text { padding-top: 10px; }
     /* OSE-1136: the recap's WHERE/WHO cards reuse the pre-event 5W styling. */
     .ose-section p { margin: 0 0 0.5rem; }
     .ose-venue-map { width: 100%; max-width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }

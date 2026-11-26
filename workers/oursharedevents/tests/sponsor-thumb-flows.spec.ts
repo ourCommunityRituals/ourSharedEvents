@@ -202,7 +202,7 @@ function stripOf(html: string): string {
 
 /** The sponsor list items, in page order. */
 function items(strip: string): string[] {
-  return [...strip.matchAll(/<li class="ose-sponsor-item"[^>]*>([\s\S]*?)<\/li>/g)].map(
+  return [...strip.matchAll(/<li class="sponsor-panel-block"[^>]*>([\s\S]*?)<\/li>/g)].map(
     (m) => m[1]
   );
 }
@@ -227,7 +227,9 @@ const reEscape = (s: string) => s.replace(/[\\^$.*+?()[\]{}|/-]/g, '\\$&');
 
 /** Attribute names an element really has: quoted values removed first, so text inside alt cannot count. */
 function handlerAttrs(markup: string): string[] {
-  const bare = markup.replace(/="[^"]*"/g, '=""');
+  // Attributes only: text between tags (an escaped title) is words, not markup.
+  const tags = (markup.match(/<[^>]*>/g) ?? []).join(' ');
+  const bare = tags.replace(/="[^"]*"/g, '=""');
   return [...bare.matchAll(/\s(on[a-z]+)\s*=/gi)].map((m) => m[1]);
 }
 
@@ -259,8 +261,10 @@ describe('OSE-1955 happy | the page names art and the proxy serves it', () => {
     const strip = stripOf(html);
     const [item] = items(strip);
     expect(item).toContain('data-testid="sponsor-thumb"');
-    expect(item).toContain('alt="Corner Bakery"');
-    expect(item, 'no visible name beside the art').not.toMatch(/>\s*Corner Bakery\s*</);
+    expect(item).toContain('data-testid=\"sponsor-name\">Corner Bakery</span>');
+    // Owner 2026-11-26: the name is on the card once, as text; the logo is decoration.
+    expect(item.match(/>\s*Corner Bakery\s*</g), 'the name once').toHaveLength(1);
+    expect(item).toContain('alt=""');
     expect(item).toContain('href="https://bakery.example"');
     expect(item).toContain('rel="noopener noreferrer nofollow"');
     expect(thumbSrcs(html)).toEqual([proxyPath('sp1955_h_one')]);
@@ -306,9 +310,9 @@ describe('OSE-1955 happy | the page names art and the proxy serves it', () => {
 
     const list = items(stripOf((await page(ev)).html));
     expect(list).toHaveLength(2);
-    expect(list[0]).toContain('alt="Ad One Art"');
-    expect(list[0]).not.toContain('>Ad One Art<');
-    expect(list[1]).toContain('>Ad Two Name</a>');
+    expect(list[0]).toContain('data-testid=\"sponsor-name\">Ad One Art</span>');
+    expect(list[0]).toContain('data-testid=\"sponsor-name\">Ad One Art</span>');
+    expect(list[1]).toContain('>Ad Two Name</span>');
     expect(list[1]).not.toContain('sponsor-thumb');
   });
 
@@ -337,8 +341,8 @@ describe('OSE-1955 happy | the page names art and the proxy serves it', () => {
       expect(list).toHaveLength(2);
       // The title is the sponsor's own words: never translated, in either language.
       expect(list[0]).toContain(`src="${proxyPath(`${ev}_a`)}"`);
-      expect(list[0]).toContain('alt="Phase Art"');
-      expect(list[1]).toContain('>Phase Name</a>');
+      expect(list[0]).toContain('data-testid=\"sponsor-name\">Phase Art</span>');
+      expect(list[1]).toContain('>Phase Name</span>');
     }
   );
 });
@@ -391,7 +395,7 @@ describe('OSE-1955 rainy | a failing logo never breaks the page', () => {
 
     const { html } = await page(ev);
     const [item] = items(stripOf(html));
-    expect(item).toContain('>Nameplate Hardware</a>');
+    expect(item).toContain('>Nameplate Hardware</span>');
     expect(item).toContain('data-testid="sponsor-item-address">1 Main St<');
     expect(html).not.toContain(`/api/v2/sponsors/${sid}/logo`);
     expect((await proxy(proxyPath(sid))).status).toBe(404);
@@ -470,7 +474,7 @@ describe('OSE-1955 rainy | a failing logo never breaks the page', () => {
 });
 
 describe('OSE-1955 edge', () => {
-  test('the thumbnail box: 64 px tall, at most 160 px wide, contained (never cropped), a 44 px target', async () => {
+  test('the card: the hub sponsor panel, a 3:1 art area, the logo drawn whole', async () => {
     const ev = 'evt1955_e_box';
     await seedEvent(ev);
     await seedSponsor(ev, { id: `${ev}_sp`, name: 'Box Co', compact: logo(ev) });
@@ -480,18 +484,16 @@ describe('OSE-1955 edge', () => {
       expect(m, `${sel} is styled`).not.toBeNull();
       return m![1];
     };
-    const thumb = css('.ose-sponsor-thumb');
-    expect(thumb).toMatch(/height:\s*64px/);
-    expect(thumb).toMatch(/width:\s*auto/);
-    expect(thumb).toMatch(/max-width:\s*160px/);
-    expect(thumb).toMatch(/object-fit:\s*contain/);
-    expect(css('.ose-sponsor-link[data-thumb]')).toMatch(/min-height:\s*44px/);
-    expect(css('.ose-sponsor-item')).toMatch(/min-height:\s*44px/);
-    // A name is a tap target too (AGENTS.md invariant 8): the link itself, not
-    // only its row, is at least 44 px tall. The browser measures it in T4j.
-    const nameLink = css('.ose-sponsor-link');
-    expect(nameLink).toMatch(/display:\s*inline-flex/);
-    expect(nameLink).toMatch(/min-height:\s*44px/);
+    // Owner 2026-11-26: every sponsor is the same card of the hub's panel
+    // (@ocr/ui `.sponsor-panel-block`; its 3:1 `.sponsor-panel-header` and the
+    // tap target come from /ui.css). The page only places the logo inside it.
+    expect(html).toContain('<ul class="sponsor-panel ose-sponsor-list"');
+    expect(html).toContain(
+      '<span class="sponsor-panel-header ose-sponsor-art" data-testid="sponsor-art">'
+    );
+    const art = css('.ose-sponsor-art > img');
+    expect(art).toMatch(/object-fit:\s*contain/);
+    expect(art).toMatch(/position:\s*absolute/);
   });
 
   test('the sponsor-list styles use tokens only: no raw colour', async () => {
@@ -528,7 +530,7 @@ describe('OSE-1955 edge', () => {
     expect(html.match(/data-testid="sponsor-list"/g)).toHaveLength(1);
   });
 
-  test('display_name wins over name in the alt; a long title is carried whole, escaped', async () => {
+  test('display_name wins over name; a long title is carried whole, escaped', async () => {
     const ev = 'evt1955_e_title';
     await seedEvent(ev);
     const long = `The Very Long & Proud Neighbourhood Co-operative ${'Bakery '.repeat(25)}`.trim();
@@ -540,9 +542,9 @@ describe('OSE-1955 edge', () => {
     });
     await seedSponsor(ev, { id: `${ev}_b`, name: long, compact: logo(`${ev}-b`) });
     const list = items(stripOf((await page(ev)).html));
-    expect(list[0]).toContain('alt="Shown Name"');
+    expect(list[0]).toContain('data-testid=\"sponsor-name\">Shown Name</span>');
     expect(list[0]).not.toContain('Legal Name LLC');
-    expect(list[1]).toContain(`alt="${long.replace(/&/g, '&amp;')}"`);
+    expect(list[1]).toContain(`data-testid="sponsor-name">${long.replace(/&/g, '&amp;')}</span>`);
   });
 
   // The router hands the proxy the path segment as it arrived (still encoded), so
@@ -711,7 +713,7 @@ describe('OSE-1955 fat-finger | a logo typed by an admin', () => {
     expect((await adminUpdate(id, { logo_url: null })).status).toBe(200);
     const item = await itemFor();
     expect(item).not.toContain('sponsor-thumb');
-    expect(item).toContain('>Clearing Co</a>');
+    expect(item).toContain('>Clearing Co</span>');
     expect((await proxy(proxyPath(id))).status).toBe(404);
   });
 
@@ -738,7 +740,7 @@ describe('OSE-1955 security', () => {
     ],
     ['an onerror in display_name', { name: 'Plain', displayName: 'x" onerror="alert(1)' }],
     ['a single quote and an ampersand', { name: "O'Brien & Sons", displayName: null }],
-  ])('%s: escaped inside alt, no tag and no handler reaches the page', async (_l, t) => {
+  ])('%s: escaped in the name, no tag and no handler reaches the page', async (_l, t) => {
     const ev = `evt1955_s_xss_${t.name.length}_${(t.displayName ?? '').length}`;
     await seedEvent(ev);
     await seedSponsor(ev, {
@@ -756,12 +758,13 @@ describe('OSE-1955 security', () => {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
-    expect(item).toContain(`alt="${escaped}"`);
+    expect(item).toContain(`data-testid="sponsor-name">${escaped}</span>`);
     expect(html).not.toContain('<script>alert(1)');
     expect(handlerAttrs(item)).toEqual([]);
-    // One img, one alt: an attribute broken out of alt would add a second.
+    // One img, one empty alt: a title broken out of its text would add markup.
     expect(item.match(/<img /g)).toHaveLength(1);
     expect(item.match(/ alt="/g)).toHaveLength(1);
+    expect(item).toContain(' alt=""');
   });
 
   test('the stored logo URL never appears; the CSP keeps img-src to self and data:; no inline handler in the strip', async () => {

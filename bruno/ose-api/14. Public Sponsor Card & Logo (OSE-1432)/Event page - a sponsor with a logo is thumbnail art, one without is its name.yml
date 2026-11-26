@@ -39,12 +39,12 @@ runtime:
         test('the sponsor with a logo is a thumbnail through the proxy', function () {
           expect(strip).to.include('src="/api/v2/sponsors/sb_pcard_onshow/logo?slot=sidebar"');
         });
-        test('its name is the alt text, not visible text', function () {
-          expect(strip).to.include('alt="Public Card On Show"');
-          expect(strip).to.not.include('>Public Card On Show<');
+        test('its name is on the card as text; the logo is decoration', function () {
+          expect(strip).to.include('data-testid="sponsor-name">Public Card On Show</span>');
+          expect(strip).to.include('alt=""');
         });
         test('the sponsor with no logo shows its name as text', function () {
-          expect(strip).to.include('>Public Card NoLogo</a>');
+          expect(strip).to.include('>Public Card NoLogo</span>');
           expect(strip).to.not.include('/api/v2/sponsors/sb_pcard_nologo/logo');
         });
         test('a stored logo URL never reaches the page', function () {

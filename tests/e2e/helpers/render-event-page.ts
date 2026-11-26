@@ -26,6 +26,8 @@ export interface SponsorRow {
   display_name?: string | null;
   address_line?: string | null;
   has_logo?: number | null;
+  header_text?: string | null;
+  has_header_image?: number | null;
 }
 
 interface Renderer {

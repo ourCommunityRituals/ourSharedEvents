@@ -1,24 +1,24 @@
 /**
- * OSE-1952 (feature OSE-1948, owner 2026-11-09): the sponsor-art rule on the
- * event page, held closely enough that Stryker cannot change it unseen.
+ * OSE-1952 (feature OSE-1948), reworked for the owner's 2026-11-26 ask: the
+ * event page shows every sponsor as a whole card, balanced. Held closely enough
+ * that Stryker cannot change the rule unseen.
  *
- * Between the header and "What", each sponsor is one list item:
- *   - with a logo on file (`has_logo`): thumbnail art only, through the
- *     same-origin, consent-gated logo proxy (`?slot=sidebar`), the escaped
- *     title as its alt text, no visible name and no address line;
- *   - without: the escaped title as the link text, and the sponsor's chosen
- *     location as a muted line under it when it set one.
- * Either way the tap goes to the sponsor's https website (rel noopener
- * noreferrer nofollow) or, with no https website, to the sponsor's own card.
+ * Between the header and "What", each sponsor is one card of the hub's sponsor
+ * panel (@ocr/ui `.sponsor-panel-block`), with the same parts in the same order:
+ *   - a 3:1 art area: the header image (`has_header_image`, through the proxy's
+ *     `?slot=header`), else the logo (`has_logo`, `?slot=sidebar`), else the
+ *     name set in type;
+ *   - the name under it (with the small logo beside it only under a header
+ *     image); never the name twice;
+ *   - the sponsor's short text, then its chosen location, each when set.
+ * Every image is decoration (alt=""): the name is always on the card as text.
+ * The tap goes to the sponsor's https website (rel noopener noreferrer nofollow)
+ * or, with no https website, to the sponsor's own card.
  *
  * The rule is `renderSponsorItem` / `renderSponsorList` in src/handlers/pages.ts,
- * mutated as a marker range (stryker.conf.mjs). It is reached here through the
- * exported phase renderers, so the anchor literals stay whole in the source
- * (the click-out invariant, sponsor-signal-never-who, reads them there).
- *
- * Every assertion compares exact markup, so a mutant that changes one attribute,
- * one separator or one branch fails. The `has_logo` SQL is a string Stryker does
- * not mutate; its branches stay pinned by public-event-stakeholder-surfaces.spec.ts.
+ * reached here through the exported phase renderers, so the anchor literals stay
+ * whole in the source (the click-out invariant, sponsor-signal-never-who, reads
+ * them there). Every assertion compares exact markup.
  *
  * Node-clean: no cloudflare:test, no D1.
  */
@@ -77,20 +77,36 @@ function social(sponsors: Sponsor[]): Social {
 /** The rendered <ul> of the pre-event strip, exactly as the page carries it. */
 function listOf(sponsors: Sponsor[]): string {
   const html = renderPreEventHtml(row(), SHARE, social(sponsors), { nonce: 'n', lang: 'en' });
-  const start = html.indexOf('<ul class="ose-sponsor-list"');
+  const start = html.indexOf('<ul class="sponsor-panel ose-sponsor-list"');
   expect(start, 'the sponsor list renders').toBeGreaterThan(-1);
   return html.slice(start, html.indexOf('</ul>', start) + '</ul>'.length);
 }
 
-const ITEM_OPEN = '<li class="ose-sponsor-item" data-testid="sponsor-item">';
-const LIST_OPEN = '<ul class="ose-sponsor-list" data-testid="sponsor-list">';
+const ITEM_OPEN = '<li class="sponsor-panel-block" data-testid="sponsor-item">';
+const LIST_OPEN = '<ul class="sponsor-panel ose-sponsor-list" data-testid="sponsor-list">';
 const one = (item: string) => `${LIST_OPEN}${ITEM_OPEN}${item}</li></ul>`;
-const thumb = (id: string, alt: string) =>
-  `<img class="ose-sponsor-thumb" data-testid="sponsor-thumb" src="/api/v2/sponsors/${id}/logo?slot=sidebar" alt="${alt}" width="160" height="64" loading="lazy" decoding="async">`;
-const site = (href: string, inner: string, extra = '') =>
-  `<a href="${href}" class="ose-sponsor-link" rel="noopener noreferrer nofollow"${extra}>${inner}</a>`;
-const card = (id: string, inner: string, extra = '') =>
-  `<a href="/sponsors/${id}" class="ose-sponsor-link" data-testid="sponsor-card-link"${extra}>${inner}</a>`;
+const nameSpan = (name: string) =>
+  `<span class="sponsor-panel-name" data-testid="sponsor-name">${name}</span>`;
+const logo = (id: string) =>
+  `<img data-testid="sponsor-thumb" src="/api/v2/sponsors/${id}/logo?slot=sidebar" alt="" width="200" height="72" loading="lazy" decoding="async" referrerpolicy="no-referrer">`;
+const headerImg = (id: string) =>
+  `<img class="sponsor-panel-header" data-testid="sponsor-header" src="/api/v2/sponsors/${id}/logo?slot=header" alt="" width="600" height="200" loading="lazy" decoding="async" referrerpolicy="no-referrer">`;
+/** The card's inside: header image, else logo art, else the name as art. */
+const withHeader = (id: string, name: string, hasLogo = false) =>
+  `${headerImg(id)}<span class="sponsor-panel-id">${hasLogo ? logo(id) : ''}${nameSpan(name)}</span>`;
+const withLogo = (id: string, name: string) =>
+  `<span class="sponsor-panel-header ose-sponsor-art" data-testid="sponsor-art">${logo(id)}</span>` +
+  `<span class="sponsor-panel-id">${nameSpan(name)}</span>`;
+const nameOnly = (name: string) =>
+  `<span class="sponsor-panel-header ose-sponsor-art" data-testid="sponsor-art">${nameSpan(name)}</span>`;
+const site = (href: string, inner: string) =>
+  `<a href="${href}" class="sponsor-panel-main" rel="noopener noreferrer nofollow">${inner}</a>`;
+const card = (id: string, inner: string) =>
+  `<a href="/sponsors/${id}" class="sponsor-panel-main" data-testid="sponsor-card-link">${inner}</a>`;
+const textLine = (t: string) =>
+  `<p class="sponsor-panel-text" data-testid="sponsor-item-text">${t}</p>`;
+const addressLine = (t: string) =>
+  `<p class="sponsor-panel-text" data-testid="sponsor-item-address">${t}</p>`;
 
 function sponsor(over: Partial<Sponsor> = {}): Sponsor {
   return {
@@ -100,42 +116,61 @@ function sponsor(over: Partial<Sponsor> = {}): Sponsor {
     display_name: null,
     address_line: null,
     has_logo: 0,
+    header_text: null,
+    has_header_image: 0,
     ...over,
   };
 }
 
-describe('OSE-1952 | sponsor art: art or name', () => {
-  it('sunny: a logo on file is thumbnail art only, linked to the https website', () => {
+describe('sponsor card: the art area', () => {
+  it('sunny: a header image fills the art area; the logo and name sit under it', () => {
+    expect(
+      listOf([sponsor({ has_header_image: 1, has_logo: 1, website_url: 'https://acme.example/' })])
+    ).toBe(one(site('https://acme.example/', withHeader('sp_1', 'Acme', true))));
+  });
+
+  it('sunny: a header image and no logo: the name alone under it', () => {
+    expect(listOf([sponsor({ has_header_image: 1 })])).toBe(
+      one(card('sp_1', withHeader('sp_1', 'Acme')))
+    );
+  });
+
+  it('sunny: no header image, a logo: the logo is the art, the name under it', () => {
     expect(listOf([sponsor({ has_logo: 1, website_url: 'https://acme.example/' })])).toBe(
-      one(site('https://acme.example/', thumb('sp_1', 'Acme'), ' data-thumb="1"'))
+      one(site('https://acme.example/', withLogo('sp_1', 'Acme')))
     );
   });
 
-  it('sunny: no logo on file is the name as the link text, no art', () => {
-    expect(listOf([sponsor({ website_url: 'https://acme.example/' })])).toBe(
-      one(site('https://acme.example/', 'Acme'))
-    );
-  });
-
-  for (const hasLogo of [0, null, undefined] as const) {
-    it(`rainy: has_logo ${String(hasLogo)} is no art`, () => {
-      const list = listOf([sponsor({ has_logo: hasLogo })]);
-      expect(list).toBe(one(card('sp_1', 'Acme')));
+  for (const v of [0, null, undefined] as const) {
+    it(`rainy: no art at all (has_logo and has_header_image ${String(v)}): the name is the art, once`, () => {
+      const list = listOf([sponsor({ has_logo: v, has_header_image: v })]);
+      expect(list).toBe(one(card('sp_1', nameOnly('Acme'))));
       expect(list).not.toContain('sponsor-thumb');
+      expect(list).not.toContain('sponsor-header');
+      expect(list.match(/data-testid="sponsor-name"/g)).toHaveLength(1);
     });
   }
 
-  it('edge: any truthy has_logo (SQLite returns 1) is art', () => {
-    expect(listOf([sponsor({ has_logo: 1 })])).toBe(
-      one(card('sp_1', thumb('sp_1', 'Acme'), ' data-thumb="1"'))
-    );
+  it('edge: any truthy flag (SQLite returns 1) is art', () => {
+    expect(listOf([sponsor({ has_logo: 1 })])).toBe(one(card('sp_1', withLogo('sp_1', 'Acme'))));
+  });
+
+  it('every image is decoration: the name is text on every card', () => {
+    const list = listOf([
+      sponsor({ id: 'a', has_header_image: 1, has_logo: 1 }),
+      sponsor({ id: 'b', has_logo: 1 }),
+      sponsor({ id: 'c' }),
+    ]);
+    expect(list.match(/<img [^>]*alt=""/g)).toHaveLength(3);
+    expect(list).not.toMatch(/<img [^>]*alt="[^"]/);
+    expect(list.match(/data-testid="sponsor-name">Acme</g)).toHaveLength(3);
   });
 });
 
-describe('OSE-1952 | sponsor art: website or card link', () => {
+describe('sponsor card: website or card link', () => {
   it('sunny: an https website is the outbound link, with the rel set', () => {
     const list = listOf([sponsor({ website_url: 'https://acme.example/a?b=1&c=2' })]);
-    expect(list).toBe(one(site('https://acme.example/a?b=1&amp;c=2', 'Acme')));
+    expect(list).toBe(one(site('https://acme.example/a?b=1&amp;c=2', nameOnly('Acme'))));
   });
 
   for (const [label, url] of [
@@ -148,96 +183,117 @@ describe('OSE-1952 | sponsor art: website or card link', () => {
   ] as const) {
     it(`rainy: a ${label} website opens the sponsor card, never an outbound link`, () => {
       const list = listOf([sponsor({ website_url: url })]);
-      expect(list).toBe(one(card('sp_1', 'Acme')));
+      expect(list).toBe(one(card('sp_1', nameOnly('Acme'))));
       expect(list).not.toContain('rel=');
     });
   }
 
   it('rainy: a card link with art carries no rel and no website', () => {
     const list = listOf([sponsor({ has_logo: 1, website_url: 'http://acme.example/' })]);
-    expect(list).toBe(one(card('sp_1', thumb('sp_1', 'Acme'), ' data-thumb="1"')));
+    expect(list).toBe(one(card('sp_1', withLogo('sp_1', 'Acme'))));
   });
 });
 
-describe('OSE-1952 | sponsor art: alt is the escaped title', () => {
-  it('sunny: display_name wins over name, in the alt and in the link text', () => {
+describe('sponsor card: the title', () => {
+  it('sunny: display_name wins over name', () => {
     expect(listOf([sponsor({ has_logo: 1, display_name: 'Acme Bakery' })])).toBe(
-      one(card('sp_1', thumb('sp_1', 'Acme Bakery'), ' data-thumb="1"'))
+      one(card('sp_1', withLogo('sp_1', 'Acme Bakery')))
     );
     expect(listOf([sponsor({ display_name: 'Acme Bakery' })])).toBe(
-      one(card('sp_1', 'Acme Bakery'))
+      one(card('sp_1', nameOnly('Acme Bakery')))
     );
   });
 
   it('rainy: a blank display_name falls back to the name', () => {
-    expect(listOf([sponsor({ has_logo: 1, display_name: '   ' })])).toBe(
-      one(card('sp_1', thumb('sp_1', 'Acme'), ' data-thumb="1"'))
-    );
+    expect(listOf([sponsor({ display_name: '   ' })])).toBe(one(card('sp_1', nameOnly('Acme'))));
   });
 
-  it('security: markup in the title is escaped in the alt and in the text', () => {
+  it('security: markup in the title, text or location is escaped', () => {
     const name = `"><script>x('1')</script>&`;
     const escaped = '&quot;&gt;&lt;script&gt;x(&#39;1&#39;)&lt;/script&gt;&amp;';
     expect(listOf([sponsor({ has_logo: 1, name })])).toBe(
-      one(card('sp_1', thumb('sp_1', escaped), ' data-thumb="1"'))
+      one(card('sp_1', withLogo('sp_1', escaped)))
     );
-    expect(listOf([sponsor({ name })])).toBe(one(card('sp_1', escaped)));
+    expect(listOf([sponsor({ name, header_text: name, address_line: name })])).toBe(
+      one(card('sp_1', nameOnly(escaped)) + textLine(escaped) + addressLine(escaped))
+    );
   });
 
   it('security: a quote in the website cannot leave the href', () => {
     const list = listOf([sponsor({ website_url: 'https://a.example/"onclick="x' })]);
-    expect(list).toBe(one(site('https://a.example/&quot;onclick=&quot;x', 'Acme')));
+    expect(list).toBe(one(site('https://a.example/&quot;onclick=&quot;x', nameOnly('Acme'))));
   });
 });
 
-describe('OSE-1952 | sponsor art: the id is encoded in the proxy src and card href', () => {
+describe('sponsor card: the id is encoded in the proxy src and card href', () => {
   it("fat-finger: an id with a space, slash, ? and ' stays one path segment", () => {
     const id = "sp 1/../x?y'z";
     // encodeURIComponent leaves ' as is; the escaper then makes it &#39;.
     const enc = 'sp%201%2F..%2Fx%3Fy&#39;z';
-    expect(listOf([sponsor({ id, has_logo: 1 })])).toBe(
-      one(card(enc, thumb(enc, 'Acme'), ' data-thumb="1"'))
+    expect(listOf([sponsor({ id, has_logo: 1, has_header_image: 1 })])).toBe(
+      one(card(enc, withHeader(enc, 'Acme', true)))
     );
   });
 });
 
-describe('OSE-1952 | sponsor art: the address line only without art', () => {
-  it('sunny: no art, an address: the name, then the muted location line', () => {
-    expect(listOf([sponsor({ address_line: '12 Main St & 3rd' })])).toBe(
+describe('sponsor card: short text and location', () => {
+  it('sunny: the short text, then the location, under the link, art or not', () => {
+    expect(
+      listOf([
+        sponsor({ has_logo: 1, header_text: 'Fresh bread', address_line: '12 Main St & 3rd' }),
+      ])
+    ).toBe(
       one(
-        `<div>${card('sp_1', 'Acme')}<small class="sub-line" data-testid="sponsor-item-address">12 Main St &amp; 3rd</small></div>`
+        card('sp_1', withLogo('sp_1', 'Acme')) +
+          textLine('Fresh bread') +
+          addressLine('12 Main St &amp; 3rd')
       )
     );
   });
 
-  it('rainy: art and an address: the art only; the location stays on the card', () => {
-    const list = listOf([sponsor({ has_logo: 1, address_line: '12 Main St' })]);
-    expect(list).toBe(one(card('sp_1', thumb('sp_1', 'Acme'), ' data-thumb="1"')));
-    expect(list).not.toContain('sponsor-item-address');
-  });
-
-  for (const address of [null, ''] as const) {
-    it(`edge: a ${address === null ? 'null' : 'empty'} address adds no line and no wrapper`, () => {
-      expect(listOf([sponsor({ address_line: address })])).toBe(one(card('sp_1', 'Acme')));
+  for (const v of [null, '', '   '] as const) {
+    it(`edge: a ${JSON.stringify(v)} text or location adds no line`, () => {
+      expect(listOf([sponsor({ header_text: v, address_line: v })])).toBe(
+        one(card('sp_1', nameOnly('Acme')))
+      );
     });
   }
+
+  it('edge: text and location are trimmed', () => {
+    expect(listOf([sponsor({ header_text: '  hi  ', address_line: ' 1 Main ' })])).toBe(
+      one(card('sp_1', nameOnly('Acme')) + textLine('hi') + addressLine('1 Main'))
+    );
+  });
 });
 
-describe('OSE-1952 | sponsor art: the list', () => {
-  it('Ad 1 with art and Ad 2 without: one item each, in order, nothing between', () => {
+describe('sponsor card: the list', () => {
+  it('three sponsors, three kinds of art: one card each, in order, nothing between', () => {
     const list = listOf([
-      sponsor({ id: 'a', name: 'Ad One', has_logo: 1, website_url: 'https://one.example/' }),
-      sponsor({ id: 'b', name: 'Ad Two' }),
+      sponsor({
+        id: 'a',
+        name: 'Ad One',
+        has_header_image: 1,
+        website_url: 'https://one.example/',
+      }),
+      sponsor({ id: 'b', name: 'Ad Two', has_logo: 1 }),
+      sponsor({ id: 'c', name: 'Ad Three' }),
     ]);
     expect(list).toBe(
-      `${LIST_OPEN}${ITEM_OPEN}${site('https://one.example/', thumb('a', 'Ad One'), ' data-thumb="1"')}</li>` +
-        `${ITEM_OPEN}${card('b', 'Ad Two')}</li></ul>`
+      `${LIST_OPEN}${ITEM_OPEN}${site('https://one.example/', withHeader('a', 'Ad One'))}</li>` +
+        `${ITEM_OPEN}${card('b', withLogo('b', 'Ad Two'))}</li>` +
+        `${ITEM_OPEN}${card('c', nameOnly('Ad Three'))}</li></ul>`
     );
+  });
+
+  it('never tier-shaped: a tier on the row changes nothing', () => {
+    const plain = listOf([sponsor({ has_logo: 1 })]);
+    const tiered = listOf([{ ...sponsor({ has_logo: 1 }), tier: 'platinum' } as Sponsor]);
+    expect(tiered).toBe(plain);
   });
 
   it('every phase renders the same list', () => {
     const sponsors = [sponsor({ has_logo: 1, website_url: 'https://acme.example/' })];
-    const expected = one(site('https://acme.example/', thumb('sp_1', 'Acme'), ' data-thumb="1"'));
+    const expected = one(site('https://acme.example/', withLogo('sp_1', 'Acme')));
     const opts = { nonce: 'n', lang: 'en' as const };
     for (const html of [
       renderEventLiveHtml(row(), SHARE, social(sponsors), opts),
