@@ -151,8 +151,8 @@ test.describe('OSE-1955 component: any shape of logo stays inside its card art a
         await allArtLoaded(page, sponsors);
         const img = page.getByTestId('sponsor-thumb');
         const box = (await img.boundingBox())!;
-        // Owner 2026-11-26: the logo is the card's art, inside the same 3:1 area
-        // every sponsor card has (the hub's .sponsor-panel-header).
+        // Owner 2026-11-26: the logo is the sponsor's banner, inside the same 3:1
+        // frame every banner has (the hub's .sponsor-panel-header).
         const area = (await page.getByTestId('sponsor-art').boundingBox())!;
         expect(Math.abs(area.width / area.height - 3), 'the art area is 3:1').toBeLessThan(0.05);
         expect(box.x).toBeGreaterThanOrEqual(area.x - 0.5);
@@ -177,8 +177,10 @@ test.describe('OSE-1955 component: any shape of logo stays inside its card art a
         expect(Math.max(scale * nw, scale * nh)).toBeGreaterThanOrEqual(32);
         const link = page.locator('[data-testid="sponsor-list"] a');
         expect((await link.boundingBox())!.height, 'art link height').toBeGreaterThanOrEqual(44);
-        await expect(page.getByTestId('sponsor-name'), 'the name is on the card').toHaveText(
-          'Shape Test Sponsor'
+        // The art is the visual; its alt carries the name, so no text beside it.
+        await expect(img).toHaveAttribute('alt', 'Shape Test Sponsor');
+        await expect(page.getByTestId('sponsor-item'), 'no visible name beside the art').toHaveText(
+          ''
         );
       });
     }

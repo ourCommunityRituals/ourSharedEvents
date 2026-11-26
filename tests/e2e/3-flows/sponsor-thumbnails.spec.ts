@@ -2,11 +2,11 @@
  * The event page's "Supported by" sponsor thumbnails, in a browser on staging
  * (OSE-1955, feature OSE-1948; owner 2026-11-09).
  *
- * Between the header and "What", every sponsor is one card of the hub's sponsor
- * panel (owner 2026-11-26: balanced). Its 3:1 art area holds the header image,
- * else the compact logo (else the header logo) through the same-origin proxy
- * /api/v2/sponsors/<id>/logo?slot=sidebar, else the name set in type. The name
- * is always on the card as text, so the images are decoration (alt=""). The workers pool (workers/oursharedevents/tests/
+ * Between the header and "What", every sponsor is one banner of the hub's
+ * sponsor panel (owner 2026-11-26: equal banners, the art is the visual). Its
+ * 3:1 frame holds the configured header art, else the compact logo (else the
+ * header logo) through the same-origin proxy /api/v2/sponsors/<id>/logo, else
+ * the name set in type. The art's alt is the name. The workers pool (workers/oursharedevents/tests/
  * sponsor-thumb-flows.spec.ts) and Bruno folder 17 prove the markup and the
  * proxy; this spec proves what only a browser can: the image really loads under
  * the CSP, the tap really leaves for the website, the box holds any shape of
@@ -63,7 +63,7 @@ for (const vp of VIEWPORTS) {
   test.describe(`OSE-1955 sponsor thumbnails @ ${vp.name}`, () => {
     test.use({ viewport: { width: vp.width, height: vp.height } });
 
-    test('A is a loaded logo with its name on the card, and tapping it opens the website', async ({
+    test('A is a loaded banner with its name as alt, and tapping it opens the website', async ({
       page,
     }) => {
       await page.route('https://example.com/**', (r) =>
@@ -71,31 +71,27 @@ for (const vp of VIEWPORTS) {
       );
       await open(page, CHECK);
       const img = await loadedThumb(page, 'sp_logo_check_a');
-      expect(await img.getAttribute('alt')).toBe('');
+      expect(await img.getAttribute('alt')).toBe('Logo Check Bakery');
       expect(await img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
       const item = itemWith(page, 'sp_logo_check_a');
-      await expect(item.getByTestId('sponsor-name'), 'the name is on the card').toHaveText(
-        'Logo Check Bakery'
-      );
+      await expect(item, 'no visible name beside the art').not.toContainText('Logo Check Bakery');
       const link = item.locator('a');
       await expect(link).toHaveAttribute('rel', /noreferrer/);
       await Promise.all([page.waitForURL(/^https:\/\/example\.com\//), link.click()]);
     });
 
-    test('B is its name, with its location under it', async ({ page }) => {
+    test('B is its name in type, and its location stays on its own card', async ({ page }) => {
       await open(page, CHECK);
       const item = itemWith(page, 'sp_logo_check_b');
       await expect(item.getByRole('link', { name: 'No Logo Hardware' })).toBeVisible();
-      await expect(item.getByTestId('sponsor-item-address')).toHaveText(
-        '2407 W 111th St, Chicago IL'
-      );
+      await expect(item.getByTestId('sponsor-item-address')).toHaveCount(0);
       await expect(item.locator('img')).toHaveCount(0);
     });
 
     test('C (a logo that cannot load) is still on the page, named "Broken Logo Books"', async ({
       page,
     }) => {
-      // C's image fails; its name is text on the card, so the link is named for it.
+      // C's image fails; its name is the alt text, so the link is named for it.
       await open(page, CHECK);
       const link = itemWith(page, 'sp_logo_check_c').getByRole('link', {
         name: 'Broken Logo Books',

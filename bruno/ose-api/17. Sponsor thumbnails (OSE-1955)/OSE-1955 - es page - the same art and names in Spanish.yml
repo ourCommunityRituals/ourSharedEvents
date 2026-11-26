@@ -33,7 +33,7 @@ runtime:
         });
         test('OSE-1955 happy (es): the same art; the title is the sponsor\'s own words, not translated', function () {
           expect(itemOf('sb_thumb_compact')).to.include(src('sb_thumb_compact'));
-          expect(itemOf('sb_thumb_compact')).to.include('data-testid="sponsor-name">Thumb Compact</span>');
+          expect(itemOf('sb_thumb_compact')).to.include('alt="Thumb Compact"');
         });
         test('OSE-1955 happy (es): no logo is the name', function () {
           expect(itemOf('Thumb Name Hardware')).to.include('>Thumb Name Hardware</span>');

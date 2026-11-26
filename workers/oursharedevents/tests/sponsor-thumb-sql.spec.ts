@@ -137,7 +137,6 @@ describe('OSE-1955 the page lists a sponsor only when both sides said yes', () =
         display_name: 'Ay & Co',
         address_line: null,
         has_logo: 0,
-        header_text: null,
         has_header_image: 0,
       },
       {
@@ -147,7 +146,6 @@ describe('OSE-1955 the page lists a sponsor only when both sides said yes', () =
         display_name: null,
         address_line: '1 Main',
         has_logo: 0,
-        header_text: null,
         has_header_image: 0,
       },
     ]);

@@ -1056,13 +1056,11 @@ interface SponsorBasicRow {
   /** 1 when the sponsor has a compact or header logo on file (sponsor_asset). */
   has_logo?: number | null;
   /**
-   * OSE-1826 (0105): the sponsor's own header block, the same one the digital
-   * poster shows. header_text is its short text; has_header_image says only
-   * THAT it has a header image (1 only while the event is live, like has_logo:
+   * OSE-1826 (0105): the sponsor's own header image, the same banner art the
+   * digital poster shows. has_header_image says only THAT it has one (1 only while the event is live, like has_logo:
    * the proxy serves art only then). The image itself loads through the
    * consent-gated proxy (?slot=header), never from the sponsor's host.
    */
-  header_text?: string | null;
   has_header_image?: number | null;
 }
 
@@ -1103,45 +1101,33 @@ function renderSponsorItem(s: SponsorBasicRow): string {
   // card link. The `??` operator mutant on this line stays live and is killed.
   const url = s.website_url ?? '';
   const id = encodeURIComponent(s.id);
-  // Owner 2026-11-09: the compact logo, falling back to the header logo.
-  const logo = s.has_logo
-    ? `<img data-testid="sponsor-thumb" src="${esc(`/api/v2/sponsors/${id}/logo?slot=sidebar`)}" alt="" width="200" height="72" loading="lazy" decoding="async" referrerpolicy="no-referrer">`
-    : '';
-  const nameLine = `<span class="sponsor-panel-name" data-testid="sponsor-name">${name}</span>`;
-  // The 3:1 art area when there is no header image: the logo, else the name.
-  const artArea = (content: string): string =>
-    `<span class="sponsor-panel-header ose-sponsor-art" data-testid="sponsor-art">${content}</span>`;
+  // Owner 2026-11-26: "Supported by" is a row of banners, to save space and
+  // showcase each sponsor's banner art. Every banner is the same 3:1 frame:
+  // the header art, else the logo, else the name in type. The name is the
+  // image's alt text, so it is always read out; the text and location stay on
+  // the sponsor's own card.
   let inner: string;
   if (s.has_header_image) {
-    inner =
-      `<img class="sponsor-panel-header" data-testid="sponsor-header" src="${esc(`/api/v2/sponsors/${id}/logo?slot=header`)}" alt="" width="600" height="200" loading="lazy" decoding="async" referrerpolicy="no-referrer">` +
-      `<span class="sponsor-panel-id">${logo}${nameLine}</span>`;
-  } else if (logo) {
-    inner = artArea(logo) + `<span class="sponsor-panel-id">${nameLine}</span>`;
+    inner = `<img class="sponsor-panel-header" data-testid="sponsor-header" src="${esc(`/api/v2/sponsors/${id}/logo?slot=header`)}" alt="${name}" width="600" height="200" loading="lazy" decoding="async" referrerpolicy="no-referrer">`;
   } else {
-    inner = artArea(nameLine);
+    // Owner 2026-11-09: the compact logo, falling back to the header logo.
+    const art = s.has_logo
+      ? `<img data-testid="sponsor-thumb" src="${esc(`/api/v2/sponsors/${id}/logo?slot=sidebar`)}" alt="${name}" width="200" height="72" loading="lazy" decoding="async" referrerpolicy="no-referrer">`
+      : `<span class="sponsor-panel-name" data-testid="sponsor-name">${name}</span>`;
+    inner = `<span class="sponsor-panel-header ose-sponsor-art" data-testid="sponsor-art">${art}</span>`;
   }
   // Each anchor stays one complete <a …> literal: the click-out invariant
   // (sponsor-signal-never-who) reads these tags from source to prove rel=noreferrer.
-  const link = url.startsWith('https://')
+  return url.startsWith('https://')
     ? `<a href="${esc(url)}" class="sponsor-panel-main" rel="noopener noreferrer nofollow">${inner}</a>`
     : `<a href="${esc(sponsorCardPath(s.id))}" class="sponsor-panel-main" data-testid="sponsor-card-link">${inner}</a>`;
-  const text = (s.header_text ?? '').trim();
-  const textLine = text
-    ? `<p class="sponsor-panel-text" data-testid="sponsor-item-text">${esc(text)}</p>`
-    : '';
-  // 0083 / OSE-1435: the location the sponsor chose to show, as its own muted line.
-  const address = (s.address_line ?? '').trim();
-  const addressLine = address
-    ? `<p class="sponsor-panel-text sub-line" data-testid="sponsor-item-address">${esc(address)}</p>`
-    : '';
-  return `${link}${textLine}${addressLine}`;
 }
 
 /**
- * OSE-1373: sponsors render as a real list. Owner 2026-11-26: one card per
- * sponsor in the hub's sponsor panel grid, every card the same width and the
- * same art area (and, in a row, the same height), so no sponsor stands out.
+ * OSE-1373: sponsors render as a real list. Owner 2026-11-26: one banner per
+ * sponsor in the hub's sponsor panel grid, every banner the same width and the
+ * same 3:1 frame, so no sponsor stands out. Compact (two across on a phone,
+ * three on a wide screen): the first phone screen belongs to the event.
  */
 function renderSponsorList(sponsors: SponsorBasicRow[]): string {
   const items = sponsors
@@ -1157,11 +1143,10 @@ function renderSponsorList(sponsors: SponsorBasicRow[]): string {
 const SPONSOR_LIST_CSS = `
     .ose-sponsor-strip { margin: 0 0 1rem; }
     .ose-sponsor-label { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); margin: 0 0 0.5rem; }
-    .ose-sponsor-list { list-style: none; margin: 0; padding: 0; gap: 0.75rem; }
-    .ose-sponsor-art { position: relative; display: flex; align-items: center; justify-content: center; padding: 0.75rem 1rem; text-align: center; }
-    .ose-sponsor-art > img { position: absolute; inset: 12px; width: calc(100% - 24px); height: calc(100% - 24px); object-fit: contain; }
-    .ose-sponsor-art > .sponsor-panel-name { font-size: 1.375rem; }
-    .sponsor-panel-main:has(> .ose-sponsor-art:last-child) + .sponsor-panel-text { padding-top: 10px; }`;
+    .ose-sponsor-list { list-style: none; margin: 0; padding: 0; gap: 0.5rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, 10rem), 1fr)); }
+    .ose-sponsor-art { position: relative; display: flex; align-items: center; justify-content: center; padding: 0.25rem 0.5rem; text-align: center; overflow: hidden; }
+    .ose-sponsor-art > img { position: absolute; inset: 6px; width: calc(100% - 12px); height: calc(100% - 12px); object-fit: contain; }
+    .ose-sponsor-art > .sponsor-panel-name { font-size: 0.9375rem; line-height: 1.2; }`;
 
 /**
  * The bar at the top of an event page: the Language menu on the left, then the
@@ -2285,9 +2270,8 @@ export async function fetchEventPageSocialData(
                                          WHERE a.sponsor_business_id = sb.id AND a.format = 'logo'),
                                        '') <> ''
                          ELSE 0 END AS has_logo,
-                    -- The header block (OSE-1826, 0105): its text is public card
-                    -- text; its image is asked for only while the proxy serves it.
-                    sb.header_text AS header_text,
+                    -- The header image (OSE-1826, 0105): asked for only while
+                    -- the proxy serves it.
                     CASE WHEN ${eventLiveSql()}
                          THEN COALESCE(sb.header_image_url, '') <> ''
                          ELSE 0 END AS has_header_image

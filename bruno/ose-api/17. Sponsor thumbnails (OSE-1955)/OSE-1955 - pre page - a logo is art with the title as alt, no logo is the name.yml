@@ -30,11 +30,11 @@ runtime:
           expect(res.getStatus()).to.eql(200);
           expect(html).to.include('data-testid="pre-sponsor-strip"');
         });
-        test('OSE-1955 happy: compact only is art through the proxy, the display name on the card, the logo as decoration', function () {
+        test('OSE-1955 happy: compact only is art through the proxy, the display name as alt, no visible name', function () {
           const it = itemOf('sb_thumb_compact');
           expect(it).to.include(src('sb_thumb_compact'));
-          expect(it).to.include('data-testid="sponsor-name">Thumb Compact</span>');
-          expect(it).to.include('alt=""');
+          expect(it).to.include('alt="Thumb Compact"');
+          expect(it).to.not.include('>Thumb Compact<');
           expect(it).to.not.include('Thumb Compact Co LLC');
         });
         test('OSE-1955 happy: its https website is the link, with rel noopener noreferrer nofollow', function () {
@@ -44,12 +44,12 @@ runtime:
         });
         test('OSE-1955 happy: header only is art too (the fallback)', function () {
           expect(itemOf('sb_thumb_header')).to.include(src('sb_thumb_header'));
-          expect(itemOf('sb_thumb_header')).to.include('data-testid="sponsor-name">Thumb Header Only</span>');
+          expect(itemOf('sb_thumb_header')).to.include('alt="Thumb Header Only"');
         });
-        test('OSE-1955 happy: no logo is the name as text, with its address line, and no proxy src', function () {
+        test('OSE-1955 happy: no logo is the name as text, no address line (banners only), and no proxy src', function () {
           const it = itemOf('Thumb Name Hardware');
           expect(it).to.include('>Thumb Name Hardware</span>');
-          expect(it).to.include('data-testid="sponsor-item-address">1 Fixture Way, Chicago IL<');
+          expect(it).to.not.include('1 Fixture Way');
           expect(html).to.not.include('/api/v2/sponsors/sb_thumb_name/logo');
         });
         test('OSE-1955 happy: art beside names, in sponsor order (compact before header before name)', function () {

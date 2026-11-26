@@ -27,8 +27,8 @@ runtime:
         const itemOf = (needle) => items.find((i) => i.includes(needle)) || '';
         const src = (id) => 'src="/api/v2/sponsors/' + id + '/logo?slot=sidebar"';
         test('OSE-1955 rainy: a stored URL the proxy refuses still lists the sponsor (art, name as alt)', function () {
-          expect(itemOf('sb_thumb_badurl')).to.include('data-testid="sponsor-name">Thumb Bad Url</span>');
-          expect(itemOf('sb_thumb_creds')).to.include('data-testid="sponsor-name">Thumb Creds</span>');
+          expect(itemOf('sb_thumb_badurl')).to.include('alt="Thumb Bad Url"');
+          expect(itemOf('sb_thumb_creds')).to.include('alt="Thumb Creds"');
         });
         test('OSE-1955 rainy: an empty logo URL is the name, and the page never names the proxy for it', function () {
           expect(itemOf('Thumb Empty Logo')).to.include('>Thumb Empty Logo</span>');

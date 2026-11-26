@@ -242,12 +242,8 @@ describe('OSE-ssp1: pre-event sponsor strip', () => {
     expect(strip).toContain('Supported by');
     expect(strip).toContain('data-testid="sponsor-thumb"');
     expect(strip).toContain(`src="/api/v2/sponsors/${sid}/logo?slot=sidebar"`);
-    expect(strip, 'the name is text on the card').toContain(
-      'data-testid=\"sponsor-name\">Thumb Art Co</span>'
-    );
-    expect(strip, 'the name, once, beside the art').toContain(
-      'data-testid=\"sponsor-name\">Thumb Art Co</span>'
-    );
+    expect(strip, 'the name is the alt text').toContain('alt="Thumb Art Co"');
+    expect(strip, 'no visible name text beside the art').not.toContain('>Thumb Art Co<');
     expect(strip).toContain('href="https://thumb.example.com"');
     expect(html, 'the stored logo URL never reaches the page').not.toContain('cdn.example.com');
   });
@@ -265,7 +261,7 @@ describe('OSE-ssp1: pre-event sponsor strip', () => {
       'pre-sponsor-strip'
     );
     expect(strip).toContain('data-testid="sponsor-thumb"');
-    expect(strip).toContain('data-testid=\"sponsor-name\">Compact Only</span>');
+    expect(strip).toContain('alt="Compact Only"');
     expect(strip, 'no website: the art opens the sponsor card').toContain(
       'data-testid="sponsor-card-link"'
     );
@@ -287,7 +283,7 @@ describe('OSE-ssp1: pre-event sponsor strip', () => {
     );
     expect(strip.match(/data-testid="sponsor-item"/g) ?? []).toHaveLength(2);
     expect(strip.match(/data-testid="sponsor-thumb"/g) ?? []).toHaveLength(1);
-    expect(strip).toContain('data-testid=\"sponsor-name\">Ad One</span>');
+    expect(strip).toContain('alt="Ad One"');
     expect(strip, 'no art: the name stays as text').toContain('>Ad Two</span>');
   });
 
@@ -470,8 +466,8 @@ describe('OSE-ssp1: live-event sponsor strip', () => {
       'live-sponsor-strip'
     );
     expect(strip).toContain(`src="/api/v2/sponsors/${sid}/logo?slot=sidebar"`);
-    expect(strip).toContain('data-testid=\"sponsor-name\">Live Art</span>');
-    expect(strip).toContain('data-testid=\"sponsor-name\">Live Art</span>');
+    expect(strip).toContain('alt="Live Art"');
+    expect(strip).not.toContain('>Live Art<');
   });
 
   test('live-sponsor-strip absent when no sponsors', async () => {
@@ -677,8 +673,8 @@ describe('OSE-ssp1: post-event stats card and sponsor thank-you', () => {
       'post-sponsor-thanks'
     );
     expect(strip).toContain(`src="/api/v2/sponsors/${sid}/logo?slot=sidebar"`);
-    expect(strip).toContain('data-testid=\"sponsor-name\">Post Art</span>');
-    expect(strip).toContain('data-testid=\"sponsor-name\">Post Art</span>');
+    expect(strip).toContain('alt="Post Art"');
+    expect(strip).not.toContain('>Post Art<');
     expect(strip).toContain('>Post Plain</span>');
   });
 

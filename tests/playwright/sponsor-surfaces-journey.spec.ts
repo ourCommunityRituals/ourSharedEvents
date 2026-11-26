@@ -236,10 +236,10 @@ test('on the event page the sponsor sits below the title and above the content, 
   await expect(page.getByTestId('poster-sponsor-item')).toHaveCount(1);
 });
 
-// OSE-1435: the location a sponsor chose to show reads as its own muted line
-// under the name. It was a bare <small> beside the name in a flex row, at the
-// browser's default size and the body text colour.
-test('the sponsor location is its own muted line under the name, and wraps', async ({
+// OSE-1435, owner 2026-11-26: the event page shows each sponsor as an equal
+// banner, so the location a sponsor chose to show is on its own card, one tap
+// away, never under the banner (it would make one banner taller than another).
+test('the sponsor location is on its own card, not under its event-page banner', async ({
   page,
   request,
 }) => {
@@ -253,31 +253,16 @@ test('the sponsor location is its own muted line under the name, and wraps', asy
   await page.setViewportSize(PHONE);
   await page.goto(`/events/${encodeURIComponent(seeded.eventId)}`);
   const item = page.getByTestId('sponsor-item').filter({ hasText: seeded.sponsorName });
-  const line = item.getByTestId('sponsor-item-address');
-  await expect(line).toHaveText(address);
-
-  const name = await item.locator('a').first().boundingBox();
-  const box = await line.boundingBox();
-  expect(box!.y, 'the location starts below the name').toBeGreaterThanOrEqual(
-    name!.y + name!.height - 1
-  );
-  expect(box!.x + box!.width, 'the location stays on the screen').toBeLessThanOrEqual(PHONE.width);
-  const style = await line.evaluate((el) => {
-    const cs = getComputedStyle(el);
-    const probe = document.createElement('span');
-    probe.style.color = 'var(--text-muted)';
-    el.appendChild(probe);
-    const muted = getComputedStyle(probe).color;
-    probe.remove();
-    return { color: cs.color, muted, size: parseFloat(cs.fontSize) };
-  });
-  expect(style.color, 'the location is muted').toBe(style.muted);
-  expect(style.size, 'the location is small text, at or above the 13px floor').toBe(13);
+  await expect(item).toBeVisible();
+  await expect(item, 'no location under the banner').not.toContainText(address);
   const { scrollWidth, clientWidth } = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
     clientWidth: document.documentElement.clientWidth,
   }));
   expect(scrollWidth, 'no sideways scroll').toBeLessThanOrEqual(clientWidth + 1);
+
+  await page.goto(`/sponsors/${encodeURIComponent(seeded.sponsorId)}`);
+  await expect(page.locator('body'), 'the location is on the sponsor card').toContainText(address);
 });
 
 test('Decline (changed their mind): the sponsor leaves all four surfaces', async ({ page }) => {

@@ -26,16 +26,15 @@ runtime:
         const items = strip.split('data-testid="sponsor-item"').slice(1);
         const itemOf = (needle) => items.find((i) => i.includes(needle)) || '';
         const src = (id) => 'src="/api/v2/sponsors/' + id + '/logo?slot=sidebar"';
-        test('OSE-1955 security: markup in the display name is escaped in the name', function () {
-          expect(itemOf('sb_thumb_xss')).to.include('data-testid="sponsor-name">Thumb&quot; onerror=&quot;alert(1)</span>');
+        test('OSE-1955 security: markup in the display name is escaped inside alt', function () {
+          expect(itemOf('sb_thumb_xss')).to.include('alt="Thumb&quot; onerror=&quot;alert(1)"');
           expect(html).to.not.include('<script>alert(1)');
         });
         test('OSE-1955 security: no inline handler attribute anywhere in the strip', function () {
-          // Attributes only: an escaped name is text between tags, not markup.
-          const bare = (strip.match(/<[^>]*>/g) || []).join(' ').replace(/="[^"]*"/g, '=""');
+          const bare = strip.replace(/="[^"]*"/g, '=""');
           expect(/\son[a-z]+\s*=/i.test(bare)).to.eql(false);
         });
-        test('OSE-1955 security: one img and one empty alt per art item (nothing broke out of the name)', function () {
+        test('OSE-1955 security: one img and one alt per art item (nothing broke out of alt)', function () {
           for (const it of items.filter((i) => i.includes('sponsor-thumb'))) {
             expect(it.split('<img ').length - 1).to.eql(1);
             expect(it.split(' alt="').length - 1).to.eql(1);

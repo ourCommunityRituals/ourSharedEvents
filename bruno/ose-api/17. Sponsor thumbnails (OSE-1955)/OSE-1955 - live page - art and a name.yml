@@ -34,8 +34,8 @@ runtime:
         test('OSE-1955 happy (live): the logo sponsor is art with its title as alt, no visible name', function () {
           const it = itemOf('sb_thumb_compact');
           expect(it).to.include(src('sb_thumb_compact'));
-          expect(it).to.include('data-testid="sponsor-name">Thumb Compact</span>');
-          expect(it).to.include('alt=""');
+          expect(it).to.include('alt="Thumb Compact"');
+          expect(it).to.not.include('>Thumb Compact<');
         });
         test('OSE-1955 happy (live): the sponsor without a logo is its name', function () {
           expect(itemOf('Thumb Name Hardware')).to.include('>Thumb Name Hardware</span>');

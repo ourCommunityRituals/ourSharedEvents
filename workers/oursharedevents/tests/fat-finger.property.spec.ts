@@ -432,7 +432,7 @@ describe('fat-finger | OSE-1955 sponsor card — any title, any id, any link', (
         const bare = item.replace(/="[^"]*"/g, '=""');
         const tags = [...bare.matchAll(/<\/?([a-zA-Z][\w-]*)/g)].map((m) => m[1].toLowerCase());
         expect(new Set(tags)).toEqual(
-          new Set(tags.filter((t) => ['a', 'img', 'span', 'p'].includes(t)))
+          new Set(tags.filter((t) => ['a', 'img', 'span'].includes(t)))
         );
         expect(tags.filter((t) => t === 'a')).toHaveLength(2); // <a …> and </a>
         expect(bare).not.toMatch(/\son[a-z]+\s*=/i);
@@ -441,33 +441,34 @@ describe('fat-finger | OSE-1955 sponsor card — any title, any id, any link', (
     );
   });
 
-  test('art through the proxy for the id, decorative alt, and the escaped title once as text', () => {
+  test('one banner: configured art through the proxy for the id, the escaped title as alt or as text', () => {
     fc.assert(
       fc.property(sponsorArb, (s) => {
         const item = renderOneItem(s);
-        const title = (s.display_name ?? '').trim() || s.name;
+        const title = oracleEsc((s.display_name ?? '').trim() || s.name);
         const id = encodeURIComponent(s.id);
-        // Owner 2026-11-26: the name is always on the card, once, as text.
-        expect(item.split(`data-testid="sponsor-name">${oracleEsc(title)}</span>`)).toHaveLength(2);
-        expect(item).not.toMatch(/<img [^>]*alt="[^"]/);
+        // Owner 2026-11-26: one banner per sponsor. Header art, else the logo,
+        // else the name in type; the art's alt is the name.
         if (s.has_header_image) {
           expect(item).toContain(
-            `src="${oracleEsc(`/api/v2/sponsors/${id}/logo?slot=header`)}" alt=""`
+            `src="${oracleEsc(`/api/v2/sponsors/${id}/logo?slot=header`)}" alt="${title}"`
           );
-        } else {
-          expect(item).not.toContain('slot=header');
-        }
-        if (s.has_logo) {
-          expect(item).toContain(
-            `src="${oracleEsc(`/api/v2/sponsors/${id}/logo?slot=sidebar`)}" alt=""`
-          );
-        } else {
           expect(item).not.toContain('slot=sidebar');
+          expect(item).not.toContain('sponsor-name');
+        } else if (s.has_logo) {
+          expect(item).not.toContain('slot=header');
+          expect(item).toContain(
+            `src="${oracleEsc(`/api/v2/sponsors/${id}/logo?slot=sidebar`)}" alt="${title}"`
+          );
+          expect(item).not.toContain('sponsor-name');
+        } else {
+          expect(item).not.toContain('<img');
+          expect(item.split(`data-testid="sponsor-name">${title}</span>`)).toHaveLength(2);
         }
-        const address = (s.address_line ?? '').trim();
-        if (address)
-          expect(item).toContain(`data-testid="sponsor-item-address">${oracleEsc(address)}</p>`);
-        else expect(item).not.toContain('sponsor-item-address');
+        expect(item.match(/<img /g)?.length ?? 0).toBeLessThanOrEqual(1);
+        // No text or location rows: every banner is the same size.
+        expect(item).not.toContain('sponsor-item-address');
+        expect(item).not.toContain('sponsor-item-text');
       }),
       opts
     );
