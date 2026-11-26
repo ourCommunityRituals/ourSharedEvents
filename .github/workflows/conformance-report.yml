@@ -43,7 +43,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
           # A persisted GITHUB_TOKEN header outranks the write token in the push URL (403).
@@ -78,7 +78,7 @@ jobs:
       # OSE-1031 — this checkout was missing entirely; the generator was silently falling back
       # to a stale 24-entry inline registry, so the report could never report the canonical 25.
       - name: Checkout OCR-docs brain (read-only)
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: ourCommunityRituals/OCR-docs
           path: OCR-docs
