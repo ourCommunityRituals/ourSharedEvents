@@ -1,0 +1,36 @@
+info:
+  name: OSE-2234 | dates | the night is moved into the past, mid-window
+  type: http
+  seq: 92
+
+# CCR loop 6 F1: moving the dates into the past is no pause button on a
+# running window. The same edit closes the set; 93 to 95 show it stays closed.
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteReadNightId}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"start_date\": \"2000-01-01\", \"end_date\": \"2000-01-01\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2234 dates: the date change is saved', function () { expect(res.getStatus()).to.eql(200); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

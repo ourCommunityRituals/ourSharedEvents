@@ -990,6 +990,46 @@ describe('7. a booth must be a stall of the same event, in use', () => {
 
 // ── 8: audit ─────────────────────────────────────────────────────────────────
 
+describe('the venue rules, through the route (owner cards 2026-11-26)', () => {
+  test('SECURITY | no venue is VENUE_NEEDED, a venue the platform has not set up is VENUE_NOT_SET_UP, each audited as denied', async () => {
+    expect((await call('POST', vp(A1), A, {})).status).toBe(201);
+    // Unlinked: the event has no venue.
+    await run('UPDATE events SET host_venue_id = NULL WHERE id = ?', A1);
+    const none = await call('POST', vp(A1, '/open'), A, { room_size: 200 });
+    expect(none.status).toBe(409);
+    expect(none.json.code).toBe('VENUE_NEEDED');
+    // Linked to a venue the host made: the platform has not set it up.
+    await run(
+      `INSERT INTO venues (id, brand_id, name) SELECT 'ven-host-made', brand_id, 'Host made' FROM events WHERE id = ?`,
+      A1
+    );
+    await run(`UPDATE events SET host_venue_id = 'ven-host-made' WHERE id = ?`, A1);
+    const raw = await call('POST', vp(A1, '/open'), A, { room_size: 200 });
+    expect(raw.status).toBe(409);
+    expect(raw.json.code).toBe('VENUE_NOT_SET_UP');
+    // Nothing opened, and nothing was written to the set.
+    const set = await one(
+      'SELECT state, room_size, opened_at, pepper_epoch FROM vote_sets WHERE event_id = ?',
+      A1
+    );
+    expect(set).toMatchObject({
+      state: 'draft',
+      room_size: null,
+      opened_at: null,
+      pepper_epoch: null,
+    });
+    // The platform sets it up: now it opens.
+    await run(`UPDATE venues SET room_kind = 'indoor', room_cap = 300 WHERE id = 'ven-host-made'`);
+    expect((await call('POST', vp(A1, '/open'), A, { room_size: 200 })).status).toBe(200);
+    const rows = await all(
+      `SELECT action, outcome FROM admin_audit_log
+        WHERE resource_type = 'event' AND resource_id = ? AND action = 'VOTE_SET_OPEN' ORDER BY rowid`,
+      A1
+    );
+    expect(rows.map((r) => r.outcome)).toEqual(['denied', 'denied', 'success']);
+  });
+});
+
 describe('8. every change is audited, with no detail', () => {
   test('the audit row holds the reference the answer carries (PR #1432 review)', async () => {
     const ctx = createExecutionContext();
