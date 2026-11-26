@@ -196,11 +196,11 @@ describe('serving an uploaded logo', () => {
 });
 
 describe('the event page', () => {
-  test('a sponsor whose logo is an upload shows as thumbnail art through the proxy', async () => {
+  test('a sponsor whose logo is an upload shows its logo through the proxy, its name on the card', async () => {
     const id = await sponsor({ name: 'Page Art Co', logo_url: ART });
     const html = await (await SELF.fetch(`https://t.test/events/${EVENT}`)).text();
     expect(html).toContain(`src="/api/v2/sponsors/${id}/logo?slot=sidebar"`);
-    expect(html).toContain('alt="Page Art Co"');
+    expect(html).toContain('data-testid="sponsor-name">Page Art Co</span>');
     // the page asks the proxy; the upload path itself is never the thumb's src
     expect(html).not.toContain(`src="${ART}"`);
   });
