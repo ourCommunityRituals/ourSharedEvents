@@ -61,8 +61,8 @@ jobs:
     # every comment). The @claude `respond` job is the only comment consumer.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
-    # No job-level continue-on-error (AI Problems Index assessment, 2026-11-26):
-    # it turned a review that never ran into a green check. The review is not a
+    # No job-level continue-on-error: a review that never ran must not show
+    # as a green check. The review is not a
     # required check, so red here never blocks a merge; a concurrency cancel
     # shows as cancelled, not failed. The last step goes red when no review ran.
     defaults:
