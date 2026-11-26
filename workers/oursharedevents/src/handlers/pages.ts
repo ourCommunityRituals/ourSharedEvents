@@ -1089,7 +1089,7 @@ function renderSponsorItem(s: SponsorBasicRow): string {
   if (s.has_logo) {
     const src = `/api/v2/sponsors/${encodeURIComponent(s.id)}/logo?slot=sidebar`;
     return anchor(
-      `<img class="ose-sponsor-thumb" data-testid="sponsor-thumb" src="${esc(src)}" alt="${name}" loading="lazy" decoding="async">`,
+      `<img class="ose-sponsor-thumb" data-testid="sponsor-thumb" src="${esc(src)}" alt="${name}" width="160" height="64" loading="lazy" decoding="async">`,
       ' data-thumb="1"'
     );
   }
