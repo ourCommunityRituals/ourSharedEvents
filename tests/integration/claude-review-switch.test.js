@@ -178,8 +178,7 @@ describe('claude-review.yml @claude respond loads no in-repo settings (OSE-2231)
   });
 });
 
-// AI Problems Index assessment (2026-11-26): a review that did not run must
-// not show green. ourWKRP's review was green with zero tokens on every PR.
+// A review that did not run must not show green.
 function reviewShowsGreenOnFailure(job) {
   if (job['continue-on-error'] === true) return true;
   const steps = job.steps || [];
