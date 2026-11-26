@@ -407,6 +407,7 @@ describe('one vote set per event', () => {
       final: false,
       result: null,
       flood_seen: false,
+      burst_seen: false,
       room_size: null,
     });
     const again = await call('POST', vp(A1), A, { played_by: 'team' });
@@ -1230,6 +1231,7 @@ describe('9. no admin answer carries a guarded key', () => {
     const list = await call('GET', vp(A1), A);
     expect(Object.keys(list.json.set).sort()).toEqual(
       [
+        'burst_seen',
         'event_id',
         'final',
         'flood_seen',

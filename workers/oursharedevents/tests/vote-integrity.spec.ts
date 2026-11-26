@@ -357,4 +357,19 @@ describe('the flag is one-way in the database', () => {
     // Setting it to 1 again is fine (the flood write and the room check may both run).
     await run(`UPDATE vote_sets SET flood_seen = 1 WHERE event_id = ?`, EV);
   });
+
+  test("SECURITY | the host's burst alarm is one-way too: no write clears it", async () => {
+    await ok(openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 10));
+    await run(`UPDATE vote_sets SET burst_seen = 1 WHERE event_id = ?`, EV);
+    await expect(run(`UPDATE vote_sets SET burst_seen = 0 WHERE event_id = ?`, EV)).rejects.toThrow(
+      /burst_seen is one-way/
+    );
+    await expect(
+      run(`UPDATE vote_sets SET burst_seen = 2 WHERE event_id = ?`, EV)
+    ).rejects.toThrow();
+    const row = await tenv.DB.prepare(`SELECT burst_seen FROM vote_sets WHERE event_id = ?`)
+      .bind(EV)
+      .first<{ burst_seen: number }>();
+    expect(row?.burst_seen).toBe(1);
+  });
 });

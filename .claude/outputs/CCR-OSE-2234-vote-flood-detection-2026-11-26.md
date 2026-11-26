@@ -1,85 +1,110 @@
-# CCR: OSE-2234, flag a flood of vote passes (detection only), 2026-11-26
+---
+ccr: 1
+class: security-fix
+requested_loops: 3
+loops_run: 3
+team: base
+gate: stop
+cumulative_score: 41
+system_score: 63
+unresolved: { regulatory: 0, security_critical: 0, critical: 0, high: 1, medium: 3, low: 6 }
+pr: 1562
+subject_sha: '04a906e9b07e2e17f29970ada066d128e66ab33e'
+---
 
-|                           |                                                                                                                                                                                        |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **System score**          | 85% (below the 95% gate)                                                                                                                                                               |
-| **Assessment confidence** | High for what the code does (tests run, faults injected); medium for how the binding behaves at 300 a minute on staging (not measured)                                                 |
-| **Gate**                  | **Human gate.** The two open findings are owner choices, not code defects (questions below)                                                                                            |
-| **Classification**        | Security-relevant feature on the vote path: 3 loops                                                                                                                                    |
-| **Team**                  | Dr of Security (loop 1, an independent read-only subagent given the code, not this session's conclusions); Lead BE Architect, Sr Automation QA and Sr Design FE lenses in this session |
+# CCR: stricter in-room voting (OSE-2234, PR #1562)
+
+**Subject:** branch `claude/project-thread-a7vakd`. Loops 1 and 2 reviewed `51eb3a9`; loop 3 reviewed `04a906e`, which carries the fixes from loops 1 and 2. The ADR-040 wording fixes and the owner's decision (built after loop 3) are unreviewed by a further loop.
+
+**Owner's asks (Matt, 2026-11-26):** flood detection only (decision card); keep the public "may be padded" note (decision card); "I would like the voting as stringent as you can make it"; chose "Changing code + room size" (decision card); "I want to keep any kind of manipulation in check too by sponsors and events manipulating results"; "I don't results pushed positively or negatively"; "Integrity is a main goal here"; "this way further AI manipulation is also in check"; and the standing rule that voting stays in the room, never online.
+
+## Verdict
+
+**41% (cumulative, the worst loop); 63% after the fixes built since loop 3. Below 95%: human gate.** The owner chose "Room check only, show room size" (decision card, 2026-11-26 05:36 UTC), now built: the public "may be padded" line comes only from the room check at final, the per-minute alarm is a host-only flag (`burst_seen`), and the final result shows the room size the host gave. No Security Critical finding: nothing leaks who voted or a count, and no auth bypass was found. The change does make voting stricter than `main` (a photo of the code goes stale in two minutes; padding past the declared room size is flagged at any pace; names and room size cannot move after open). It does not meet the owner's bar that no host can push a result, and the public flag can be tripped against an honest night. The owner's choice closes the smear path and makes a host's room size visible; a host can still boost up to the size they declare.
 
 ## What was reviewed
 
-In scope: `migrations/0122_vote_flood_seen.sql`, `src/lib/vote-flood.ts`, the call in `src/handlers/qr-scan.ts`, the router's `ctx` pass-through, `flood_seen` on the admin `VoteSetView` (`src/lib/vote-sets.ts`), `padded` on the public result (`src/lib/vote-public-result.ts`, `src/lib/vote-page-render.ts`), the host warning (`src/templates/admin.html`), `VOTE_FLOOD_LIMITER` in `wrangler.toml`, the gate rule in `tests/e2e/0-architecture/votes-never-who.invariant.spec.ts`, and the ADR-040 amendment.
+`git diff origin/main...HEAD` under `workers/oursharedevents/src`, `migrations/0122_vote_integrity.sql`, the tests named below, the Bruno 25 folder, and `docs/adr/ADR-040-anonymous-votable-object.md` (2026-11-26 amendments). Not reviewed: OurWKRP, the vote-cast path beyond the participant insert, sponsor-role reach into admin routes (predates this diff), staging runtime.
 
-Out of scope: the per-song cap (OSE-2126, on hold by the owner's decision), cookie signing, the room vote screen's own design (OSE-2226).
+## Loop 1
 
-## Loop 1: surface (Dr of Security, read-only)
+Team: dr-of-security
+Critical layer: what is true versus assumed in the code, comments and ADR.
+Score: 51%
 
-- **Critical:** the riskiest assumption is that a flag can't carry a voter, a count or a time. Read of the key (`vote-flood:<event id>`), the value (a 0/1 column) and the one log line (`{type, event_id}`): nothing identifying. The public answer carries the flag only on a final, non-void set (`RESULT_SQL` requires `is_final = 1 AND is_void = 0`).
-- **Conservative:** worst cases are an attacker who stays under the threshold, an attacker who trips it on purpose, and detection that slows or breaks a vote.
-- Findings:
-  - **H1 (High, 10): the alarm can't see the attack that decides a night.** A night is decided by a lead of 5 to 9 and 10 to 14 voters (decision 7). 10 to 20 forged passes can swing it, far under 300 a minute, and the binding counts per location.
-  - **M1 (Medium, 5): anyone can trip the flag on someone else's night.** With a photo of the code and a script, one address passes 300 a minute. Because the flag is one-way, the public line "may be padded" stays for good, even if the attacker never voted. The first wording also said "votes", but the signal counts scans that minted a pass.
-  - **L1 (Low, 2): detection sat on the answer path.** It was awaited before the 302, with no timeout.
-  - **L2 (Low, 2): a docs claim said the flood's minute is not kept.** The log host stamps its own time on `VOTE_FLOOD_SEEN`.
-  - **L3 (Low, 2): a one-bit hint after final.** The Dr of Security judged it not a participation figure under decision 7 / Q8-2, and not a re-identification path. Accepted.
-- Score at loop 1: 100 − 10 − 5 − 2 − 2 − 2 = 79%.
+Eight findings: host boost through a self-declared room size and fresh admin stamps (Critical); a one-way public flag that can be tripped without padding (High); a fixed 300/min threshold against room sizes to 50000 (Medium); stamp proves freshness, not presence (Medium); a duplicate-name object after open splits votes (Medium); the admin card's static QR dies in two minutes with no word to voters (Medium); Bruno 51 and 52 pass vacuously on an edge 403 (Low); a set with no room size is never room-checked (Low). Found sound: the stamp crypto and window, the room check's place in the final batch, no code path that clears the flag or moves the room size, no public leak, brand scope.
 
-## Loop 2: pressure (reacting to loop 1)
+## Loop 2
 
-- **L1 fixed:** `/q` hands detection to `ctx.waitUntil` (the router passes `ctx`). Test: a binding that never answers still gets the redirect and its pass. Watched failing first: with the old `await`, the test timed out at 60 s.
-- **L2 fixed:** the migration, the lib and the ADR now say the database keeps no time, and that the log line carries the log host's own time.
-- **M1 words fixed:** both lines now say "scans", not "votes" or "new voters". The smear risk itself is written into the ADR amendment as an owner choice: keep or drop the public line.
-- **H1:** cannot be fixed by tuning. Any threshold low enough to see 10 to 20 passes is below a real room. It is written down in the lib and the ADR ("no flag never means a clean night"), and it goes to the owner.
-- Pressure checks, all held:
-  - A second isolate past the limit writes once more. The UPDATE is `WHERE flood_seen = 0`, so it is idempotent.
-  - A void set: the flag is kept, and no public result is shown (unchanged).
-  - Brand scope: the admin read is already scoped by `guardAdminObjectScope`.
-  - The namespace ids 15097 and 15098 were already used by `wrangler.client-test.toml` (`tests/unit/ci/client-test-site.test.js` caught it). Moved to 22341 to 22343.
-  - `REQUIRED_DB_MIGRATION` was bumped to 122 (`scripts/check-schema-guard.mjs` passes).
-- Score at loop 2: 100 − 10 − 5 − 2 (L3 accepted, still counted) = 83%.
+Team: role-backend-architect
+Conservative layer: assume the worst insider, sponsor, attendee, remote relay and script, for both boost and smear.
+Score: 56%
 
-## Loop 3: confirmation
+Confirmed the loop 1 core (smear High, boost High) and added: the vote screen skipped reloads while hidden, so a sleeping screen silently stops votes (Medium); the host can still add decoys, close a rival's window early or reopen a favourite's after open (Medium); the flood detector is per location (Low); stale-photo scans still write scan rows (Low).
 
-- Re-ran, all green:
-  - the worker vote specs: 14 files, 290 tests;
-  - the full `tests/e2e/0-architecture/`: 433 passed, 2 skipped (pre-existing);
-  - `tests/integration` and `tests/unit/ci`: 3,328 passed;
-  - the admin Voting card in a phone-width browser: 9 passed.
-- **Born red:** each new test was watched failing on an injected fault, then the fault was removed. The faults:
-  - no count at `/q`;
-  - the write keeps the hour;
-  - a reopen clears the flag;
-  - "padded" shown before final;
-  - the key carries more than the event;
-  - no try/catch;
-  - no isolate memo;
-  - the wrangler limit at 600;
-  - detection awaited on the answer path;
-  - the gate's `flood_seen` rule removed (its negative controls go red);
-  - the admin card never unhides the warning.
-- L3 is accepted by the reviewer's own judgement, so it drops to 0. Final: 100 − 10 (H1) − 5 (M1) = **85%**.
-- The drop from 100 is the protocol working. H1 and M1 are the owner's to accept or change, not this session's to argue away.
+## Loop 3
+
+Team: role-qa-automation
+Recursive layer: were loops 1 and 2 honest, are the fixes real, what did both miss.
+Score: 41%
+
+Merged the duplicates between loops 1 and 2, kept the host boost at Critical, verified the duplicate-name fix (pre-check, atomic SQL guard, test) and the reload fix, and added: ADR sentences that overstated (no remote path; photo stops within two minutes; sees padding at any pace; a stale "photo can trip" line), a residual on the name fix (pre-open repeats allowed, ASCII-only case folding, the SQL guard untested alone), and test gaps (room check tested by direct inserts only; no Bruno case for LABEL_TAKEN or the room check).
 
 ## Findings register
 
-| Id  | Weight | Status      | Note                                                                                                  |
-| --- | ------ | ----------- | ----------------------------------------------------------------------------------------------------- |
-| H1  | 10     | Open: owner | Detection can't see paced stuffing. Documented.                                                       |
-| M1  | 5      | Open: owner | Smear route through the public "may be padded" line. Wording fixed; keep-or-drop is the owner's call. |
-| L1  | 2      | Fixed       | waitUntil, with a test                                                                                |
-| L2  | 2      | Fixed       | Docs corrected                                                                                        |
-| L3  | 2      | Accepted    | One bit after final; not a participation figure                                                       |
+| Id  | Severity | Finding                                                                                                                                                                                                                                                                                              | Status                                                                                                                                                                                                        |
+| --- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1  | High     | A host declares the room size (10 to 50000) and can fetch fresh stamps from the admin list, so paced forged voters below that size boost a result and nothing flags it. Was Critical; lowered because the declared size is now printed with the final result, so the room can see an inflated number | Open: mitigated (room size public at final); refusing it needs a ceiling the host does not choose                                                                                                             |
+| F2  | High     | The one-way public "may be padded" flag could be tripped against an honest night by one browser re-scanning fast                                                                                                                                                                                     | Fixed after loop 3 (owner decision): the alarm writes host-only `burst_seen`; the public line comes only from the room check. Born red. The under-declaring host is now visible through the printed room size |
+| F3  | Medium   | The fixed 300/min alarm misjudges big honest rooms and small padded ones                                                                                                                                                                                                                             | Fixed after loop 3: the alarm no longer marks a public result (host warning only)                                                                                                                             |
+| F4  | Medium   | The stamp proves a fresh view, not presence: one live relay serves anyone, each pass lasts 30 minutes                                                                                                                                                                                                | Open: accepted residual risk to name with the owner; code comment and ADR now say so                                                                                                                          |
+| F5  | Medium   | A duplicate-name object after open splits a song's votes                                                                                                                                                                                                                                             | Fixed in 04a906e (LABEL_TAKEN, code and SQL, born red)                                                                                                                                                        |
+| F6  | Medium   | Admin card showed a code that dies in two minutes as if it were the room code; the vote screen skipped reloads while hidden                                                                                                                                                                          | Fixed in 04a906e (card wording, always reload, reload on becoming visible)                                                                                                                                    |
+| F7  | Medium   | A stale-stamp scan lands on the event page with no word, so an honest voter is dropped silently                                                                                                                                                                                                      | Open: follow-up (voter landing message)                                                                                                                                                                       |
+| F8  | Medium   | After open a host can add a decoy with a new name, close a rival's window early, or reopen a favourite's                                                                                                                                                                                             | Open: owner decision (freeze adding after open; window moves are already audited)                                                                                                                             |
+| F9  | Low      | A set with no room size (opened by an older Worker) is never room-checked                                                                                                                                                                                                                            | Open                                                                                                                                                                                                          |
+| F10 | Low      | Bruno 51 and 52 pass vacuously on an edge 403 (pattern predates this branch)                                                                                                                                                                                                                         | Open                                                                                                                                                                                                          |
+| F11 | Low      | The flood alarm counts per Cloudflare location, so a spread flood is unseen                                                                                                                                                                                                                          | Open (documented in vote-flood.ts)                                                                                                                                                                            |
+| F12 | Low      | A stale-stamp scan still writes a scan row                                                                                                                                                                                                                                                           | Open                                                                                                                                                                                                          |
+| F13 | Low      | Name fix residual: repeats before open are allowed; `lower()` folds ASCII only                                                                                                                                                                                                                       | Open                                                                                                                                                                                                          |
+| F14 | Low      | Test gaps: room check proven by direct inserts only; no Bruno case for LABEL_TAKEN or the room check at final                                                                                                                                                                                        | Open                                                                                                                                                                                                          |
+| F15 | Low      | ADR-040 overstated (no remote path; photo dead in two minutes; any pace; stale "photo can trip" line)                                                                                                                                                                                                | Fixed after loop 3 (ADR wording), unreviewed                                                                                                                                                                  |
 
-## Before shipping
+## What must be true before shipping
 
-- Owner answers the questions below. The PR is a draft until then.
-- After merge: the staging chain T1 to T4 is green for the merge SHA. Bruno `23. Voting admin` list 110 checks `flood_seen: false` on staging.
-- The scripted burst on staging (story acceptance) needs `VOTING_ENABLED` on in staging (OSE-2227, the owner's PR). Until then it can't run, and the story stays below Done.
+- The owner answers F8 (freeze adding objects after open) and accepts or refuses F4 and F11.
+- PR #1562 CI green, then the staging chain (T1 to T4) green for the merge SHA.
+- Migration 0122's two triggers apply on staging D1 (the first `CREATE TRIGGER` in this migrations folder); seen on staging, not assumed.
+- Bruno 50 (fresh stamp mints) and 51/52 (no or old stamp mints none) print their test names on staging, not only the EDGE branch.
 
-## Human-gate questions
+## Verification
 
-1. **Threshold.** Is 300 passes a minute per event right? It is about twice a whole room arriving at once (S0: 150 in 5 s), and one address at full speed passes it.
-2. **The public line.** Keep "A sudden burst of scans of the vote code came in during this vote, so this result may be padded." under the final result? Or show the flag to the host only, given that anyone with a photo of the code can trip it?
-3. **Accept H1.** Paced or spread-out stuffing is not flagged; the flag catches only a careless bulk flood. Is that acceptable for "detection only"?
+- Born red after the owner's decision: the alarm writing `flood_seen` again, the public result dropping the room size, the `burst_seen` trigger removed, and the gate's `burst_seen` rule removed: each went red, each restored.
+- Born red: nine injected faults went red before the loops (stamp check, window, room trigger, flag trigger, room check compare, room check placement, open without room size, label lock with both guards removed); the duplicate-name test went red with both its guards removed (04a906e).
+- Local runs: vote worker specs 16 files, 1591 tests passed; `vote-set-admin` and vote-screen specs 69 passed after 04a906e; architecture structural gates passed (lexicon, lexicon allowance and votes-never-who: 57 passed after 04a906e); Bruno structure tests 421 passed; Playwright admin voting card and vote screen 12 passed. `tsc --noEmit` clean.
+- Not verified: staging runtime, trigger apply on remote D1, the full worker suite's last run.
+
+## Risks accepted
+
+None accepted yet by the owner. Proposed for acceptance: F4 (a live relay of the screen; in-room presence cannot be proven anonymously), F11 (a per-location alarm is a smoke alarm, not a meter). Both are stated in ADR-040.
+
+## Human gate
+
+Below 95%, so the owner decides. ADR-040 is a governance artifact and needs Matt's review before merge. The decision card on the public note was answered ("Room check only, show room size") and is built.
+
+Questions for the owner:
+
+- Should a host be refused from adding new songs or stalls once voting has opened (F8)?
+- Do you accept that one person relaying a live view of the room screen can still let others vote, with the room check as the only backstop (F4)?
+- Should the room size have a ceiling the host does not choose, such as a venue capacity the operator keeps (F1)?
+
+## Solutioning
+
+- F2 and F3: done (owner decision, built after loop 3).
+- F1: the declared size is now public at final. Closing it fully needs a ceiling the host does not choose (for example the venue's capacity held by the operator); owner choice.
+- F7: a stale stamp lands on the event page with one line ("This vote code has changed. Scan the code on the room screen again."), no count.
+- F8: refuse new objects once voting has opened, or show the host and operator when a window was moved; owner choice.
+- F9: refuse a reopen of a set with no room size, or let that reopen set it once.
+- F10: make Bruno 51 and 52 fail when the EDGE branch runs on a request that should reach the Worker.
+- F12 to F14: Unicode case folding in the label key; a cast-path test past the room size; Bruno cases for LABEL_TAKEN and the room check.
+- With F1, F7, F8 and F9 closed and F4, F11 accepted, the open weight is about 8 (four Lows), a projected 92%; reaching 95 also needs F13 and F14 closed and a fresh CCR on the result.

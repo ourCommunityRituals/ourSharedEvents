@@ -7092,7 +7092,8 @@
         <div>
           <h2 class="card-title">Voting</h2>
           <p class="sub-line" id="votes-summary" data-testid="votes-summary" aria-live="polite"></p>
-          <p class="sub-line" id="votes-flood" data-testid="votes-flood" role="status" hidden>Voting on this night looked padded: a burst of scans faster than one room makes, or more voters than the room holds. Results will say they may be padded. If the code was photographed or shared, replace it.</p>
+          <p class="sub-line" id="votes-flood" data-testid="votes-flood" role="status" hidden>More voters took part than the room size you gave, so the result says it may be padded.</p>
+          <p class="sub-line" id="votes-burst" data-testid="votes-burst" role="status" hidden>A burst of scans came in faster than one room makes. Only you see this; the result says it may be padded only if more voters take part than the room holds. If the code was photographed or shared, replace it.</p>
           <p class="sub-line" id="votes-room" data-testid="votes-room" hidden></p>
         </div>
         <button type="button" class="btn btn-secondary card-action" id="votes-toggle" data-action="votes-toggle" data-testid="votes-toggle" aria-expanded="false" aria-controls="votes-body">Show</button>
@@ -7115,7 +7116,7 @@
           <div id="votes-room-field" data-testid="votes-room-field" hidden>
             <label for="votes-room-size">How many can the room hold?</label>
             <input type="number" id="votes-room-size" data-testid="votes-room-size" inputmode="numeric" min="10" max="50000" step="1" aria-describedby="votes-room-hint" />
-            <p class="sub-line" id="votes-room-hint" data-testid="votes-room-hint">Needed to open voting, and fixed once voting opens. If there are more voters than the room holds, the results say they may be padded.</p>
+            <p class="sub-line" id="votes-room-hint" data-testid="votes-room-hint">Needed to open voting, and fixed once voting opens. The result shows it to everyone, and says it may be padded if more voters take part than the room holds.</p>
           </div>
           <div class="detail-card-actions" id="votes-set-actions" data-testid="votes-set-actions" hidden>
             <button type="button" class="btn btn-primary" id="votes-open" data-action="votes-set-move" data-move="open" data-testid="votes-open">Open voting</button>
@@ -7279,8 +7280,9 @@
         var set = data.set || null;
         var objects = Array.isArray(data.objects) ? data.objects : [];
         byId('votes-summary').textContent = window.votesSummary(set);
-        // OSE-2234: a flood of vote passes was seen. A flag, never a count.
+        // OSE-2234: the room check at final (public) and the burst alarm (host only). Flags, never counts.
         byId('votes-flood').hidden = !(set && set.flood_seen === true);
+        byId('votes-burst').hidden = !(set && set.burst_seen === true);
         // The room size: asked for before the first open, then fixed and shown.
         byId('votes-room-field').hidden = !(set && !set.final && set.state === 'draft' && !set.opened);
         var room = set && typeof set.room_size === 'number' ? set.room_size : null;

@@ -154,11 +154,17 @@ export interface VoteSetView {
    */
   result: VoteSetResult | null;
   /**
-   * A flood of vote passes was seen on the event's vote code (OSE-2234,
-   * lib/vote-flood.ts). A flag only, for the host: no count, no time. It stays
-   * true through a reopen and after final.
+   * The room check at final found more voters than the room size the host
+   * gave (OSE-2234, lib/vote-results.ts ROOM_CHECK_UPDATE), so the public
+   * result says it may be padded. A flag only: no count, no time. One-way.
    */
   flood_seen: boolean;
+  /**
+   * A burst of vote passes faster than one room makes was seen on the event's
+   * vote code (lib/vote-flood.ts). The host's alarm only, never public. A flag
+   * only: no count, no time. It stays true through a reopen and after final.
+   */
+  burst_seen: boolean;
   /**
    * The room size the host gave when voting first opened: the most people the
    * room can hold. Fixed from then on (migration 0122 trigger). Null before
@@ -201,6 +207,7 @@ interface SetRow {
   winner_label: string | null;
   winner_team_id: string | null;
   flood_seen: number;
+  burst_seen: number;
   room_size: number | null;
 }
 
@@ -216,7 +223,7 @@ interface ObjectRow {
 }
 
 const SET_SELECT = `SELECT id, event_id, state, played_by, (pepper_epoch IS NOT NULL) AS opened, is_final,
-       outcome, winner_object_id, winner_team_id, flood_seen, room_size,
+       outcome, winner_object_id, winner_team_id, flood_seen, burst_seen, room_size,
        (SELECT w.label FROM votable_objects w
          WHERE w.id = vote_sets.winner_object_id AND w.set_id = vote_sets.id) AS winner_label
   FROM vote_sets`;
@@ -247,6 +254,7 @@ function projectSet(row: SetRow): VoteSetView {
     final: Number(row.is_final) === 1,
     result: projectResult(row),
     flood_seen: Number(row.flood_seen) === 1,
+    burst_seen: Number(row.burst_seen) === 1,
     room_size: row.room_size == null ? null : Number(row.room_size),
   };
 }

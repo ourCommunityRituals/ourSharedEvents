@@ -7,13 +7,14 @@
  * and reads the set with the same libs the admin and the voter page use.
  *
  * What it holds:
- *   - over the limit sets vote_sets.flood_seen, once; under it does not;
+ *   - over the limit sets vote_sets.burst_seen, once; under it does not;
  *   - every minted pass counts, a renewal by the same browser included;
  *   - the write keeps no time: updated_at does not move;
  *   - a close and a reopen do not clear the flag, and final keeps it;
- *   - before final the flag is in no public answer (the voter page, the
- *     public result); after final the result says it may be padded;
- *   - the host sees it: the admin set answer carries flood_seen;
+ *   - the flag is in no public answer, before or after final: it is the
+ *     host's alarm only (owner, 2026-11-26, "Room check only, show room
+ *     size"); the public "may be padded" line comes from the room check;
+ *   - the host sees it: the admin set answer carries burst_seen;
  *   - the limiter key is the event only, and no new log line carries a
  *     cookie, the pass, k or the Location;
  *   - fail-safe: no binding, a throwing binding or a D1 error flag nothing,
@@ -21,10 +22,10 @@
  *   - wrangler.toml's limit equals VOTE_FLOOD_PASSES_PER_MINUTE in every env.
  *
  * Staging twin: bruno/ose-api/23. Voting admin (OSE-2127), list 110 (the set
- * answer carries flood_seen false). The scripted burst on staging waits for
+ * answer carries burst_seen false). The scripted burst on staging waits for
  * VOTING_ENABLED on staging (OSE-2227).
  * Structural twin: tests/e2e/0-architecture/votes-never-who.invariant.spec.ts
- * (flood_seen is set only to the literal 1).
+ * (burst_seen is set only to the literal 1).
  *
  * @born-red OSE-2234 | method: injected-fault, each removed after; listed in
  *   the PR body | date: 2026-11-26
@@ -44,7 +45,7 @@ import {
   reopenVoteSet,
 } from '../src/lib/vote-sets';
 import { readPublicVoteResult } from '../src/lib/vote-public-result';
-import { PADDED_WORDS } from '../src/lib/vote-page-render';
+import { PADDED_WORDS, roomSizeWords } from '../src/lib/vote-page-render';
 import { VOTING_ON } from '../src/lib/voting-switch';
 import {
   MARK_FLOOD_SQL,
@@ -106,9 +107,9 @@ const run = (sql: string, ...binds: unknown[]) =>
     .bind(...binds)
     .run();
 const row = (eventId: string) =>
-  tenv.DB.prepare(`SELECT flood_seen, updated_at, is_final FROM vote_sets WHERE event_id = ?`)
+  tenv.DB.prepare(`SELECT burst_seen, updated_at, is_final FROM vote_sets WHERE event_id = ?`)
     .bind(eventId)
-    .first<{ flood_seen: number; updated_at: string; is_final: number }>();
+    .first<{ burst_seen: number; updated_at: string; is_final: number }>();
 
 const nowIso = () => new Date().toISOString();
 async function ok<T>(p: Promise<{ ok: boolean } & T>): Promise<void> {
@@ -202,9 +203,9 @@ afterEach(() => {
 
 describe('the flag', () => {
   test('the column is a 0-or-1 flag, 0 by default', async () => {
-    expect((await row(EV))?.flood_seen).toBe(0);
+    expect((await row(EV))?.burst_seen).toBe(0);
     await expect(
-      run(`UPDATE vote_sets SET flood_seen = 2 WHERE event_id = ?`, EV)
+      run(`UPDATE vote_sets SET burst_seen = 2 WHERE event_id = ?`, EV)
     ).rejects.toThrow();
   });
 
@@ -212,14 +213,14 @@ describe('the flag', () => {
     const limiter = fakeLimiter(3);
     const e = scanEnv(limiter);
     for (let i = 0; i < 3; i++) expect(hasPass(await scan(EV, e))).toBe(true);
-    expect((await row(EV))?.flood_seen).toBe(0);
-    expect((await readVoteSet(tenv.DB, EV))?.flood_seen).toBe(false);
+    expect((await row(EV))?.burst_seen).toBe(0);
+    expect((await readVoteSet(tenv.DB, EV))?.burst_seen).toBe(false);
     // The fourth pass in the window trips it. Detection only: it still gets its pass.
     expect(hasPass(await scan(EV, e))).toBe(true);
-    expect((await row(EV))?.flood_seen).toBe(1);
-    expect((await readVoteSet(tenv.DB, EV))?.flood_seen).toBe(true);
+    expect((await row(EV))?.burst_seen).toBe(1);
+    expect((await readVoteSet(tenv.DB, EV))?.burst_seen).toBe(true);
     // Another event's set is untouched.
-    expect((await row(EV_2))?.flood_seen).toBe(0);
+    expect((await row(EV_2))?.burst_seen).toBe(0);
   });
 
   test('every minted pass counts, a renewal by the same browser included', async () => {
@@ -228,7 +229,7 @@ describe('the flag', () => {
     const same = freshCookie();
     for (let i = 0; i < 3; i++) expect(hasPass(await scan(EV, e, same))).toBe(true);
     expect(limiter.keys).toEqual([voteFloodKey(EV), voteFloodKey(EV), voteFloodKey(EV)]);
-    expect((await row(EV))?.flood_seen).toBe(1);
+    expect((await row(EV))?.burst_seen).toBe(1);
   });
 
   test('a scan that mints no pass does not count', async () => {
@@ -236,24 +237,24 @@ describe('the flag', () => {
     await ok(closeVoteSet(tenv.DB, EV, nowIso()));
     expect(hasPass(await scan(EV, scanEnv(limiter)))).toBe(false);
     expect(limiter.keys).toEqual([]);
-    expect((await row(EV))?.flood_seen).toBe(0);
+    expect((await row(EV))?.burst_seen).toBe(0);
   });
 
   test('the write keeps no time: updated_at does not move', async () => {
     await run(`UPDATE vote_sets SET updated_at = '2000-01-01 00:00:00' WHERE event_id = ?`, EV);
     await scan(EV, scanEnv(fakeLimiter(0)));
-    expect(await row(EV)).toMatchObject({ flood_seen: 1, updated_at: '2000-01-01 00:00:00' });
+    expect(await row(EV)).toMatchObject({ burst_seen: 1, updated_at: '2000-01-01 00:00:00' });
   });
 
   test('a close and a reopen do not clear it, and final keeps it', async () => {
     await scan(EV, scanEnv(fakeLimiter(0)));
     await ok(closeVoteSet(tenv.DB, EV, nowIso()));
     await ok(reopenVoteSet(tenv.DB, EV, PEPPER, nowIso()));
-    expect((await row(EV))?.flood_seen).toBe(1);
+    expect((await row(EV))?.burst_seen).toBe(1);
     await ok(closeVoteSet(tenv.DB, EV, nowIso()));
     await ok(adminFinalizeVoteSet(tenv.DB, EV, nowIso()));
-    expect(await row(EV)).toMatchObject({ flood_seen: 1, is_final: 1 });
-    expect((await readVoteSet(tenv.DB, EV))?.flood_seen).toBe(true);
+    expect(await row(EV)).toMatchObject({ burst_seen: 1, is_final: 1 });
+    expect((await readVoteSet(tenv.DB, EV))?.burst_seen).toBe(true);
   });
 
   test('the write never touches a final set', async () => {
@@ -261,7 +262,7 @@ describe('the flag', () => {
     await ok(adminFinalizeVoteSet(tenv.DB, EV, nowIso()));
     const res = await run(MARK_FLOOD_SQL, EV);
     expect(res.meta.changes).toBe(0);
-    expect((await row(EV))?.flood_seen).toBe(0);
+    expect((await row(EV))?.burst_seen).toBe(0);
   });
 
   test('past the limit the flag is written once per isolate, not once per pass', async () => {
@@ -275,7 +276,7 @@ describe('the flag', () => {
 describe('who sees it', () => {
   test('before final, no public answer carries it: the voter page and the public result', async () => {
     await scan(EV, scanEnv(fakeLimiter(0)));
-    expect((await row(EV))?.flood_seen).toBe(1);
+    expect((await row(EV))?.burst_seen).toBe(1);
     expect(await readPublicVoteResult(tenv.DB, EV)).toBeNull();
     const html = await votePage(EV);
     expect(html).not.toContain('vote-result-padded');
@@ -286,18 +287,52 @@ describe('who sees it', () => {
     expect(await votePage(EV)).not.toContain(PADDED_WORDS);
   });
 
-  test('after final, the result says it may be padded; a night with no flood does not', async () => {
+  test("after final, a burst alone never marks the public result: it is the host's alarm only", async () => {
+    // Owner, decision card 2026-11-26, "Room check only, show room size".
     await scan(EV, scanEnv(fakeLimiter(0)));
+    expect((await readVoteSet(tenv.DB, EV))?.burst_seen).toBe(true);
     for (const id of [EV, EV_2]) {
       await ok(closeVoteSet(tenv.DB, id, nowIso()));
       await ok(adminFinalizeVoteSet(tenv.DB, id, nowIso()));
     }
-    expect(await readPublicVoteResult(tenv.DB, EV)).toMatchObject({ padded: true });
+    expect(await readPublicVoteResult(tenv.DB, EV)).toMatchObject({ padded: false });
     expect(await readPublicVoteResult(tenv.DB, EV_2)).toMatchObject({ padded: false });
-    const flooded = await votePage(EV);
-    expect(flooded).toContain('data-testid="vote-result-padded"');
-    expect(flooded).toContain(PADDED_WORDS);
-    expect(await votePage(EV_2)).not.toContain(PADDED_WORDS);
+    const burst = await votePage(EV);
+    expect(burst).not.toContain('vote-result-padded');
+    expect(burst).not.toContain(PADDED_WORDS);
+    expect(burst).not.toMatch(/burst/i);
+    // The host still sees it after final.
+    expect((await readVoteSet(tenv.DB, EV))?.burst_seen).toBe(true);
+    expect((await readVoteSet(tenv.DB, EV))?.flood_seen).toBe(false);
+  });
+});
+
+describe('the public result after final (owner, 2026-11-26: "Room check only, show room size")', () => {
+  test("the room check's flag says may be padded; every final result shows the room size the host gave", async () => {
+    for (const id of [EV, EV_2]) await ok(closeVoteSet(tenv.DB, id, nowIso()));
+    // As the room check at final would (vote-integrity.spec.ts drives the real check).
+    await run(`UPDATE vote_sets SET flood_seen = 1 WHERE event_id = ?`, EV);
+    for (const id of [EV, EV_2]) await ok(adminFinalizeVoteSet(tenv.DB, id, nowIso()));
+    expect(await readPublicVoteResult(tenv.DB, EV)).toMatchObject({ padded: true, room_size: 200 });
+    expect(await readPublicVoteResult(tenv.DB, EV_2)).toMatchObject({
+      padded: false,
+      room_size: 200,
+    });
+    const flagged = await votePage(EV);
+    expect(flagged).toContain('data-testid="vote-result-padded"');
+    expect(flagged).toContain(PADDED_WORDS);
+    expect(flagged).toContain('data-testid="vote-result-room"');
+    expect(flagged).toContain(roomSizeWords(200));
+    const clean = await votePage(EV_2);
+    expect(clean).not.toContain(PADDED_WORDS);
+    expect(clean).toContain(roomSizeWords(200));
+  });
+
+  test('before final the room size is in no public answer', async () => {
+    expect(await readPublicVoteResult(tenv.DB, EV)).toBeNull();
+    const html = await votePage(EV);
+    expect(html).not.toContain('vote-result-room');
+    expect(html).not.toContain(roomSizeWords(200));
   });
 });
 
@@ -347,7 +382,7 @@ describe('fail-safe: detection never blocks a vote', () => {
 
   test('no binding: the pass stands, nothing is flagged', async () => {
     for (let i = 0; i < 3; i++) expect(hasPass(await scan(EV, scanEnv(undefined)))).toBe(true);
-    expect((await row(EV))?.flood_seen).toBe(0);
+    expect((await row(EV))?.burst_seen).toBe(0);
   });
 
   test('a binding that throws: the pass stands, nothing is flagged', async () => {
@@ -357,7 +392,7 @@ describe('fail-safe: detection never blocks a vote', () => {
       },
     };
     expect(hasPass(await scan(EV, scanEnv(broken)))).toBe(true);
-    expect((await row(EV))?.flood_seen).toBe(0);
+    expect((await row(EV))?.burst_seen).toBe(0);
   });
 
   test('a D1 error on the flag write: noteVotePassMinted answers false and does not throw', async () => {

@@ -20,8 +20,8 @@
  *      "Publish the event to open voting."; once the event is Published it opens.
  *   7. OSE-2140: the room's vote code is made from the card, which shows its
  *      `/q` URL (asking for a pass) and its QR, and is replaced from it.
- *   8. OSE-2234: the flood warning is hidden on a normal night and shows, with
- *      no number, when the set answer says a flood was seen.
+ *   8. OSE-2234: the room check warning and the host-only burst warning are
+ *      hidden on a normal night and show, with no number, when the set says so.
  *   9. The room size: voting does not open without it, and once open it is
  *      shown as fixed and no longer asked for (2026-11-26).
  *
@@ -308,8 +308,9 @@ test.describe('admin: the Voting card', () => {
     expect(text).not.toMatch(/\d+\s*votes?\b/i);
     expect(text).not.toMatch(/\bvotes?\s*:\s*\d/i);
     expect(text).not.toMatch(/fewer than 5|withheld|margin|floor/i);
-    // OSE-2234: a night with no flood shows no flood warning.
+    // OSE-2234: a night with no flag shows neither warning.
     await expect(page.getByTestId('votes-flood')).toBeHidden();
+    await expect(page.getByTestId('votes-burst')).toBeHidden();
   });
 
   test('the flood warning: shown, with no number, when the set says a flood was seen (OSE-2234)', async ({
@@ -322,14 +323,22 @@ test.describe('admin: the Voting card', () => {
     await page.route(`**/api/v2/admin/events/${eventId}/votables`, async (route) => {
       const res = await route.fetch();
       const body = (await res.json()) as { set?: Record<string, unknown> };
-      if (body.set) body.set.flood_seen = true;
+      if (body.set) {
+        body.set.flood_seen = true;
+        body.set.burst_seen = true;
+      }
       await route.fulfill({ response: res, json: body });
     });
     await openCard(page);
     const warn = page.getByTestId('votes-flood');
     await expect(warn).toBeVisible();
-    await expect(warn).toContainText('Results will say they may be padded');
+    await expect(warn).toContainText('the result says it may be padded');
     expect(await warn.innerText()).not.toMatch(/\d/);
+    // The burst alarm is the host's only (owner, 2026-11-26).
+    const burst = page.getByTestId('votes-burst');
+    await expect(burst).toBeVisible();
+    await expect(burst).toContainText('Only you see this');
+    expect(await burst.innerText()).not.toMatch(/\d/);
     for (const colorScheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme });
       const results = await new AxeBuilder({ page })

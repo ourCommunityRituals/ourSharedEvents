@@ -111,14 +111,16 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 
 ```sql
 -- 0122: vote integrity (OSE-2234, OSE ADR-040 decision 6, amended
--- 2026-11-26): vote_sets.flood_seen, a one-way flag that the night looked
--- padded, and vote_sets.room_size, the room size the host gave at the first
--- open; plus two triggers, vote_sets_flood_one_way (the flag never goes back
+-- 2026-11-26): vote_sets.flood_seen, a one-way flag set by the room check at
+-- final (public: the result may be padded), vote_sets.burst_seen, a one-way
+-- flag set by the per-minute alarm (the host's only), and vote_sets.room_size,
+-- the room size the host gave at the first open; plus three triggers,
+-- vote_sets_flood_one_way and vote_sets_burst_one_way (neither flag goes back
 -- to 0) and vote_sets_room_size_fixed (the room size never changes once set).
--- Additive: two columns (default 0 and null) and two triggers. No row is
--- written or rewritten.
+-- Additive: three columns (defaults 0, null and 0) and three triggers. No row
+-- is written or rewritten.
 -- THE ROLLBACK IS: revert the Worker and LEAVE THE COLUMNS AND TRIGGERS. The
--- older Worker never reads or writes either column, so the triggers never
+-- older Worker never reads or writes any of these columns, so the triggers never
 -- fire for it; a flag or room size already set stays in its row and shows
 -- again when this Worker returns. Note: the older Worker opens a set with no
 -- room size (null), and such a set is not room-checked at final. SQLite

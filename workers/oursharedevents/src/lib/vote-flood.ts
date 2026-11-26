@@ -14,7 +14,14 @@
  * wrangler.toml), keyed by `vote-flood:` and the event id only, for one
  * 60-second window, in memory at the Cloudflare location. Past
  * VOTE_FLOOD_PASSES_PER_MINUTE the binding answers `success: false`, and the
- * set's flood_seen turns to 1, once.
+ * set's burst_seen turns to 1, once.
+ *
+ * THE HOST'S ALARM, NOT THE PUBLIC'S (owner, decision card 2026-11-26, "Room
+ * check only, show room size"). burst_seen is shown in the admin Voting card
+ * only. One browser re-scanning fast, or a large honest room arriving at once,
+ * can trip it (CCR loops 1 to 3), so it never marks a public result. The
+ * public "may be padded" line comes only from the room check at final
+ * (flood_seen, lib/vote-results.ts ROOM_CHECK_UPDATE).
  *
  * WHY THE BINDING, NOT KV (the story's first sketch). A KV counter takes one
  * write per pass on one key, and KV refuses more than one write a second to a
@@ -77,8 +84,8 @@ export function voteFloodKey(eventId: string): string {
  * final and not flagged yet, and touches no other column (no updated_at, so
  * the hour of the flood is not kept).
  */
-export const MARK_FLOOD_SQL = `UPDATE vote_sets SET flood_seen = 1
-  WHERE event_id = ? AND flood_seen = 0 AND is_final = 0`;
+export const MARK_FLOOD_SQL = `UPDATE vote_sets SET burst_seen = 1
+  WHERE event_id = ? AND burst_seen = 0 AND is_final = 0`;
 
 // Events this isolate has already flagged, so a flood past the limit does not
 // write once per pass. Bounded: a long-lived isolate forgets the oldest.
