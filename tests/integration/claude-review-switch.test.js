@@ -178,6 +178,43 @@ describe('claude-review.yml @claude respond loads no in-repo settings (OSE-2231)
   });
 });
 
+// AI Problems Index assessment (2026-11-26): a review that did not run must
+// not show green. ourWKRP's review was green with zero tokens on every PR.
+function reviewShowsGreenOnFailure(job) {
+  if (job['continue-on-error'] === true) return true;
+  const steps = job.steps || [];
+  const at = steps.findIndex((s) =>
+    String(s.uses || '').startsWith('anthropics/claude-code-action@')
+  );
+  const step = steps[at];
+  if (step['continue-on-error'] !== true) return false;
+  if (!step.id) return true;
+  return !steps
+    .slice(at + 1)
+    .some(
+      (s) =>
+        String(s.if || '').includes(`steps.${step.id}.outcome == 'failure'`) &&
+        /\bexit 1\b/.test(String(s.run || ''))
+    );
+}
+
+describe('claude-review.yml: a review that did not run goes red, not green', () => {
+  it('the review job has no job-level continue-on-error and fails after a failed action step', () => {
+    expect(reviewShowsGreenOnFailure(review)).toBe(false);
+  });
+
+  it('the check would fail on the old job (born red)', () => {
+    const old = JSON.parse(JSON.stringify(review));
+    old['continue-on-error'] = true;
+    expect(reviewShowsGreenOnFailure(old)).toBe(true);
+    const noFailStep = JSON.parse(JSON.stringify(review));
+    noFailStep.steps = noFailStep.steps.filter(
+      (s) => s.name !== 'Fail when the review did not run'
+    );
+    expect(reviewShowsGreenOnFailure(noFailStep)).toBe(true);
+  });
+});
+
 describe('claude-review.yml reviewer instructions come from the base branch', () => {
   const NAME = 'Reviewer instructions from base branch';
   const idx = (pred) => review.steps.findIndex(pred);
