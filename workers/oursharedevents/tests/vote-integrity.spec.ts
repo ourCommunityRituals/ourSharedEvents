@@ -352,12 +352,22 @@ describe('the room size has a ceiling the host cannot set (owner, 2026-11-26)', 
     expect(await openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 100)).toMatchObject({
       code: 'VENUE_NEEDED',
     });
+    // A venue the platform has not set up (a host-made look-alike of a capped
+    // venue) does not open voting either (CCR loop 6, F2; owner card
+    // 2026-11-26, "Yes, platform sets each venue first").
     await atVenue(EV, null, null);
+    expect(await openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 100)).toMatchObject({
+      ok: false,
+      status: 409,
+      code: 'VENUE_NOT_SET_UP',
+    });
+    expect(await setRow(EV)).toMatchObject({ room_size: null });
+    await atVenue(EV, 'outdoor', null);
     await ok(openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 100));
   });
 
-  test('SECURITY | a venue with no limit set: 500 at most; over it is refused and nothing opens', async () => {
-    await atVenue(EV, null, null);
+  test('SECURITY | outdoors with no permit limit: 500 at most; over it is refused and nothing opens', async () => {
+    await atVenue(EV, 'outdoor', null);
     expect(ROOM_CEILING_DEFAULT).toBe(500);
     const over = await openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 501);
     expect(over).toMatchObject({ ok: false, code: 'ROOM_SIZE_OVER_CEILING' });

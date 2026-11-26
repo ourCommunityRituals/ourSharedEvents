@@ -1,0 +1,35 @@
+info:
+  name: OSE-2234 | open | a second song cannot run a different length
+  type: http
+  seq: 73
+
+# Song one opened at 136 s (70). Nothing opens here; 74 opens song two at 136 s.
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteNightId}}/votables/objects/{{voteSongTwoId}}/open"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"window_seconds\": 60}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2234 open: 409 WINDOW_LENGTH_FIXED, every song runs the first song\'s length', function () { expect(res.getStatus()).to.eql(409); expect(b.code).to.eql('WINDOW_LENGTH_FIXED'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0122; the entries below do not cover every migration after 0083, see the note at 0104)
+- `DB` — main / anonymous public surface (highest migration: 0123; the entries below do not cover every migration after 0083, see the note at 0104)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -110,6 +110,19 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0123: vote windows (OSE-2234, OSE ADR-040, owner card 2026-11-26: windows
+-- run their full length): vote_sets.opened_at, the hour the set first opened
+-- (the 30-day backstop that makes a set final), and votable_objects.
+-- window_seconds, the length a song's window opened at (one length per kind
+-- per set; CHECK NULL or 30 to 43200). No trigger (0025): the T0 gate
+-- votes-never-who keeps both written once. Additive: two columns, both null.
+-- No row is written or rewritten.
+-- THE ROLLBACK IS: revert the Worker and LEAVE THE COLUMNS. The older Worker
+-- never reads or writes them. Note: it lets a closed window open again and a
+-- second length run in one set, and a set it opens has opened_at null, so no
+-- 30-day backstop applies to that set when this Worker returns. SQLite cannot
+-- drop a column with a CHECK; leave them.
+
 -- 0122: vote integrity (OSE-2234, OSE ADR-040 decision 6, amended
 -- 2026-11-26): vote_sets.flood_seen, a one-way flag set by the room check at
 -- final (public: the result may be padded), vote_sets.burst_seen, a one-way
