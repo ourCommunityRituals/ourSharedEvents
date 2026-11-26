@@ -5,8 +5,7 @@
  * and records every request they make. Phone first, WCAG 2.0, 2.1 and 2.2 at
  * levels A and AA, as for the voter page.
  *
- * Red-team ids name the attack each case stands against; the threat model is
- * docs/security/THREAT-MODEL-voting-red-blue-2026-11-26.md.
+ * Case ids map to the owner's private security review.
  *
  * Mandatory: listed in the T0 Gate (component) step of oursharedevents-ci.yml
  * beside voter-page.component.spec.ts.

@@ -247,7 +247,7 @@ This decision opens the same engine to any event or market. It changes no table,
 
 ### 13. The Access Pass and the Online Pick
 
-**Owner, 2026-11-26** (project thread on voting from outside the room, relayed by the coordinator): "If 'Online Pick' means voting from outside the room, please check it with Matt before building it. I give permission." The design is OCR-docs PR #200; the red team and blue team review is `docs/security/THREAT-MODEL-voting-red-blue-2026-11-26.md`.
+**Owner, 2026-11-26** (project thread on voting from outside the room, relayed by the coordinator): "If 'Online Pick' means voting from outside the room, please check it with Matt before building it. I give permission." The design is OCR-docs PR #200; the security review is held privately by the owner.
 
 **How this sits with the in-room rule** (decision 6, amended the same day). The Room Pick stays in the room: no host, sponsor, brand or tier setting can open it to the link. Decision 13 adds two narrow exceptions the owner allowed by name, and nothing else: the Access Pass, which is capped, given one by one by the host, and counts the same as a person in the room; and the Online Pick, which is a separate result and never changes the Room Pick. The owner approved this reading in OCR-docs PR #200 (merged), which designs both.
 
@@ -263,7 +263,7 @@ The night's official result is now called the **Room Pick**. It is decided exact
   - The way in is `/q/crowd/:eventId`, so the cookie stays on `/q` (AGENTS.md invariant 4).
   - Its page says: "Anyone can vote here, so this can be gamed. That's why it's for fun and never the official result." The result page shows the Room Pick first.
   - No bot check (the proposal's default): a bot check would add a third party and still not make it official.
-  - The host, and only the host, sees a flag when the Online Pick looks gamed: more links opened in one minute than a full room would, or more than twice the room size of Online Pick voters. It carries no number and refuses no vote.
+  - The host, and only the host, sees a flag when the Online Pick looks gamed. It carries no number and refuses no vote.
 - **The vote route is limited per caller** (found in the review): 600 votes a minute per caller on each vote route, then 429. The address is a bucket key only.
 
 Migration 0124. Still the owner's to confirm (built on the proposal's defaults): the cap of 4, or one that grows with room size; the Access Pass on for every event by default; and no bot check on the Online Pick.

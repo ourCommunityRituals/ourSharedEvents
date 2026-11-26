@@ -5,8 +5,7 @@
  * rule is the model in tests/helpers/vote-outcome-model.ts, which
  * tests/vote-outcome-differential.spec.ts checks against the product's SQL.
  *
- * The numbers here are the ones in docs/security/THREAT-MODEL-voting-red-blue-2026-11-26.md
- * (section "What the simulations show"). `VOTE_SIM_PRINT=1` prints the tables.
+ * `VOTE_SIM_PRINT=1` prints the tables.
  *
  * Red-team ids: RT-AP-11 (a host's Access Passes boost a song), RT-AP-12
  * (Access Passes bury a winner), RT-RP-04 ("not for me" stuffing), RT-RP-05

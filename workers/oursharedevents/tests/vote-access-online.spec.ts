@@ -1,8 +1,8 @@
 /**
  * The Access Pass and the Online Pick (OSE ADR-040 decision 13), and the vote
  * route's limit (decision 5). Workers pool, real D1 (migrations to 0124), the
- * real router. Red-team ids (RT-…) name the attack each case stands against;
- * the threat model is docs/security/THREAT-MODEL-voting-red-blue-2026-11-26.md.
+ * real router. Case ids (RT-…) map to the owner's
+ * private security review.
  *
  * Each case names, in brackets, the fault it was seen failing on first.
  *
