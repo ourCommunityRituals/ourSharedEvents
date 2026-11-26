@@ -33,6 +33,8 @@
 // @born-red landing hexagon links are touch targets (OSE-2084) | method: the six tests seen failing on the source as it was (a staging hexagon link: 28.1 px at 320 px), then 16 faults injected one at a time, each put back (the floor at 30 px; the taller box never used, used though it cuts an area, without its 480 px floor, without slice, without data-tall, its rule removed, its rule 4/3; one step too early; small hexagons linked at every width; hexagons under the last step linked; the plain copy dropped; the link style not sent; its third step at 700 px; the linked copies not hidden first; "Tap a hexagon" always said); each turned this file red. Then StrykerJS on src/lib/attendee-map.ts: 18 mutants of the new code survived the first run (the name's reach on each side, the box holding an area on each side, a row of five linked from 480 px, large hexagons keeping the whole frame); each is killed now, by the test that names it | date: 2026-11-15
 // @born-red attendee-map mutants | method: StrykerJS mutants of src/lib/attendee-map.ts, each new test seen failing against the mutant it kills (status Killed in the report) | date: 2026-11-09
 import { PAN_SCRIPT } from '../src/lib/map-pan-script';
+import { TIP_SCRIPT } from '../src/lib/map-tip-script';
+import { TIP_STYLE } from '../src/lib/map-tip-style';
 import { PAN_STYLE } from '../src/lib/map-pan-style';
 import { LABEL_STYLE } from '../src/lib/map-label-style';
 import { describe, expect, test } from 'vitest';
@@ -625,8 +627,14 @@ describe('the hexagons link to their areas', () => {
       zoomHref: href,
     }).html;
     for (const cell of [CELL, NEAR]) {
+      // The map's own tooltip (lib/map-tip-script.ts) says what the <title> says.
+      const tip = html.match(
+        new RegExp(`data-cell="${cell}" data-count="1" data-tip="([^"]+)"`)
+      )?.[1];
+      expect(tip).toMatch(/^Area \d.*: 1 event$/);
+      expect(html).toContain(`<title>${tip}</title>`);
       expect(html).toContain(
-        `<g data-testid="amap-area" data-cell="${cell}" data-count="1"><a href="/?zip=60406&amp;area=${cell}" data-testid="amap-area-link">`
+        `<g data-testid="amap-area" data-cell="${cell}" data-count="1" data-tip="${tip}"><a href="/?zip=60406&amp;area=${cell}" data-testid="amap-area-link">`
       );
       expect(html).toContain(
         `<a class="amap-zoom" href="/?zip=60406&amp;area=${cell}" data-testid="amap-zoom">Zoom in</a>`
@@ -818,9 +826,9 @@ describe('design budget', () => {
     );
     expect(landing).not.toContain('preserveAspectRatio');
     // The narrow style comes after the other blocks, so its sizes are the ones used.
-    expect(landing).toContain(`${MAP_STYLE}${ZOOM_STYLE}${NARROW_MAP_STYLE}\n`);
+    expect(landing).toContain(`${MAP_STYLE}${ZOOM_STYLE}${NARROW_MAP_STYLE}${TIP_STYLE}\n`);
     const plain = renderAttendeeMap(two(), { now: NOW, area: { count: 10, min: 10 } }).html;
-    expect(plain).toContain(`${MAP_STYLE}${NARROW_MAP_STYLE}\n`);
+    expect(plain).toContain(`${MAP_STYLE}${NARROW_MAP_STYLE}${TIP_STYLE}\n`);
   });
 
   test('what the taller box shows holds the whole area and every dot target', () => {
@@ -1034,7 +1042,7 @@ describe('design budget', () => {
     const html = landingOver([...STAGING_AREAS, FIXTURE_AREA]);
     const twice = [
       ...html.matchAll(
-        /<g data-testid="amap-area" data-cell="([0-9a-f]{15})" data-count="1"><a class="amap-w3" href="\/\?area=([0-9a-f]{15})" data-testid="amap-area-link">(.*?)<\/a><g class="amap-n3">(.*?)<\/g><\/g>/g
+        /<g data-testid="amap-area" data-cell="([0-9a-f]{15})" data-count="1" data-tip="[^"]+"><a class="amap-w3" href="\/\?area=([0-9a-f]{15})" data-testid="amap-area-link">(.*?)<\/a><g class="amap-n3">(.*?)<\/g><\/g>/g
       ),
     ];
     expect(twice).toHaveLength(11);
@@ -1294,8 +1302,9 @@ describe('the place panel under the map', () => {
 
   test('rainy: no origin (no request) means no Share button and no script; the panel still works', () => {
     const html = zoomed([ev('a')]).html;
-    // The map's own zoom script (lib/map-pan-script.ts) is the only script.
-    expect(html.split(PAN_SCRIPT).join('')).not.toContain('<script');
+    // The map's own zoom and tooltip scripts (lib/map-pan-script.ts,
+    // lib/map-tip-script.ts) are the only scripts.
+    expect(html.split(PAN_SCRIPT).join('').split(TIP_SCRIPT).join('')).not.toContain('<script');
     expect(html).not.toContain('share-btn');
     expect(html).toContain('data-testid="amap-open"');
   });
@@ -1409,7 +1418,7 @@ describe('the zoomed area, edge by edge', () => {
       .map((v) => v.toFixed(5))
       .join(',');
     expect(html).toContain(
-      `<a href="#amap-dot-1" class="amap-f amap-d1 type-trivia when-week" data-testid="amap-dot" data-exact="1" data-count="1" data-ll="${ll}">` +
+      `<a href="#amap-dot-1" class="amap-f amap-d1 type-trivia when-week" data-testid="amap-dot" data-exact="1" data-count="1" data-ll="${ll}" data-tip="Event solo">` +
         '<title>Event solo</title>' +
         `<circle class="amap-hit" cx="${x}" cy="${y}" r="39" fill-opacity="0"/>` +
         `<circle class="amap-dot" cx="${x}" cy="${y}" r="17"/>` +
@@ -1443,10 +1452,10 @@ describe('the zoomed area, edge by edge', () => {
         .map((v) => v.toFixed(5))
         .join(',');
     expect(html).toContain(
-      `<a href="#amap-dot-1" class="amap-f amap-d1 amap-blk" data-testid="amap-dot" data-exact="0" data-count="1" data-ll="${ll(far.lat, far.lon)}"><title>Event n</title>`
+      `<a href="#amap-dot-1" class="amap-f amap-d1 amap-blk" data-testid="amap-dot" data-exact="0" data-count="1" data-ll="${ll(far.lat, far.lon)}" data-tip="Event n"><title>Event n</title>`
     );
     expect(html).toContain(
-      `</a><a href="#amap-dot-2" class="amap-f amap-d2" data-testid="amap-dot" data-exact="1" data-count="2" data-ll="${ll(RIPH.lat, RIPH.lon)}"><title>Spot 2: 2 events</title>`
+      `</a><a href="#amap-dot-2" class="amap-f amap-d2" data-testid="amap-dot" data-exact="1" data-count="2" data-ll="${ll(RIPH.lat, RIPH.lon)}" data-tip="Spot 2: 2 events"><title>Spot 2: 2 events</title>`
     );
     // No text list sits between the drawing and the caption, only the anchor.
     expect(html).not.toContain('data-testid="amap-legend-dot"');
@@ -1484,7 +1493,7 @@ describe('the zoomed area, edge by edge', () => {
       '<p class="amap-credit" data-testid="amap-credit">Datos del mapa de calles © colaboradores de <a href="https://www.openstreetmap.org/copyright/es">OpenStreetMap</a>, preparados por <a href="https://protomaps.com">Protomaps</a>.</p>'
     );
     expect(html).toContain(
-      `${MAP_STYLE}${ZOOM_STYLE}${STREET_STYLE}${LABEL_STYLE}${PAN_STYLE}${NARROW_MAP_STYLE}\n`
+      `${MAP_STYLE}${ZOOM_STYLE}${STREET_STYLE}${LABEL_STYLE}${PAN_STYLE}${NARROW_MAP_STYLE}${TIP_STYLE}\n`
     );
     expect(caption(html)).toBe(
       `1 event in this area over the next ${CORRIDOR_WINDOW_DAYS} days. A solid dot is a named place, shown on its block; a pale dot marks only its block.`

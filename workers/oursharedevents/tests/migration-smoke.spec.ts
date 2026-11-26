@@ -44,6 +44,7 @@ const DB_TABLES = [
   'admin_brand_memberships', // 0050 (OSE-666/B2 identity→brand+role membership)
   'anon_id_returns', // 0031 (OSE-272 SharedReport pipeline)
   'bigquery_export_state', // 0035 (OSE-272 Session 4 BigQuery export watermark)
+  'brand_addons', // 0121 (OSE-2232 — paid add-ons the platform turned on for a brand; no person column)
   'brand_parents', // 0118 (OSE-1553 — the parent of a brand; no person column)
   'business_type_category_map', // 0059 (OSE-730 Sponsor Onboarding — step-5 smart default)
   'campaigns', // 0039 (campaigns metadata table — enterprise sponsor comparison)

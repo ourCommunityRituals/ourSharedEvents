@@ -1,0 +1,14 @@
+info:
+  name: Page layouts and the vote screen (OSE-2232 OSE-2226)
+  type: folder
+request: {}
+docs: |-
+  Report skins and the host's vote screen (OSE-2232, OSE-2226). A layout
+  arranges a page's parts (lib/layout-skins.ts); it never recolors and never
+  hides a part. Seq 30 is the solution engineer's path: a .md skin file sent
+  to an event (lib/layout-skin-md.ts). Seq 40 shows a file that claims a skin
+  it does not match is refused in words. Seq 50 to 70 read the vote screen:
+  no code yet, then the code's QR and "Scan to vote" once it is made (staging
+  has voting on). Seq 10 makes one synthetic draft event and seq 905 archives it.
+  Mock-layer twin: workers/oursharedevents/tests/vote-screen-layouts.spec.ts
+  and tests/layout-skins.spec.ts.

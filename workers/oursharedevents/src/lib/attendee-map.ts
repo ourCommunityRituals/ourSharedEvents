@@ -123,6 +123,8 @@ import {
 import { LABEL_STYLE } from './map-label-style.js';
 import { PAN_STYLE } from './map-pan-style.js';
 import { PAN_SCRIPT } from './map-pan-script.js';
+import { TIP_SCRIPT } from './map-tip-script.js';
+import { TIP_STYLE } from './map-tip-style.js';
 
 export interface AttendeeMapItem {
   id?: unknown;
@@ -544,7 +546,9 @@ function svgFor(
       const where = streets
         ? ` data-ll="${cellPoint(a.cell)}" data-name="${escapeHtml(a.name || String(a.n))}"`
         : '';
-      return `<g${areaClassAttr(a, filterClasses)} data-testid="amap-area" data-cell="${a.cell}" data-count="${k}"${where}>${inner}</g>`;
+      // The same words for the map's own tooltip (lib/map-tip-script.ts), which
+      // keeps clear of the pointer and shows on a press and hold on a phone.
+      return `<g${areaClassAttr(a, filterClasses)} data-testid="amap-area" data-cell="${a.cell}" data-count="${k}"${where} data-tip="${escapeHtml(label)}">${inner}</g>`;
     })
     .join('');
   const cut = tall ? ' preserveAspectRatio="xMidYMid slice"' : '';
@@ -848,7 +852,7 @@ function zoomSvg(cell: string, dots: MapDot[], lang: Lang, streets: string, name
       // The place's own point (its res-9 cell's centre, the point it is drawn at),
       // for the distance the map's script works out on the phone.
       return (
-        `<a href="${dotHref(d)}" class="${escapeHtml(cls)}" data-testid="amap-dot" data-exact="${d.exact ? 1 : 0}" data-count="${d.events.length}" data-ll="${cellPoint(d.cell)}">` +
+        `<a href="${dotHref(d)}" class="${escapeHtml(cls)}" data-testid="amap-dot" data-exact="${d.exact ? 1 : 0}" data-count="${d.events.length}" data-ll="${cellPoint(d.cell)}" data-tip="${escapeHtml(title)}">` +
         `<title>${escapeHtml(title)}</title>` +
         `<circle class="amap-hit" cx="${fx(x)}" cy="${fx(y)}" r="${DOT_HIT_R}" fill-opacity="0"/>` +
         `<circle class="amap-dot" cx="${fx(x)}" cy="${fx(y)}" r="${DOT_R}"/>` +
@@ -927,12 +931,12 @@ function renderZoom(
   }));
   const panels = renderPlacePanels(places, { lang, sponsorTitles, ...panel });
   const html = `<div class="amap-wrap" data-testid="amap-wrap"><figure class="amap" data-testid="amap" data-zoom="${cell}"${streets ? ' data-pan' : ''}>
-              ${MAP_STYLE}${ZOOM_STYLE}${streets ? STREET_STYLE + LABEL_STYLE + PAN_STYLE : ''}${NARROW_MAP_STYLE}
+              ${MAP_STYLE}${ZOOM_STYLE}${streets ? STREET_STYLE + LABEL_STYLE + PAN_STYLE : ''}${NARROW_MAP_STYLE}${streets ? TIP_STYLE : ''}
               ${back}
               ${drawing}${streets ? panControls(lang, true) : ''}
               ${zoomLegend()}
               <figcaption id="amap-caption" data-testid="amap-caption">${caption}</figcaption>${credit}
-            </figure>${panels}</div>${streets ? PAN_SCRIPT : ''}`;
+            </figure>${panels}</div>${streets ? PAN_SCRIPT + TIP_SCRIPT : ''}`;
   return { html, state: 'map', count: inArea.length, areas: [{ ...area, n: 1 }] };
 }
 
@@ -1034,10 +1038,10 @@ export function renderAttendeeMap(
         ? ` ${msg(lang, 'map.tapToZoom')}`
         : ` <span class="amap-w${map.links}" data-testid="amap-tap">${msg(lang, 'map.tapToZoom')}</span>`;
   const html = `<figure class="amap" data-testid="amap"${map.tall ? ' data-tall' : ''}${streets ? ' data-pan' : ''}>
-              ${MAP_STYLE}${streets ? STREET_STYLE + LABEL_STYLE + PAN_STYLE : ''}${opts?.zoomHref ? ZOOM_STYLE : ''}${NARROW_MAP_STYLE}${map.links ? LINK_STYLE : ''}${quiet ? MAP_LIST_STYLE : ''}
+              ${MAP_STYLE}${streets ? STREET_STYLE + LABEL_STYLE + PAN_STYLE : ''}${opts?.zoomHref ? ZOOM_STYLE : ''}${NARROW_MAP_STYLE}${map.links ? LINK_STYLE : ''}${quiet ? MAP_LIST_STYLE : ''}${TIP_STYLE}
               ${map.svg}${streets ? panControls(lang) : ''}
               ${legendFor(drawn, lang, opts?.sponsorTitles, opts?.zoomHref, opts?.filterClasses, !!streets, quiet)}
               <figcaption id="amap-caption" data-testid="amap-caption">${caption}${tap}</figcaption>${credit}
-            </figure>${streets ? PAN_SCRIPT : ''}`;
+            </figure>${streets ? PAN_SCRIPT : ''}${TIP_SCRIPT}`;
   return { html, state: 'map', count, areas: drawn };
 }

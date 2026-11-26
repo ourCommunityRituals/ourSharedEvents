@@ -110,6 +110,15 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0121: brand_addons (OSE-2232, the paid add-ons the platform has turned on
+-- for a brand; today only 'skins'). Additive: one new table, no index, no
+-- column. THE ROLLBACK IS: revert the Worker and LEAVE THE TABLE. The older
+-- Worker never reads it, so every brand may save any layout again, as before.
+--
+-- Surgical reverse, only if the table itself must go (grants are lost; the
+-- platform turns them on again):
+DROP TABLE IF EXISTS brand_addons;
+
 -- 0120: venues, venue_operators, events.host_venue_id (OSE-2221, a venue a
 -- brand owns and the operators who run events there). Additive: two new
 -- tables, one nullable column, three indexes. THE ROLLBACK IS: revert the

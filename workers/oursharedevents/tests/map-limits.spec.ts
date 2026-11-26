@@ -150,7 +150,7 @@ const TAP = 'Tap a hexagon to see its events on the map.';
 function page(html: string, areas: number): { links: 0 | 1 | 2 | 3 | null; tall: boolean } {
   const hexagons = [
     ...html.matchAll(
-      /<g data-testid="amap-area" data-cell="[0-9a-f]{15}" data-count="1">(<a (?:class="amap-w(\d)" )?href="\/\?area=[0-9a-f]{15}" data-testid="amap-area-link">)?/g
+      /<g data-testid="amap-area" data-cell="[0-9a-f]{15}" data-count="1" data-tip="[^"]+">(<a (?:class="amap-w(\d)" )?href="\/\?area=[0-9a-f]{15}" data-testid="amap-area-link">)?/g
     ),
   ].map((m) => (!m[1] ? null : m[2] ? Number(m[2]) : 0));
   expect(hexagons).toHaveLength(areas);

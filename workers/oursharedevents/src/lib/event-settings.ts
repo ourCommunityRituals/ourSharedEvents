@@ -57,6 +57,16 @@
 // write and by the sponsor flip (lib/map-default.ts), and never client-writable:
 // validateSettingsPatch rejects it. Its SQL lives here with the rest of the
 // settings_json readers so the column keeps one home.
+import {
+  LAYOUT_SURFACES,
+  checkLayout,
+  defaultLayout,
+  isLayoutSurface,
+  readLayout,
+  type LayoutSurface,
+  type SurfaceLayout,
+} from './layout-skins';
+
 export const MAP_DEFAULT_KEY = 'mapDefault';
 
 /** SQL (on the events table, optional alias): the map setting is still the default. */
@@ -176,6 +186,8 @@ export type EventSettings = Partial<Record<EventSettingKey, boolean>> & {
   displayDwellSeconds?: number;
   leagueLinks?: LeagueLinks;
   donateLink?: string;
+  /** OSE-2232: how each surface is arranged (lib/layout-skins.ts). */
+  layouts?: Partial<Record<LayoutSurface, SurfaceLayout>>;
 };
 
 /** A stored settings write: like EventSettings, but null clears a key. */
@@ -186,6 +198,8 @@ export type EventSettingsPatch = Partial<Record<EventSettingKey, boolean>> & {
   displayDwellSeconds?: number | null;
   leagueLinks?: Partial<Record<LeagueLinkKind, string | null>> | null;
   donateLink?: string | null;
+  /** OSE-2232: a whole layout per surface; null clears one surface, or all. */
+  layouts?: Partial<Record<LayoutSurface, SurfaceLayout | null>> | null;
 };
 
 const KNOWN = new Set<string>(EVENT_SETTING_KEYS);
@@ -260,9 +274,27 @@ export function parseEventSettings(raw: unknown): EventSettings {
         if (clean) links[kind as LeagueLinkKind] = clean;
       }
       if (Object.keys(links).length) out.leagueLinks = links;
+    } else if (k === 'layouts' && v && typeof v === 'object' && !Array.isArray(v)) {
+      // Lenient: a surface whose stored layout does not read cleanly is
+      // dropped, and that surface takes its standard skin.
+      const layouts: Partial<Record<LayoutSurface, SurfaceLayout>> = {};
+      for (const surface of LAYOUT_SURFACES) {
+        const raw = (v as Record<string, unknown>)[surface];
+        const layout = raw === undefined ? null : readLayout(surface, raw);
+        if (layout) layouts[surface] = layout;
+      }
+      if (Object.keys(layouts).length) out.layouts = layouts;
     }
   }
   return out;
+}
+
+/** A surface's layout: the saved one, or its standard skin. */
+export function resolveLayout(settings: EventSettings, surface: LayoutSurface): SurfaceLayout {
+  const saved = settings.layouts?.[surface];
+  return saved
+    ? { ...saved, order: [...saved.order], wide: [...saved.wide] }
+    : defaultLayout(surface);
 }
 
 /** Is the poster's QR grid shown? Absent or unreadable → yes. */
@@ -377,6 +409,31 @@ export function validateSettingsPatch(
         links[kind as LeagueLinkKind] = clean;
       }
       out.leagueLinks = links;
+    } else if (k === 'layouts') {
+      if (v === null) {
+        out.layouts = null;
+        continue;
+      }
+      if (typeof v !== 'object' || Array.isArray(v)) {
+        return { ok: false, error: 'settings.layouts must be an object' };
+      }
+      const layouts: Partial<Record<LayoutSurface, SurfaceLayout | null>> = {};
+      for (const [surface, layout] of Object.entries(v as Record<string, unknown>)) {
+        if (!isLayoutSurface(surface)) {
+          return {
+            ok: false,
+            error: `settings.layouts.${surface} is not a page that takes a layout (${LAYOUT_SURFACES.join(', ')})`,
+          };
+        }
+        if (layout === null) {
+          layouts[surface] = null;
+          continue;
+        }
+        const checked = checkLayout(surface, layout);
+        if (!checked.ok) return { ok: false, error: checked.error };
+        layouts[surface] = checked.value;
+      }
+      out.layouts = layouts;
     } else {
       return { ok: false, error: `settings.${k} is not a known setting` };
     }

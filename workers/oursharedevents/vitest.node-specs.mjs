@@ -29,6 +29,7 @@ export const NODE_SPECS = [
   // OSE-2225 — the off-limits list is the one home of vote label rules
   // (imports the vote libs and reads src/; no runtime).
   'tests/vote-off-limits.spec.ts',
+  'tests/layout-skins.spec.ts',
   // OSE-1751 — the report's corridor baseline is one chain, shared with the export
   'tests/corridor-baseline-publication.spec.ts',
   // OSE-1752 — the recap's walk-in line reads the same however it is withheld
@@ -192,6 +193,8 @@ export const NODE_SPECS = [
   'tests/street-labels.spec.ts',
   'tests/sunset.spec.ts',
   'tests/map-pan.spec.ts',
+  // The map's own tooltip (owner, 2026-11-25): markup, the script in jsdom, its bans.
+  'tests/map-tip.spec.ts',
   // The landing's filter tabs and distance choice (OSE-2156): the markup, the script in jsdom, its bans.
   'tests/area-tabs.spec.ts',
   'tests/category-slider.spec.ts',

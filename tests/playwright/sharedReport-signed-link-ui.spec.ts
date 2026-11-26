@@ -159,6 +159,56 @@ test.describe('OSE-R-003 — signed-link SharedReport page in browser', () => {
     await expect(page.locator('[data-testid="signed-link-return-rate"]')).toHaveCount(0);
   });
 
+  // OSE-2232: the event's skin moves the report's parts in the DOM, so what is
+  // read and tabbed follows what is seen. No layout reads as it always has.
+  test('OSE-2232 | FE | GET /sharedReport (signed-link) | the event skin moves the parts, in the DOM and on screen', async ({
+    page,
+  }) => {
+    const regions = () =>
+      page
+        .locator('[data-testid="signed-link-report-article"] > [data-region]')
+        .evaluateAll((els) => els.map((e) => e.getAttribute('data-region')));
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await loadSharedReportWithMockedResponse(page, {
+      status: 200,
+      body: { ok: true, report: makeReportFixture() },
+    });
+    await expect(page.locator('[data-testid="signed-link-stats"]')).toBeVisible();
+    expect(await regions()).toEqual(['stats', 'sponsors', 'posters', 'trend']);
+
+    await page.unrouteAll();
+    await loadSharedReportWithMockedResponse(page, {
+      status: 200,
+      body: {
+        ok: true,
+        report: makeReportFixture(),
+        layout: {
+          skin: 'custom',
+          columns: 2,
+          order: ['trend', 'map', 'sponsors', 'stats', 'classes', 'posters', 'locked'],
+          wide: ['trend'],
+        },
+      },
+    });
+    const article = page.locator('[data-testid="signed-link-report-article"]');
+    await expect(article).toHaveAttribute('data-layout-columns', '2');
+    expect(await regions()).toEqual(['trend', 'sponsors', 'stats', 'posters']);
+    // The header stays first; trend runs the full width, stats takes a column.
+    await expect(article.locator('> *').first()).toHaveAttribute(
+      'data-testid',
+      'signed-link-report-header'
+    );
+    const width = async (id: string) =>
+      (await page.locator(`[data-testid="${id}"]`).boundingBox())?.width ?? 0;
+    const full = await width('signed-link-trend-section');
+    expect(await width('signed-link-stats')).toBeLessThan(full * 0.6);
+
+    // A phone reads one column whatever the skin says.
+    await page.setViewportSize({ width: 375, height: 812 });
+    const phoneFull = await width('signed-link-trend-section');
+    expect(await width('signed-link-stats')).toBeGreaterThan(phoneFull * 0.9);
+  });
+
   test('OSE-R-003 | FE | GET /sharedReport (signed-link with valid token) | admin sections are hidden so the page shows ONLY the customer report', async ({
     page,
   }) => {

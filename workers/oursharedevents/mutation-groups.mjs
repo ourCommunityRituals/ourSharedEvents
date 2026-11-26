@@ -45,6 +45,12 @@
 // each), and because every spec that reaches them reaches street-map.ts too
 // (48 of render's 51 specs), so neither job runs a spec render did not run.
 //
+// sponsors was part of render until 2026-11-25. render was back at the edge
+// of its 15 minutes: 14 min 20 s on PR 1555's earlier push (2026-11-24), then
+// cancelled at the limit on its next push, which added one line to pages.ts
+// (the report's layout script). The sponsor art and logo rules are the cut:
+// files of their own, read by the sponsor specs, not the street layer.
+//
 // catalog was part of landing until 2026-11-23. landing had grown to the edge
 // of its 15 minutes: on main that day it took 11 min 52 s (run 45220626203) on
 // a fast runner and 14 min 12 s (45202271951) on a slow one (the dry run alone
@@ -111,9 +117,8 @@ export const MUTATION_GROUPS = Object.freeze({
     'src/handlers/map-areas.ts',
     'src/handlers/pages.ts',
     'src/lib/i18n/language-menu.ts',
-    'src/lib/sponsor-logo.ts',
-    'src/handlers/sponsors.ts',
   ]),
+  sponsors: Object.freeze(['src/lib/sponsor-logo.ts', 'src/handlers/sponsors.ts']),
   forms: Object.freeze(['src/handlers/form-pages.ts', 'src/lib/event-staleness.ts']),
   tiles: Object.freeze(['src/lib/mvt.ts', 'src/lib/pmtiles.ts']),
   // W1 (OSE-2095, 2026-11-16): the ZIP at the Where step and the search that

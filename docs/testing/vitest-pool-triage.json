@@ -2004,6 +2004,13 @@
       "testCount": 1
     },
     {
+      "file": "workers/oursharedevents/tests/layout-skins.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 8
+    },
+    {
       "file": "workers/oursharedevents/tests/legal-footer.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -2135,6 +2142,13 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 17
+    },
+    {
+      "file": "workers/oursharedevents/tests/map-tip.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 18
     },
     {
       "file": "workers/oursharedevents/tests/map-zoom.spec.ts",
@@ -3464,7 +3478,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
-      "testCount": 74
+      "testCount": 75
     },
     {
       "file": "workers/oursharedevents/tests/shared-report-scans-on-the-code.spec.ts",
@@ -4214,6 +4228,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
       "testCount": 35
+    },
+    {
+      "file": "workers/oursharedevents/tests/vote-screen-layouts.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 9
     },
     {
       "file": "workers/oursharedevents/tests/vote-set-admin.spec.ts",
