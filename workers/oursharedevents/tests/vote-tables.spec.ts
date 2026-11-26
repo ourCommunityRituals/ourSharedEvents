@@ -273,7 +273,8 @@ describe('OSE-2125 | the vote tables: where they live and what they hold', () =>
       'outcome', // 0114 (OSE-2130): 'winner' or 'too_close', written at final
       'winner_object_id',
       'winner_team_id',
-      'flood_seen', // 0122 (OSE-2234): a one-way flag that a flood of vote passes was seen
+      'flood_seen', // 0122 (OSE-2234): a one-way flag that the night looked padded
+      'room_size', // 0122: the room size the host gave at the first open, fixed from then on
     ]);
     expect(await columns('votable_objects')).toEqual([
       'id',

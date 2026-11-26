@@ -110,12 +110,20 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
--- 0122: vote_sets.flood_seen (OSE-2234, OSE ADR-040 decision 6, detection
--- only): a one-way flag that a flood of vote passes was seen on the event's
--- vote code. Additive: one column, default 0. No row is written or rewritten.
--- THE ROLLBACK IS: revert the Worker and LEAVE THE COLUMN. The older Worker
--- never reads it; a flag already set stays in its row and shows again when
--- this Worker returns. SQLite cannot drop a column with a CHECK; leave it.
+-- 0122: vote integrity (OSE-2234, OSE ADR-040 decision 6, amended
+-- 2026-11-26): vote_sets.flood_seen, a one-way flag that the night looked
+-- padded, and vote_sets.room_size, the room size the host gave at the first
+-- open; plus two triggers, vote_sets_flood_one_way (the flag never goes back
+-- to 0) and vote_sets_room_size_fixed (the room size never changes once set).
+-- Additive: two columns (default 0 and null) and two triggers. No row is
+-- written or rewritten.
+-- THE ROLLBACK IS: revert the Worker and LEAVE THE COLUMNS AND TRIGGERS. The
+-- older Worker never reads or writes either column, so the triggers never
+-- fire for it; a flag or room size already set stays in its row and shows
+-- again when this Worker returns. Note: the older Worker opens a set with no
+-- room size (null), and such a set is not room-checked at final. SQLite
+-- cannot drop a column with a CHECK; leave them. Do not drop the triggers:
+-- they are what stop a host from clearing a flag or raising a room size.
 
 -- 0121: brand_addons (OSE-2232, the paid add-ons the platform has turned on
 -- for a brand; today only 'skins'). Additive: one new table, no index, no

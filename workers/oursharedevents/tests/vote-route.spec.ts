@@ -170,7 +170,7 @@ async function openNight(
     });
     ids.push(res.json.object.id);
   }
-  expect((await admin('POST', vp(eventId, '/open'))).status).toBe(200);
+  expect((await admin('POST', vp(eventId, '/open'), { room_size: 200 })).status).toBe(200);
   for (const id of ids)
     expect((await admin('POST', vp(eventId, `/objects/${id}/open`), {})).status).toBe(200);
   return ids;
@@ -794,7 +794,7 @@ describe('the logs cannot tell a side, or counted from duplicate', () => {
         createExecutionContext()
       );
       const id = ((await made.json()) as Json).object.id as string;
-      await fetched(adminReq('POST', vp(N1, '/open')));
+      await fetched(adminReq('POST', vp(N1, '/open'), { room_size: 200 }));
       await fetched(adminReq('POST', vp(N1, `/objects/${id}/open`), {}));
       tv = await one(
         `SELECT secret_margin AS t, secret_floor AS v FROM vote_sets WHERE event_id = ?`,

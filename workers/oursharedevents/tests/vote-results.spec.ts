@@ -129,7 +129,7 @@ async function openNight(
     expect(res.status, JSON.stringify(res.json)).toBe(201);
     ids.push(res.json.object.id);
   }
-  expect((await call('POST', vp(eventId, '/open'))).status).toBe(200);
+  expect((await call('POST', vp(eventId, '/open'), { room_size: 200 })).status).toBe(200);
   return ids;
 }
 

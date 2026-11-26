@@ -54,6 +54,7 @@ import { scanNodeKey } from '../lib/scan-node-key';
 import { issueVotePass, votePageTarget, VOTE_CODE_TYPE } from '../lib/vote-pass';
 import type { VotingSwitchEnv } from '../lib/voting-switch';
 import { noteVotePassMinted, type VoteFloodLimiter } from '../lib/vote-flood';
+import { voteCodeStampOk } from '../lib/vote-code-window';
 
 import { errorLabel } from '../lib/error-label';
 // One warning per isolate, not one per scan: the missing secret is a config
@@ -313,7 +314,16 @@ export async function handleQrScan(
   // OSE-2133: a vote code whose scan stands may carry a pass, in the fragment
   // only. A failure here (a D1 blip reading the set) mints none and the
   // visitor keeps today's redirect; the line names the failure, nothing else.
-  if (voterId && scanStored && url.searchParams.get('type') === VOTE_CODE_TYPE) {
+  // The rotating code (lib/vote-code-window.ts): a pass needs this minute's
+  // stamp, or the last minute's, from the room screen. A photo of the code goes
+  // stale within two minutes; a stale or missing stamp mints no pass, and the
+  // scan stands as any other code's.
+  if (
+    voterId &&
+    scanStored &&
+    url.searchParams.get('type') === VOTE_CODE_TYPE &&
+    (await voteCodeStampOk(env.ANON_ID_HASH_PEPPER, qrToken, url.searchParams.get('w'), nowMs))
+  ) {
     let pass: string | null = null;
     try {
       pass = await issueVotePass(env, voterId, eventId, deploymentId, nowMs);

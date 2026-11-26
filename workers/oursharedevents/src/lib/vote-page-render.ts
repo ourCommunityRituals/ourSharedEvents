@@ -217,11 +217,13 @@ export const VOTE_PAGE_SCRIPT = `(function () {
 })();`;
 
 /**
- * The line under a result whose night saw a flood of vote passes (OSE-2234).
- * Draft words; the owner's wording for the report is still open (ADR-040).
+ * The line under a result whose night was flagged (OSE-2234): a burst of scans
+ * faster than one room makes, or more voters than the room holds. One line for
+ * both, so it says nothing about how many voted. Kept public by the owner
+ * (2026-11-26).
  */
 export const PADDED_WORDS =
-  'A sudden burst of scans of the vote code came in during this vote, so this result may be padded.';
+  'Voting on this night looked unusual for one room, so this result may be padded.';
 
 function renderResult(result: PublicVoteResult | null): string {
   if (!result) return '';

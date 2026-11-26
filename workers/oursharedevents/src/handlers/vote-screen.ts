@@ -19,8 +19,9 @@
 // code, since a scan would lead nowhere.
 //
 // A host who replaces a photographed code changes this screen too: the page
-// loads itself again every minute while it is shown, so a retired code does
-// not stay on the wall.
+// loads itself again every 20 seconds while it is shown, so a retired code does
+// not stay on the wall, and the code's rotating stamp (lib/vote-code-window.ts)
+// is always one `/q` accepts.
 //
 // The arrangement is the event's vote-screen layout (lib/layout-skins.ts,
 // settings.layouts.vote_screen): the words above or below the code, or side by
@@ -41,10 +42,16 @@ import {
 
 export interface VoteScreenEnv extends VotingSwitchEnv {
   DB?: D1Database;
+  /** Stamps the code for this minute (lib/vote-code-window.ts). */
+  ANON_ID_HASH_PEPPER?: string;
 }
 
-/** How often the screen reloads itself, so a replaced code reaches the wall. */
-export const VOTE_SCREEN_RELOAD_SECONDS = 60;
+/**
+ * How often the screen reloads itself, so a replaced code reaches the wall and
+ * the rotating stamp (lib/vote-code-window.ts, 60 to 120 seconds of life) is
+ * always fresh on it. Well inside one stamp's minute.
+ */
+export const VOTE_SCREEN_RELOAD_SECONDS = 20;
 
 /** The one line the screen shows next to the code. */
 export const VOTE_SCREEN_LINE = 'Scan to vote';
@@ -164,7 +171,10 @@ export async function handleAdminVoteScreenPage(
   } else {
     let code;
     try {
-      code = await readVoteCode(env.DB, row.id, origin);
+      code = await readVoteCode(env.DB, row.id, origin, {
+        pepper: env.ANON_ID_HASH_PEPPER,
+        nowMs: Date.now(),
+      });
     } catch {
       return fail(503, "We're having trouble loading this event", 'Try again in a minute.');
     }

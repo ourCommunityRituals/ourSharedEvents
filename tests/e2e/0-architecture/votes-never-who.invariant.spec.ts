@@ -741,6 +741,7 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
     expect(labels.length - new Set(labels).size, `a label is reused: ${labels.join(', ')}`).toBe(0);
     const vote = labels.filter((l) => l.startsWith('ose:vote:'));
     expect(vote.sort()).toEqual([
+      'ose:vote:code-window:v1', // the rotating vote code's stamp (lib/vote-code-window.ts)
       'ose:vote:participant:v1',
       'ose:vote:pass-seal:v1',
       'ose:vote:receipt:v1',

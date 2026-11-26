@@ -1,5 +1,5 @@
 info:
-  name: "OSE-2133 | scan | the vote code, with the set open"
+  name: "OSE-2133 | scan | the vote code with this minute's stamp, with the set open"
   type: http
   seq: 50
 
@@ -9,7 +9,7 @@ info:
 
 http:
   method: GET
-  url: "{{baseUrl}}/q/{{votePassToken}}?type=vote"
+  url: "{{baseUrl}}/q/{{votePassToken}}?type=vote&w={{votePassStamp}}"
   headers:
     - name: CF-Access-Client-Id
       value: "{{cfAccessClientId}}"

@@ -54,6 +54,7 @@ import {
   voteFloodKey,
   type VoteFloodLimiter,
 } from '../src/lib/vote-flood';
+import { voteCodeStamp } from '../src/lib/vote-code-window';
 
 interface TestEnv {
   DB: D1Database;
@@ -147,9 +148,12 @@ const freshCookie = () => `anon_33333333-4444-5555-6666-${String(++cookieSeq).pa
 
 /** One scan of the event's vote code, as a browser with `cookie` (a fresh one by default). */
 async function scan(eventId: string, scanEnvValue: QrScanEnv, cookie = freshCookie()) {
-  const req = new Request(`${ORIGIN}/q/${TOKEN[eventId]}?type=vote`, {
-    headers: { Cookie: `ose_anon=${await signAnonId(cookie, PEPPER)}` },
-  });
+  const req = new Request(
+    `${ORIGIN}/q/${TOKEN[eventId]}?type=vote&w=${await voteCodeStamp(PEPPER, TOKEN[eventId], Date.now())}`,
+    {
+      headers: { Cookie: `ose_anon=${await signAnonId(cookie, PEPPER)}` },
+    }
+  );
   return handleQrScan(req, scanEnvValue, TOKEN[eventId], true);
 }
 const hasPass = (res: Response) => (res.headers.get('Location') ?? '').includes('/vote#t=');
@@ -188,7 +192,7 @@ beforeEach(async () => {
     await run(`DELETE FROM vote_sets WHERE event_id = ?`, id);
     await seedEvent(id);
     await ok(createVoteSet(tenv.DB, id, 'object'));
-    await ok(openVoteSet(tenv.DB, id, PEPPER, nowIso()));
+    await ok(openVoteSet(tenv.DB, id, PEPPER, nowIso(), 200));
   }
 });
 
@@ -330,9 +334,12 @@ describe('fail-safe: detection never blocks a vote', () => {
     const hung: VoteFloodLimiter = { limit: () => new Promise(() => {}) };
     const waited: Promise<unknown>[] = [];
     const ctx = { waitUntil: (p: Promise<unknown>) => void waited.push(p) };
-    const req = new Request(`${ORIGIN}/q/${TOKEN[EV]}?type=vote`, {
-      headers: { Cookie: `ose_anon=${await signAnonId(freshCookie(), PEPPER)}` },
-    });
+    const req = new Request(
+      `${ORIGIN}/q/${TOKEN[EV]}?type=vote&w=${await voteCodeStamp(PEPPER, TOKEN[EV], Date.now())}`,
+      {
+        headers: { Cookie: `ose_anon=${await signAnonId(freshCookie(), PEPPER)}` },
+      }
+    );
     const res = await handleQrScan(req, scanEnv(hung), TOKEN[EV], true, ctx);
     expect(hasPass(res)).toBe(true);
     expect(waited).toHaveLength(1);

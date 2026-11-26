@@ -28,6 +28,11 @@
  * (ADR-040 decision 7), so it does not show the code either; the room screen
  * is OurWKRP's, which shows the code the host gives it.
  *
+ * IT ROTATES (2026-11-26). The URL shown carries a stamp for the current
+ * minute (lib/vote-code-window.ts); `/q` mints a pass only for a fresh stamp.
+ * The token itself stays the same all night, so the scan count per placement
+ * is unchanged. The room screen reloads inside the stamp's life.
+ *
  * ONE PER EVENT. A partial unique index allows one vote code in use per event.
  * Making one when one is in use returns that one. A host who fears the code
  * was photographed replaces it from the Voting card (replaceVoteCode, POST
@@ -41,6 +46,16 @@
 
 import { generateQrCode } from './qr';
 import { VOTE_CODE_TYPE } from './vote-pass';
+import { voteCodeStamp } from './vote-code-window';
+
+/**
+ * What a view needs to stamp the URL for this minute (lib/vote-code-window.ts).
+ * With no pepper the URL has no stamp, and `/q` mints no pass from it.
+ */
+export interface VoteCodeClock {
+  pepper?: string;
+  nowMs: number;
+}
 
 /** What the admin sees of the vote code: its placement id, its URL and a QR of it. */
 export interface VoteCodeView {
@@ -57,9 +72,14 @@ interface VoteCodeRow {
 /** The label a vote code's placement carries in the admin and in exports of placements. */
 export const VOTE_CODE_LABEL = 'Vote code (room screen)';
 
-/** The URL a vote code's QR encodes: the placement's `/q` path, asking for a pass. */
-export function voteCodeUrl(origin: string, qrToken: string): string {
-  return `${origin}/q/${encodeURIComponent(qrToken)}?type=${VOTE_CODE_TYPE}`;
+/**
+ * The URL a vote code's QR encodes: the placement's `/q` path, asking for a
+ * pass, with this minute's stamp when there is one. Without the stamp `/q`
+ * mints no pass (the rotating code, lib/vote-code-window.ts).
+ */
+export function voteCodeUrl(origin: string, qrToken: string, stamp?: string): string {
+  const base = `${origin}/q/${encodeURIComponent(qrToken)}?type=${VOTE_CODE_TYPE}`;
+  return stamp ? `${base}&w=${encodeURIComponent(stamp)}` : base;
 }
 
 async function readRow(db: D1Database, eventId: string): Promise<VoteCodeRow | null> {
@@ -73,8 +93,15 @@ async function readRow(db: D1Database, eventId: string): Promise<VoteCodeRow | n
     .first<VoteCodeRow>();
 }
 
-function view(origin: string, row: VoteCodeRow): VoteCodeView {
-  const url = voteCodeUrl(origin, row.qr_token);
+async function view(
+  origin: string,
+  row: VoteCodeRow,
+  clock?: VoteCodeClock
+): Promise<VoteCodeView> {
+  const stamp = clock?.pepper
+    ? await voteCodeStamp(clock.pepper, row.qr_token, clock.nowMs)
+    : undefined;
+  const url = voteCodeUrl(origin, row.qr_token, stamp);
   let qr = '';
   try {
     qr = generateQrCode(url, { errorCorrection: 'M', scale: 4 });
@@ -88,10 +115,11 @@ function view(origin: string, row: VoteCodeRow): VoteCodeView {
 export async function readVoteCode(
   db: D1Database,
   eventId: string,
-  origin: string
+  origin: string,
+  clock?: VoteCodeClock
 ): Promise<VoteCodeView | null> {
   const row = await readRow(db, eventId);
-  return row ? view(origin, row) : null;
+  return row ? view(origin, row, clock) : null;
 }
 
 const hex = (bytes: number) => {
@@ -122,10 +150,11 @@ function insertCode(db: D1Database, eventId: string, id: string): D1PreparedStat
 export async function makeVoteCode(
   db: D1Database,
   eventId: string,
-  origin: string
+  origin: string,
+  clock?: VoteCodeClock
 ): Promise<{ made: boolean; code: VoteCodeView }> {
   const existing = await readRow(db, eventId);
-  if (existing) return { made: false, code: view(origin, existing) };
+  if (existing) return { made: false, code: await view(origin, existing, clock) };
   const id = `pd_${hex(8)}`;
   try {
     await insertCode(db, eventId, id).run();
@@ -135,7 +164,7 @@ export async function makeVoteCode(
   }
   const row = await readRow(db, eventId);
   if (!row) throw new Error('vote code not readable after insert');
-  return { made: row.id === id, code: view(origin, row) };
+  return { made: row.id === id, code: await view(origin, row, clock) };
 }
 
 /**
@@ -147,7 +176,8 @@ export async function makeVoteCode(
 export async function replaceVoteCode(
   db: D1Database,
   eventId: string,
-  origin: string
+  origin: string,
+  clock?: VoteCodeClock
 ): Promise<VoteCodeView> {
   const id = `pd_${hex(8)}`;
   await db.batch([
@@ -161,5 +191,5 @@ export async function replaceVoteCode(
   ]);
   const row = await readRow(db, eventId);
   if (!row || row.id !== id) throw new Error('vote code not replaced');
-  return view(origin, row);
+  return view(origin, row, clock);
 }

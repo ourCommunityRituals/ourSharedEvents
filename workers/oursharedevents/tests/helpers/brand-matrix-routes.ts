@@ -295,7 +295,7 @@ export const MATRIX_ROUTES: readonly MatrixRoute[] = [
   }),
   eventRoute('/api/v2/admin/events/:id/votables/(.+)', 'POST', '/votables/open', {
     variant: 'open the set',
-    body: () => ({}),
+    body: () => ({ room_size: 200 }),
   }),
   eventRoute('/api/v2/admin/events/:id/votables/(.+)', 'POST', '', {
     variant: 'add an object',

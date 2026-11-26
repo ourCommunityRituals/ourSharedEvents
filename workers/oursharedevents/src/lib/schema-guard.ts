@@ -24,7 +24,7 @@
  * scripts/check-schema-guard.mjs.
  */
 
-/** Highest migration in migrations/ — currently 0122_vote_flood_seen.sql */
+/** Highest migration in migrations/ — currently 0122_vote_integrity.sql */
 export const REQUIRED_DB_MIGRATION = 122;
 
 /** Highest migration in migrations-forms/ — currently 0018_registration_email_encrypted.sql */
