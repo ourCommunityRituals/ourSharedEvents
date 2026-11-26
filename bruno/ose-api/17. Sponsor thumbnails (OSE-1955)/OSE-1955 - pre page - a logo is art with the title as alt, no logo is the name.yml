@@ -42,20 +42,21 @@ runtime:
           expect(it).to.include('href="https://example.com"');
           expect(it).to.include('rel="noopener noreferrer nofollow"');
         });
-        test('OSE-1955 happy: header only is art too (the fallback)', function () {
-          expect(itemOf('sb_thumb_header')).to.include(src('sb_thumb_header'));
+        test('OSE-1955 happy: a wide logo only is the banner', function () {
+          // Owner 2026-11-26: a wide logo (top banner) is the banner art, at the proxy's default slot.
+          expect(itemOf('sb_thumb_header')).to.include('src="/api/v2/sponsors/sb_thumb_header/logo"');
           expect(itemOf('sb_thumb_header')).to.include('alt="Thumb Header Only"');
         });
-        test('OSE-1955 happy: no logo is the name as text, with its address line, and no proxy src', function () {
+        test('OSE-1955 happy: no logo is the name as text, no address line (banners only), and no proxy src', function () {
           const it = itemOf('Thumb Name Hardware');
-          expect(it).to.include('>Thumb Name Hardware</a>');
-          expect(it).to.include('data-testid="sponsor-item-address">1 Fixture Way, Chicago IL<');
+          expect(it).to.include('>Thumb Name Hardware</span>');
+          expect(it).to.not.include('1 Fixture Way');
           expect(html).to.not.include('/api/v2/sponsors/sb_thumb_name/logo');
         });
         test('OSE-1955 happy: art beside names, in sponsor order (compact before header before name)', function () {
           const a = strip.indexOf(src('sb_thumb_compact'));
-          const b = strip.indexOf(src('sb_thumb_header'));
-          const c = strip.indexOf('>Thumb Name Hardware</a>');
+          const b = strip.indexOf('src="/api/v2/sponsors/sb_thumb_header/logo"');
+          const c = strip.indexOf('>Thumb Name Hardware</span>');
           expect(a).to.be.above(-1);
           expect(b).to.be.above(a);
           expect(c).to.be.above(b);

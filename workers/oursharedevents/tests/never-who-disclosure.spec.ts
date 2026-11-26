@@ -213,12 +213,14 @@ describe('OSE-1373 | recap numbers, sponsor list, and no calendar after the fact
   for (const [phase, render] of PAGES) {
     test(`${phase}: sponsors render one per list item, never run together`, () => {
       const html = render();
-      const lists = html.match(/<ul class="ose-sponsor-list"[\s\S]*?<\/ul>/g) ?? [];
+      const lists = html.match(/<ul class="sponsor-panel ose-sponsor-list"[\s\S]*?<\/ul>/g) ?? [];
       expect(lists.length).toBe(1);
-      expect((lists[0].match(/<li class="ose-sponsor-item"/g) ?? []).length).toBe(SPONSORS.length);
+      // Owner 2026-11-26: one card per sponsor, the hub's sponsor panel block.
+      expect((lists[0].match(/<li class="sponsor-panel-block"/g) ?? []).length).toBe(
+        SPONSORS.length
+      );
       expect(html).not.toContain('<div class="ose-sponsor-list">');
       expect(html).not.toMatch(/Covenant Local Bronze<\/a><a/);
-      expect(html).toMatch(/\.ose-sponsor-item \{[^}]*min-height: 44px/);
     });
   }
 

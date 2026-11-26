@@ -137,6 +137,7 @@ describe('OSE-1955 the page lists a sponsor only when both sides said yes', () =
         display_name: 'Ay & Co',
         address_line: null,
         has_logo: 0,
+        has_wide_logo: 0,
       },
       {
         id: 'sp_b',
@@ -145,6 +146,7 @@ describe('OSE-1955 the page lists a sponsor only when both sides said yes', () =
         display_name: null,
         address_line: '1 Main',
         has_logo: 0,
+        has_wide_logo: 0,
       },
     ]);
   });
@@ -221,6 +223,25 @@ describe('OSE-1955 has_logo: art when the proxy has an image to serve', () => {
   ] as const)('%s → has_logo %i', async (_what, logos, want) => {
     sponsor({ id: 'sp_logo', ...logos });
     expect(await listed()).toEqual([{ id: 'sp_logo', has_logo: want }]);
+  });
+});
+
+describe('owner 2026-11-26 has_wide_logo: the banner art is the wide logo (top banner) only', () => {
+  it.each([
+    ['a wide logo', { header: 'https://cdn.example.com/h.png' }, 1],
+    [
+      'a wide and a square logo',
+      { compact: 'https://cdn.example.com/c.png', header: 'https://cdn.example.com/h.png' },
+      1,
+    ],
+    ['only a square logo', { compact: 'https://cdn.example.com/c.png' }, 0],
+    ['an empty wide logo', { header: '' }, 0],
+    ['only a poster header image', { headerImage: 'https://cdn.example.com/hi.png' }, 0],
+    ['no logo row', {}, 0],
+  ] as const)('%s → has_wide_logo %i', async (_what, logos, want) => {
+    sponsor({ id: 'sp_wide', ...logos });
+    const social = await fetchEventPageSocialData({ DB: db } as never, EVENT);
+    expect(social.sponsors.map((s) => Number(s.has_wide_logo))).toEqual([want]);
   });
 });
 

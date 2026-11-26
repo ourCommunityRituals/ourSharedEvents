@@ -241,7 +241,9 @@ describe('OSE-ssp1: pre-event sponsor strip', () => {
     const strip = stripOf(html, 'pre-sponsor-strip');
     expect(strip).toContain('Supported by');
     expect(strip).toContain('data-testid="sponsor-thumb"');
-    expect(strip).toContain(`src="/api/v2/sponsors/${sid}/logo?slot=sidebar"`);
+    expect(strip, 'the wide logo is the banner art').toContain(
+      `src="/api/v2/sponsors/${sid}/logo"`
+    );
     expect(strip, 'the name is the alt text').toContain('alt="Thumb Art Co"');
     expect(strip, 'no visible name text beside the art').not.toContain('>Thumb Art Co<');
     expect(strip).toContain('href="https://thumb.example.com"');
@@ -284,7 +286,7 @@ describe('OSE-ssp1: pre-event sponsor strip', () => {
     expect(strip.match(/data-testid="sponsor-item"/g) ?? []).toHaveLength(2);
     expect(strip.match(/data-testid="sponsor-thumb"/g) ?? []).toHaveLength(1);
     expect(strip).toContain('alt="Ad One"');
-    expect(strip, 'no art: the name stays as text').toContain('>Ad Two</a>');
+    expect(strip, 'no art: the name stays as text').toContain('>Ad Two</span>');
   });
 
   test('an empty logo URL is not art: the name shows', async () => {
@@ -304,7 +306,7 @@ describe('OSE-ssp1: pre-event sponsor strip', () => {
       'pre-sponsor-strip'
     );
     expect(strip).not.toContain('data-testid="sponsor-thumb"');
-    expect(strip).toContain('>Blank Logo</a>');
+    expect(strip).toContain('>Blank Logo</span>');
   });
 
   test('inactive sponsors are excluded from the strip', async () => {
@@ -330,7 +332,7 @@ describe('OSE-ssp1: pre-event sponsor strip', () => {
     const res = await SELF.fetch(`https://t.test/events/${id}`);
     const html = await res.text();
     expect(html).toContain('href="https://linksponsor.example.com"');
-    expect(html).toContain('class="ose-sponsor-link"');
+    expect(html).toContain('class="sponsor-panel-main"');
     expect(html).toContain('rel="noopener noreferrer nofollow"');
   });
 
@@ -350,7 +352,7 @@ describe('OSE-ssp1: pre-event sponsor strip', () => {
     expect(html).not.toContain('javascript:alert');
     // 0083: a sponsor with no usable website links to its own public card.
     expect(html).toMatch(
-      /href="\/sponsors\/[^"]+" class="ose-sponsor-link" data-testid="sponsor-card-link"/
+      /href="\/sponsors\/[^"]+" class="sponsor-panel-main" data-testid="sponsor-card-link"/
     );
   });
 
@@ -364,7 +366,7 @@ describe('OSE-ssp1: pre-event sponsor strip', () => {
     expect(html).toContain('No Link Sponsor');
     // 0083 (decided 2026-09-30): tap → the sponsor's card, never nowhere.
     expect(html).toMatch(
-      /href="\/sponsors\/[^"]+" class="ose-sponsor-link" data-testid="sponsor-card-link">No Link Sponsor</
+      /href="\/sponsors\/[^"]+" class="sponsor-panel-main" data-testid="sponsor-card-link">[\s\S]*?>No Link Sponsor</
     );
     expect(html).not.toContain('rel="noopener noreferrer nofollow"');
   });
@@ -465,7 +467,9 @@ describe('OSE-ssp1: live-event sponsor strip', () => {
       await (await SELF.fetch(`https://t.test/events/${id}`)).text(),
       'live-sponsor-strip'
     );
-    expect(strip).toContain(`src="/api/v2/sponsors/${sid}/logo?slot=sidebar"`);
+    expect(strip, 'the wide logo is the banner art').toContain(
+      `src="/api/v2/sponsors/${sid}/logo"`
+    );
     expect(strip).toContain('alt="Live Art"');
     expect(strip).not.toContain('>Live Art<');
   });
@@ -498,7 +502,7 @@ describe('OSE-ssp1: live-event sponsor strip', () => {
 
 // ── Live-event 5W order (mirrors the pre-event order) ────────────────────────
 
-describe('live-event section order (WHAT → WHERE → WHO → HOW MUCH → CTA → WHY → HOW)', () => {
+describe('live-event section order (WHAT → HOW MUCH → CTA → WHERE → WHO → WHY → HOW)', () => {
   async function seedRichLive(id: string): Promise<void> {
     const now = Date.now();
     const start = new Date(now - 3600_000).toISOString();
@@ -517,7 +521,7 @@ describe('live-event section order (WHAT → WHERE → WHO → HOW MUCH → CTA 
       .run();
   }
 
-  test('the live section order matches pre-event — WHO before cost, CTA before WHY/HOW', async () => {
+  test('the live section order matches pre-event — cost before the ask, the ask before WHERE', async () => {
     const id = 'evt_ssp1_live_order';
     await seedRichLive(id);
     const html = await (await SELF.fetch(`https://t.test/events/${id}`)).text();
@@ -535,12 +539,12 @@ describe('live-event section order (WHAT → WHERE → WHO → HOW MUCH → CTA 
     ]) {
       expect(at(t), `${t} must render`).toBeGreaterThan(-1);
     }
-    // WHAT → WHERE → WHO → HOW MUCH → CTA(checkin) → WHY → HOW
-    expect(at('event-what-live'), 'WHAT leads').toBeLessThan(at('event-where-live'));
-    expect(at('event-where-live'), 'WHERE before WHO').toBeLessThan(at('event-who-live'));
-    expect(at('event-who-live'), 'WHO before HOW MUCH').toBeLessThan(at('event-how-much-live'));
+    // WHAT → HOW MUCH → CTA(checkin) → WHERE → WHO → WHY → HOW (owner 2026-11-26)
+    expect(at('event-what-live'), 'WHAT leads').toBeLessThan(at('event-how-much-live'));
     expect(at('event-how-much-live'), 'HOW MUCH before the CTA').toBeLessThan(at('event-checkin'));
-    expect(at('event-checkin'), 'the CTA precedes WHY/HOW').toBeLessThan(at('event-why-live'));
+    expect(at('event-checkin'), 'the CTA precedes WHERE').toBeLessThan(at('event-where-live'));
+    expect(at('event-where-live'), 'WHERE before WHO').toBeLessThan(at('event-who-live'));
+    expect(at('event-who-live'), 'WHO before WHY').toBeLessThan(at('event-why-live'));
     expect(at('event-why-live'), 'WHY before HOW').toBeLessThan(at('event-how-live'));
   });
 });
@@ -672,10 +676,12 @@ describe('OSE-ssp1: post-event stats card and sponsor thank-you', () => {
       await (await SELF.fetch(`https://t.test/events/${id}`)).text(),
       'post-sponsor-thanks'
     );
-    expect(strip).toContain(`src="/api/v2/sponsors/${sid}/logo?slot=sidebar"`);
+    expect(strip, 'the wide logo is the banner art').toContain(
+      `src="/api/v2/sponsors/${sid}/logo"`
+    );
     expect(strip).toContain('alt="Post Art"');
     expect(strip).not.toContain('>Post Art<');
-    expect(strip).toContain('>Post Plain</a>');
+    expect(strip).toContain('>Post Plain</span>');
   });
 
   test('post-sponsor-thanks renders when active sponsors exist', async () => {

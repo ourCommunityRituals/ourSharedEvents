@@ -36,7 +36,7 @@ runtime:
           expect(itemOf('sb_thumb_compact')).to.include('alt="Thumb Compact"');
         });
         test('OSE-1955 happy (es): no logo is the name', function () {
-          expect(itemOf('Thumb Name Hardware')).to.include('>Thumb Name Hardware</a>');
+          expect(itemOf('Thumb Name Hardware')).to.include('>Thumb Name Hardware</span>');
         });
 
 settings:

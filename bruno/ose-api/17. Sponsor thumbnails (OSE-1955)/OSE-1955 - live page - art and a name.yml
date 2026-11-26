@@ -38,7 +38,7 @@ runtime:
           expect(it).to.not.include('>Thumb Compact<');
         });
         test('OSE-1955 happy (live): the sponsor without a logo is its name', function () {
-          expect(itemOf('Thumb Name Hardware')).to.include('>Thumb Name Hardware</a>');
+          expect(itemOf('Thumb Name Hardware')).to.include('>Thumb Name Hardware</span>');
           expect(items.length).to.eql(2);
         });
 

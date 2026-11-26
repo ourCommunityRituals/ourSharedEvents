@@ -5,7 +5,8 @@
  * The worker-pool spec (workers/oursharedevents/tests/event-page-choices.spec.ts)
  * proves the markup and the order. This proves what only a browser measures:
  * Register is the first button and runs the full width of the column, the
- * choices are tall enough to tap, Share and Add to calendar sit side by side
+ * choices are tall enough to tap, Register is on the first phone screen
+ * above the Where card, Share and Add to calendar sit side by side
  * below them (a pair, not a stack), nothing scrolls sideways, each choice goes
  * where it says, and Back goes back, or to the events list when there is
  * nowhere to go back to.
@@ -89,9 +90,13 @@ for (const width of [375, 320]) {
     for (const choice of [register, checkin, back])
       expect(choice.height).toBeGreaterThanOrEqual(MIN_TOUCH);
 
-    // The facts come first: the choices are below the Where card.
+    // Owner 2026-11-26: the main action is on the first phone screen, so the
+    // choices sit above the Where card, and Register is fully in view on load.
     const where = b['event-where'];
-    expect(register.y).toBeGreaterThan(where.y + where.height - 1);
+    expect(column.y + column.height).toBeLessThanOrEqual(where.y + 1);
+    expect(register.y + register.height, 'Register is on the first screen').toBeLessThanOrEqual(
+      812
+    );
   });
 
   test(`at ${width}px: Share and Add to calendar are a pair below the choices, and nothing scrolls sideways`, async ({

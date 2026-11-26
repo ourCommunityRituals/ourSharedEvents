@@ -2,10 +2,11 @@
  * The event page's "Supported by" sponsor thumbnails, in a browser on staging
  * (OSE-1955, feature OSE-1948; owner 2026-11-09).
  *
- * Between the header and "What", a sponsor with a logo is thumbnail art only:
- * the compact logo, else the header logo, through the same-origin proxy
- * /api/v2/sponsors/<id>/logo?slot=sidebar, its title as alt. A sponsor with no
- * logo is its name. The workers pool (workers/oursharedevents/tests/
+ * Between the header and "What", every sponsor is one banner of the hub's
+ * sponsor panel (owner 2026-11-26: equal banners, the art is the visual). Its
+ * 3:1 frame holds the configured header art, else the compact logo (else the
+ * header logo) through the same-origin proxy /api/v2/sponsors/<id>/logo, else
+ * the name set in type. The art's alt is the name. The workers pool (workers/oursharedevents/tests/
  * sponsor-thumb-flows.spec.ts) and Bruno folder 17 prove the markup and the
  * proxy; this spec proves what only a browser can: the image really loads under
  * the CSP, the tap really leaves for the website, the box holds any shape of
@@ -62,7 +63,7 @@ for (const vp of VIEWPORTS) {
   test.describe(`OSE-1955 sponsor thumbnails @ ${vp.name}`, () => {
     test.use({ viewport: { width: vp.width, height: vp.height } });
 
-    test('A is a loaded thumbnail with its name as alt, and tapping it opens the website', async ({
+    test('A is a loaded banner with its name as alt, and tapping it opens the website', async ({
       page,
     }) => {
       await page.route('https://example.com/**', (r) =>
@@ -79,21 +80,19 @@ for (const vp of VIEWPORTS) {
       await Promise.all([page.waitForURL(/^https:\/\/example\.com\//), link.click()]);
     });
 
-    test('B is its name, with its location under it', async ({ page }) => {
+    test('B is its name in type, and its location stays on its own card', async ({ page }) => {
       await open(page, CHECK);
       const item = itemWith(page, 'sp_logo_check_b');
       await expect(item.getByRole('link', { name: 'No Logo Hardware' })).toBeVisible();
-      await expect(item.getByTestId('sponsor-item-address')).toHaveText(
-        '2407 W 111th St, Chicago IL'
-      );
+      // The banner holds the name only: no location or short text under it.
+      await expect(item).toHaveText('No Logo Hardware');
       await expect(item.locator('img')).toHaveCount(0);
     });
 
     test('C (a logo that cannot load) is still on the page, named "Broken Logo Books"', async ({
       page,
     }) => {
-      // Today C is art whose image fails, so its name is the alt text; after
-      // OSE-1950 it is the name as text. Either way the link is named for it.
+      // C's image fails; its name is the alt text, so the link is named for it.
       await open(page, CHECK);
       const link = itemWith(page, 'sp_logo_check_c').getByRole('link', {
         name: 'Broken Logo Books',
@@ -125,7 +124,7 @@ for (const vp of VIEWPORTS) {
   });
 }
 
-test.describe('OSE-1955 edge: any shape of logo stays inside its box, uncropped', () => {
+test.describe('OSE-1955 edge: any shape of logo stays inside its card art area, uncropped', () => {
   // The fixture's logo is square. A very wide and a very tall image are served in
   // place of A's real logo, on the same same-origin URL, so the page's own CSS
   // and CSP decide how they show.
@@ -133,9 +132,9 @@ test.describe('OSE-1955 edge: any shape of logo stays inside its box, uncropped'
     ['wide 4:1', 400, 100],
     ['tall 1:4', 100, 400],
   ] as const) {
-    test(`a ${shape} logo is at most 160 x 64, object-fit contain`, async ({ page }) => {
+    test(`a ${shape} logo stays inside the 3:1 art area, object-fit contain`, async ({ page }) => {
       await page.setViewportSize({ width: 375, height: 812 });
-      await page.route('**/api/v2/sponsors/sp_logo_check_a/logo?slot=sidebar', (r) =>
+      await page.route('**/api/v2/sponsors/sp_logo_check_a/logo', (r) =>
         r.fulfill({
           status: 200,
           contentType: 'image/svg+xml',
@@ -146,8 +145,14 @@ test.describe('OSE-1955 edge: any shape of logo stays inside its box, uncropped'
       const img = await loadedThumb(page, 'sp_logo_check_a');
       expect(await img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBe(w);
       const box = (await img.boundingBox())!;
-      expect(box.height).toBeLessThanOrEqual(64.5);
-      expect(box.width).toBeLessThanOrEqual(160.5);
+      const area = (await itemWith(page, 'sp_logo_check_a')
+        .getByTestId('sponsor-art')
+        .boundingBox())!;
+      expect(Math.abs(area.width / area.height - 3), 'the art area is 3:1').toBeLessThan(0.05);
+      expect(box.x).toBeGreaterThanOrEqual(area.x - 0.5);
+      expect(box.y).toBeGreaterThanOrEqual(area.y - 0.5);
+      expect(box.x + box.width).toBeLessThanOrEqual(area.x + area.width + 0.5);
+      expect(box.y + box.height).toBeLessThanOrEqual(area.y + area.height + 0.5);
       expect(await img.evaluate((el) => getComputedStyle(el).objectFit)).toBe('contain');
       // Contained: the whole image is drawn, scaled by the smaller of the two ratios.
       const scale = Math.min(box.width / w, box.height / h);

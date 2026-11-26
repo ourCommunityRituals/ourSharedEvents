@@ -95,7 +95,8 @@ describe('a future event shows the countdown, rendered by the server', () => {
       /<small class="sub-line" data-testid="event-countdown" aria-live="off" data-starts-at="[^"]+" data-tz="America\/Chicago">Starts in 5 hours<\/small><\/p>$/
     );
     // Inside the page header, above the sponsor strip and the facts.
-    const header = html.match(/<header data-testid="event-header">[\s\S]*?<\/header>/)?.[0] ?? '';
+    const header =
+      html.match(/<header[^>]*data-testid="event-header">[\s\S]*?<\/header>/)?.[0] ?? '';
     expect(header).toContain('data-testid="event-countdown"');
     expect(html.match(/<small[^>]*data-testid="event-countdown"/g)).toHaveLength(1);
   });

@@ -390,7 +390,7 @@ function renderOneItem(s: ThumbSponsor): string {
     { sponsors: [s], regCount: 0, checkinCount: 0, surveyCount: 0, emailCount: 0 },
     { nonce: 'n', lang: 'en' }
   );
-  const open = '<li class="ose-sponsor-item" data-testid="sponsor-item">';
+  const open = '<li class="sponsor-panel-block" data-testid="sponsor-item">';
   const at = html.indexOf(open);
   expect(at).toBeGreaterThan(-1);
   expect(html.indexOf(open, at + 1), 'one item per sponsor').toBe(-1);
@@ -419,10 +419,12 @@ const sponsorArb = fc.record({
     { nil: null }
   ),
   address_line: fc.option(printable, { nil: null }),
+  header_text: fc.option(printable, { nil: null }),
   has_logo: fc.constantFrom(0, 1, null),
+  has_wide_logo: fc.constantFrom(0, 1, null),
 });
 
-describe('fat-finger | OSE-1955 sponsor thumbnail — any title, any id, any link', () => {
+describe('fat-finger | OSE-1955 sponsor card — any title, any id, any link', () => {
   test('the item is one link of known tags, with no handler attribute', () => {
     fc.assert(
       fc.property(sponsorArb, (s) => {
@@ -430,7 +432,7 @@ describe('fat-finger | OSE-1955 sponsor thumbnail — any title, any id, any lin
         const bare = item.replace(/="[^"]*"/g, '=""');
         const tags = [...bare.matchAll(/<\/?([a-zA-Z][\w-]*)/g)].map((m) => m[1].toLowerCase());
         expect(new Set(tags)).toEqual(
-          new Set(tags.filter((t) => ['a', 'img', 'div', 'small'].includes(t)))
+          new Set(tags.filter((t) => ['a', 'img', 'span'].includes(t)))
         );
         expect(tags.filter((t) => t === 'a')).toHaveLength(2); // <a …> and </a>
         expect(bare).not.toMatch(/\son[a-z]+\s*=/i);
@@ -439,19 +441,33 @@ describe('fat-finger | OSE-1955 sponsor thumbnail — any title, any id, any lin
     );
   });
 
-  test('art when there is a logo: the proxy src for the id, the escaped title as alt, no address', () => {
+  test('one banner: the configured logo through the proxy for the id, the escaped title as alt or as text', () => {
     fc.assert(
       fc.property(sponsorArb, (s) => {
         const item = renderOneItem(s);
-        const title = (s.display_name ?? '').trim() || s.name;
-        if (s.has_logo) {
-          const src = `/api/v2/sponsors/${encodeURIComponent(s.id)}/logo?slot=sidebar`;
-          expect(item).toContain(`src="${oracleEsc(src)}" alt="${oracleEsc(title)}"`);
-          expect(item).not.toContain('sponsor-item-address');
+        const title = oracleEsc((s.display_name ?? '').trim() || s.name);
+        const id = encodeURIComponent(s.id);
+        // Owner 2026-11-26: one banner per sponsor. The wide logo (top banner),
+        // else the square logo, else the name in type; the art's alt is the name.
+        if (s.has_wide_logo) {
+          expect(item).toContain(
+            `src="${oracleEsc(`/api/v2/sponsors/${id}/logo`)}" alt="${title}"`
+          );
+          expect(item).not.toContain('slot=');
+          expect(item).not.toContain('sponsor-name');
+        } else if (s.has_logo) {
+          expect(item).toContain(
+            `src="${oracleEsc(`/api/v2/sponsors/${id}/logo?slot=sidebar`)}" alt="${title}"`
+          );
+          expect(item).not.toContain('sponsor-name');
         } else {
           expect(item).not.toContain('<img');
-          expect(item).toContain(`>${oracleEsc(title)}</a>`);
+          expect(item.split(`data-testid="sponsor-name">${title}</span>`)).toHaveLength(2);
         }
+        expect(item.match(/<img /g)?.length ?? 0).toBeLessThanOrEqual(1);
+        // No text or location rows: every banner is the same size.
+        expect(item).not.toContain('sponsor-item-address');
+        expect(item).not.toContain('sponsor-item-text');
       }),
       opts
     );

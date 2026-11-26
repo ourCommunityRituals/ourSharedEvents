@@ -31,7 +31,7 @@ runtime:
           expect(itemOf('sb_thumb_creds')).to.include('alt="Thumb Creds"');
         });
         test('OSE-1955 rainy: an empty logo URL is the name, and the page never names the proxy for it', function () {
-          expect(itemOf('Thumb Empty Logo')).to.include('>Thumb Empty Logo</a>');
+          expect(itemOf('Thumb Empty Logo')).to.include('>Thumb Empty Logo</span>');
           expect(html).to.not.include('/api/v2/sponsors/sb_thumb_empty/logo');
         });
         test('OSE-1955 rainy: a sponsor that has not answered is not on the page', function () {

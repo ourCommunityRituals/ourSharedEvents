@@ -25,8 +25,6 @@
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"Event","name":"Parish Spring Fundraiser","url":"https://oursharedevents.com/events/evt_golden","startDate":"2026-10-24T23:00:00Z","endDate":"2026-10-25T04:59:59.999Z","eventStatus":"https://schema.org/EventScheduled","location":{"@type":"Place","name":"St. Barnabas Hall","address":"123 Main St"},"description":"Come support the cause."}</script>
   <link rel="stylesheet" href="/ui.css" />
   <style>
-    /* OSE-655 A2: palette driven by @ocr/ui role tokens (from /ui.css), so a
-       [data-brand] on <html> swaps the whole surface. No raw hex here. */
     [data-surface="ose-public"] { --ose-bg: var(--bg); --ose-card: var(--surface); --ose-text: var(--text); --ose-muted: var(--text-muted); --ose-accent: var(--accent); --ose-live: var(--live); --ose-focus: var(--accent); --ose-accent-tint: color-mix(in srgb, var(--accent) 8%, transparent); }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
@@ -112,18 +110,15 @@
     .ose-never-who-body p { margin: 0 0 0.5rem; }
     .ose-never-who-body a { color: var(--accent); }
 
-    .ose-sponsor-label { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); margin: 0 0 0.25rem; }
-    .ose-sponsor-list { list-style: none; margin: 0; padding: 0; }
-    .ose-sponsor-item { display: flex; align-items: center; min-height: 44px; border-bottom: 1px solid var(--border); }
-    .ose-sponsor-item:last-child { border-bottom: none; }
-    .ose-sponsor-link { color: var(--accent); font-weight: 600; display: inline-flex; align-items: center; min-height: 44px; }
-    .ose-sponsor-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    .ose-sponsor-link[data-thumb] { display: inline-flex; align-items: center; min-height: 44px; padding: 0.25rem 0; }
-    .ose-sponsor-thumb { display: block; height: 64px; width: auto; max-width: 160px; object-fit: contain; }
-    .ose-sponsor-name { color: var(--text); font-weight: 600; }
-    /* OSE-1136: the recap's WHERE/WHO cards reuse the pre-event 5W styling. */
+    .ose-sponsor-strip { margin: 0 0 1rem; }
+    .ose-sponsor-label { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); margin: 0 0 0.5rem; }
+    .ose-sponsor-list { list-style: none; margin: 0; padding: 0; gap: 0.5rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, 10rem), 1fr)); }
+    .ose-sponsor-art { position: relative; display: flex; align-items: center; justify-content: center; padding: 0.25rem 0.5rem; text-align: center; overflow: hidden; }
+    .ose-sponsor-art > img { position: absolute; inset: 4px; width: calc(100% - 8px); height: calc(100% - 8px); object-fit: contain; }
+    .ose-sponsor-art > .sponsor-panel-name { font-size: 0.9375rem; line-height: 1.2; }
+    .ose-section { margin: 0 0 1rem; } .ose-section > h2 { margin: 0; font-size: 1rem; }
     .ose-section p { margin: 0 0 0.5rem; }
-    .ose-venue-map { width: 100%; max-width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
+    .ose-venue-map { width: 100%; max-width: 100%; height: auto; max-height: 10rem; object-fit: cover; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
     .ose-who-image { width: 120px; height: 120px; object-fit: cover; border-radius: 50%; display: block; margin-bottom: 0.75rem; background: var(--ose-accent-tint); }
   </style>
 </head>
@@ -170,19 +165,23 @@
         
       </section>
 
-      <section class="ose-card ose-section" data-testid="event-where-post" aria-labelledby="where-heading-post">
-             <h2 id="where-heading-post">Dónde</h2>
+      <section class="card card--sectioned ose-section" data-testid="event-where-post" aria-labelledby="where-heading-post">
+             <h2 class="card-header" id="where-heading-post">Dónde</h2>
+             <div class="card-body">
              <img src="/api/v2/maps/venue-image?event=evt_golden" alt="Mapa de St. Barnabas Hall" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="venue-map-post" />
              <p><span data-testid="event-mode" data-mode="in_person">Presencial</span> · <strong>St. Barnabas Hall</strong></p>
              <p>123 Main St</p>
-           </section>
+           </div>
+         </section>
 
-      <section class="ose-card ose-section" data-testid="event-who-post" aria-labelledby="who-heading-post">
-             <h2 id="who-heading-post">Quién</h2>
+      <section class="card card--sectioned ose-section" data-testid="event-who-post" aria-labelledby="who-heading-post">
+             <h2 class="card-header" id="who-heading-post">Quién</h2>
+             <div class="card-body">
              
              <p data-testid="event-who-host-post">The Parish Council</p>
              
-           </section>
+           </div>
+         </section>
 
       
 

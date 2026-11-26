@@ -64,10 +64,10 @@ test.describe('poster to event page', () => {
       'event-title',
       'event-when',
       'event-what',
-      'event-where',
-      'event-who',
       'event-how-much',
       'event-choices',
+      'event-where',
+      'event-who',
     ];
     const drawn: { id: string; y: number }[] = [];
     for (const id of order) {
@@ -81,7 +81,7 @@ test.describe('poster to event page', () => {
       expect(ids, `${must} is on the page`).toContain(must);
     }
     const byPosition = [...drawn].sort((a, b) => a.y - b.y).map((d) => d.id);
-    expect(byPosition, 'facts first, in order, then the choices').toEqual(ids);
+    expect(byPosition, 'What and price, then the choices, then Where and Who').toEqual(ids);
   });
 
   test('printed poster: the short address under the code leads to the same page when typed', async ({

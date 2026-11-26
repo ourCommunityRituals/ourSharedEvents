@@ -202,7 +202,7 @@ function stripOf(html: string): string {
 
 /** The sponsor list items, in page order. */
 function items(strip: string): string[] {
-  return [...strip.matchAll(/<li class="ose-sponsor-item"[^>]*>([\s\S]*?)<\/li>/g)].map(
+  return [...strip.matchAll(/<li class="sponsor-panel-block"[^>]*>([\s\S]*?)<\/li>/g)].map(
     (m) => m[1]
   );
 }
@@ -232,6 +232,8 @@ function handlerAttrs(markup: string): string[] {
 }
 
 const proxyPath = (id: string) => `/api/v2/sponsors/${encodeURIComponent(id)}/logo?slot=sidebar`;
+/** Owner 2026-11-26: the banner asks for the wide logo (the proxy's default slot). */
+const widePath = (id: string) => `/api/v2/sponsors/${encodeURIComponent(id)}/logo`;
 
 async function proxy(src: string, init?: RequestInit): Promise<Response> {
   return SELF.fetch(`https://t.test${src}`, init);
@@ -245,12 +247,13 @@ describe('OSE-1955 happy | the page names art and the proxy serves it', () => {
     const ev = 'evt1955_h_one';
     await seedEvent(ev);
     const compact = logo('one-compact');
+    const wide = logo('one-header');
     await seedSponsor(ev, {
       id: 'sp1955_h_one',
       name: 'Corner Bakery LLC',
       displayName: 'Corner Bakery',
       website: 'https://bakery.example',
-      header: logo('one-header'),
+      header: wide,
       compact,
     });
 
@@ -263,18 +266,21 @@ describe('OSE-1955 happy | the page names art and the proxy serves it', () => {
     expect(item, 'no visible name beside the art').not.toMatch(/>\s*Corner Bakery\s*</);
     expect(item).toContain('href="https://bakery.example"');
     expect(item).toContain('rel="noopener noreferrer nofollow"');
-    expect(thumbSrcs(html)).toEqual([proxyPath('sp1955_h_one')]);
+    expect(thumbSrcs(html)).toEqual([widePath('sp1955_h_one')]);
 
     const res = await proxy(thumbSrcs(html)[0]);
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toMatch(/^image\//);
     expect(res.headers.get('x-content-type-options')).toBe('nosniff');
-    expect(upstream, 'the compact logo wins over the header logo').toEqual([compact]);
+    expect(upstream, 'the wide logo (top banner) is the banner, over the square one').toEqual([
+      wide,
+    ]);
+    expect(compact).not.toBe(wide);
   });
 
   test.each([
-    ['compact only', { compact: true, header: false }],
-    ['header only (the fallback)', { compact: false, header: true }],
+    ['square (compact) only: the fallback', { compact: true, header: false }],
+    ['wide (header) only: the banner', { compact: false, header: true }],
   ])('%s: a thumbnail, and its src serves that logo', async (_label, has) => {
     stubUpstream();
     const ev = `evt1955_h_${has.compact ? 'c' : 'h'}`;
@@ -289,7 +295,7 @@ describe('OSE-1955 happy | the page names art and the proxy serves it', () => {
     });
 
     const { html } = await page(ev);
-    expect(thumbSrcs(html)).toEqual([proxyPath(sid)]);
+    expect(thumbSrcs(html)).toEqual([has.header ? widePath(sid) : proxyPath(sid)]);
     const res = await proxy(thumbSrcs(html)[0]);
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toMatch(/^image\//);
@@ -308,7 +314,7 @@ describe('OSE-1955 happy | the page names art and the proxy serves it', () => {
     expect(list).toHaveLength(2);
     expect(list[0]).toContain('alt="Ad One Art"');
     expect(list[0]).not.toContain('>Ad One Art<');
-    expect(list[1]).toContain('>Ad Two Name</a>');
+    expect(list[1]).toContain('>Ad Two Name</span>');
     expect(list[1]).not.toContain('sponsor-thumb');
   });
 
@@ -338,7 +344,7 @@ describe('OSE-1955 happy | the page names art and the proxy serves it', () => {
       // The title is the sponsor's own words: never translated, in either language.
       expect(list[0]).toContain(`src="${proxyPath(`${ev}_a`)}"`);
       expect(list[0]).toContain('alt="Phase Art"');
-      expect(list[1]).toContain('>Phase Name</a>');
+      expect(list[1]).toContain('>Phase Name</span>');
     }
   );
 });
@@ -391,8 +397,9 @@ describe('OSE-1955 rainy | a failing logo never breaks the page', () => {
 
     const { html } = await page(ev);
     const [item] = items(stripOf(html));
-    expect(item).toContain('>Nameplate Hardware</a>');
-    expect(item).toContain('data-testid="sponsor-item-address">1 Main St<');
+    expect(item).toContain('>Nameplate Hardware</span>');
+    // Owner 2026-11-26: banners only; the location stays on the sponsor's card.
+    expect(item).not.toContain('1 Main St');
     expect(html).not.toContain(`/api/v2/sponsors/${sid}/logo`);
     expect((await proxy(proxyPath(sid))).status).toBe(404);
     expect(upstream).toEqual([]);
@@ -470,7 +477,7 @@ describe('OSE-1955 rainy | a failing logo never breaks the page', () => {
 });
 
 describe('OSE-1955 edge', () => {
-  test('the thumbnail box: 64 px tall, at most 160 px wide, contained (never cropped), a 44 px target', async () => {
+  test('the banner: the hub sponsor panel, a 3:1 frame, the logo drawn whole', async () => {
     const ev = 'evt1955_e_box';
     await seedEvent(ev);
     await seedSponsor(ev, { id: `${ev}_sp`, name: 'Box Co', compact: logo(ev) });
@@ -480,18 +487,16 @@ describe('OSE-1955 edge', () => {
       expect(m, `${sel} is styled`).not.toBeNull();
       return m![1];
     };
-    const thumb = css('.ose-sponsor-thumb');
-    expect(thumb).toMatch(/height:\s*64px/);
-    expect(thumb).toMatch(/width:\s*auto/);
-    expect(thumb).toMatch(/max-width:\s*160px/);
-    expect(thumb).toMatch(/object-fit:\s*contain/);
-    expect(css('.ose-sponsor-link[data-thumb]')).toMatch(/min-height:\s*44px/);
-    expect(css('.ose-sponsor-item')).toMatch(/min-height:\s*44px/);
-    // A name is a tap target too (AGENTS.md invariant 8): the link itself, not
-    // only its row, is at least 44 px tall. The browser measures it in T4j.
-    const nameLink = css('.ose-sponsor-link');
-    expect(nameLink).toMatch(/display:\s*inline-flex/);
-    expect(nameLink).toMatch(/min-height:\s*44px/);
+    // Owner 2026-11-26: every sponsor is the same banner in the hub's panel
+    // (@ocr/ui `.sponsor-panel-block`; its 3:1 `.sponsor-panel-header` and the
+    // tap target come from /ui.css). The page only places the logo inside it.
+    expect(html).toContain('<ul class="sponsor-panel ose-sponsor-list"');
+    expect(html).toContain(
+      '<span class="sponsor-panel-header ose-sponsor-art" data-testid="sponsor-art">'
+    );
+    const art = css('.ose-sponsor-art > img');
+    expect(art).toMatch(/object-fit:\s*contain/);
+    expect(art).toMatch(/position:\s*absolute/);
   });
 
   test('the sponsor-list styles use tokens only: no raw colour', async () => {
@@ -711,7 +716,7 @@ describe('OSE-1955 fat-finger | a logo typed by an admin', () => {
     expect((await adminUpdate(id, { logo_url: null })).status).toBe(200);
     const item = await itemFor();
     expect(item).not.toContain('sponsor-thumb');
-    expect(item).toContain('>Clearing Co</a>');
+    expect(item).toContain('>Clearing Co</span>');
     expect((await proxy(proxyPath(id))).status).toBe(404);
   });
 
