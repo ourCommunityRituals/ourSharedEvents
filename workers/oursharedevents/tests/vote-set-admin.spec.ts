@@ -785,6 +785,26 @@ describe('6. after the first open, a song team cannot change', () => {
     ).toBe(200);
   });
 
+  test('once voting opens, a new object cannot take a name already in the set (no vote split)', async () => {
+    await call('POST', vp(A1), A, {});
+    // Before the first open a repeat is the host's own business.
+    expect(
+      (await call('POST', vp(A1, '/objects'), A, { kind: 'song', label: 'Song A' })).status
+    ).toBe(201);
+    await call('POST', vp(A1, '/open'), A, { room_size: 200 });
+    const twin = await call('POST', vp(A1, '/objects'), A, { kind: 'song', label: '  song a ' });
+    expect(twin.status).toBe(409);
+    expect(twin.json.code).toBe('LABEL_TAKEN');
+    const n = await tenv.DB.prepare(`SELECT COUNT(*) AS n FROM votable_objects WHERE event_id = ?`)
+      .bind(A1)
+      .first<{ n: number }>();
+    expect(Number(n?.n)).toBe(1);
+    // A new name still joins while the event is live.
+    expect(
+      (await call('POST', vp(A1, '/objects'), A, { kind: 'song', label: 'Song B' })).status
+    ).toBe(201);
+  });
+
   test('a team night needs a team on each object; an object night refuses one', async () => {
     await call('POST', vp(A1), A, { played_by: 'team' });
     expect(

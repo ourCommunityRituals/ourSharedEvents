@@ -25,13 +25,17 @@
  *     it is never printed as a poster placement by mistake;
  *   - the event page reads no token at all.
  * The OSE display (the TV page and display-config) carries no vote word at all
- * (ADR-040 decision 7), so it does not show the code either; the room screen
- * is OurWKRP's, which shows the code the host gives it.
+ * (ADR-040 decision 7), so it does not show the code either. The room screen
+ * is the admin vote screen (handlers/vote-screen.ts), signed in, which fetches
+ * a freshly stamped URL on every reload. A copy of the URL taken anywhere else
+ * (the Voting card, a print, a screenshot, another app) stops minting passes
+ * within two minutes.
  *
  * IT ROTATES (2026-11-26). The URL shown carries a stamp for the current
  * minute (lib/vote-code-window.ts); `/q` mints a pass only for a fresh stamp.
  * The token itself stays the same all night, so the scan count per placement
- * is unchanged. The room screen reloads inside the stamp's life.
+ * is unchanged. The vote screen reloads every VOTE_SCREEN_RELOAD_SECONDS,
+ * hidden or not, well inside the stamp's life.
  *
  * ONE PER EVENT. A partial unique index allows one vote code in use per event.
  * Making one when one is in use returns that one. A host who fears the code

@@ -7,8 +7,14 @@
  * an AI agent, kept minting vote passes from anywhere until the host replaced
  * it. Now the URL the room screen shows carries a stamp that changes every
  * minute, and `/q` mints a pass only for a stamp from this minute or the one
- * before. A photo stops working within two minutes. To keep voting, someone
- * outside the room needs a live view of the screen, all night.
+ * before. A photo stops working within two minutes.
+ *
+ * WHAT IT RAISES, NOT WHAT IT PREVENTS. It makes remote voting cost more; it
+ * does not stop it. One person relaying a live view of the screen (a video
+ * call, a phone on a stand, or a script polling the admin list as a signed-in
+ * host) can hand a fresh URL each minute to any number of people, and each
+ * pass then lasts VOTE_PASS_TTL_SECONDS. Past the room size the host gave, the
+ * room check at final flags it; below that, nothing does.
  *
  * THE STAMP. `w=<minute>.<seal>`: the minute is whole minutes since the epoch
  * (UTC, the server's clock only), and the seal is the first 16 bytes of an

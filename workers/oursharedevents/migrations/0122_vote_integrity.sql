@@ -1,6 +1,7 @@
 -- Migration 0122: vote integrity on a vote set (OSE-2234; OSE ADR-040
 -- decision 6, amended 2026-11-26: flood detection, then "as stringent as you
--- can make it", with hosts and sponsors unable to push a result up or down).
+-- can make it"; the owner's goal is that hosts and sponsors cannot push a
+-- result up or down. What this migration does not stop is in ADR-040.)
 --
 -- Two columns and two triggers on vote_sets:
 --

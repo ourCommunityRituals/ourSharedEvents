@@ -121,6 +121,16 @@ const LABEL_FIXED = fail(
   'LABEL_FIXED',
   'A name is fixed once voting has opened, so votes stay with what was voted for'
 );
+/**
+ * Once voting has opened, a new object may not take a name already in the set
+ * (CCR loop 1, F5): a second "Song A" added mid-night would split its votes.
+ * Names compare trimmed and without case.
+ */
+const LABEL_TAKEN = fail(
+  409,
+  'LABEL_TAKEN',
+  'That name is already in this vote set, and voting has opened, so it would split the votes'
+);
 const EVENT_OVER = fail(409, 'EVENT_OVER', 'The event is over; voting cannot open again');
 /** OSE-2142: the event is on but not Published. The admin card says "Publish the event to open voting." */
 export const EVENT_NOT_PUBLISHED = fail(
@@ -471,6 +481,8 @@ export function parseRoomSize(v: unknown): VoteResult<number> {
  * push a result up or down). Only this first open writes it, and the trigger
  * vote_sets_room_size_fixed (migration 0122) refuses any later change, so a
  * host cannot raise it after the night to hide padding. A reopen keeps it.
+ * The size itself is the host's word: a host who gives one far above the room
+ * weakens the check from the start (CCR loop 1, F1), which ADR-040 names.
  */
 export async function openVoteSet(
   db: D1Database,
@@ -833,6 +845,17 @@ function teamRule(set: VoteSetView, group: string | null): VoteFail | null {
   return null;
 }
 
+/** True when the set already holds an object of this name (trimmed, any case). */
+async function labelInSet(db: D1Database, setId: string, label: string): Promise<boolean> {
+  const row = await db
+    .prepare(
+      `SELECT 1 AS hit FROM votable_objects WHERE set_id = ? AND lower(trim(label)) = lower(trim(?)) LIMIT 1`
+    )
+    .bind(setId, label)
+    .first<{ hit: number }>();
+  return !!row;
+}
+
 /** Add an object to the event's set, in draft. Refused on a final set or after the event. */
 export async function createVotable(
   db: D1Database,
@@ -845,6 +868,7 @@ export async function createVotable(
   const team = teamRule(set, input.group_id);
   if (team) return team;
   if (input.booth_id && !(await boothOfEvent(db, input.booth_id, eventId))) return BOOTH_MISS;
+  if (set.opened && (await labelInSet(db, set.id, input.label))) return LABEL_TAKEN;
   const id = newId('vobj');
   // One statement: the set is not final, the event is on, the set holds one
   // kind, it is under the cap, and the booth is this event's. A set that has
@@ -862,6 +886,8 @@ export async function createVotable(
             AND (s.state = 'draft' OR ${EVENT_LIVE})
             AND NOT EXISTS (SELECT 1 FROM votable_objects o WHERE o.set_id = s.id AND o.kind <> ?)
             AND (SELECT COUNT(*) FROM votable_objects o WHERE o.set_id = s.id) < ?
+            AND (s.pepper_epoch IS NULL OR NOT EXISTS (SELECT 1 FROM votable_objects o
+                  WHERE o.set_id = s.id AND lower(trim(o.label)) = lower(trim(?))))
             AND (? IS NULL OR EXISTS (SELECT 1 FROM event_booths b
                                        WHERE b.id = ? AND b.event_id = s.event_id AND b.is_active = 1))`
       )
@@ -878,6 +904,7 @@ export async function createVotable(
         eventId,
         input.kind,
         VOTE_OBJECTS_MAX,
+        input.label,
         input.booth_id,
         input.booth_id
       ),
@@ -910,6 +937,7 @@ export async function createVotable(
       .first<{ n: number }>();
     if (Number(size?.n ?? 0) >= VOTE_OBJECTS_MAX)
       return fail(409, 'TOO_MANY', `A vote set holds ${VOTE_OBJECTS_MAX} objects at most`);
+    if (now.opened && (await labelInSet(db, set.id, input.label))) return LABEL_TAKEN;
     return BOOTH_MISS;
   }
   const view = await readObject(db, eventId, id);

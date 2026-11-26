@@ -7154,7 +7154,7 @@
 
         <div class="card-body" id="votes-code" data-testid="votes-code" hidden>
           <h3 class="card-title">The room’s vote code</h3>
-          <p class="sub-line" data-testid="votes-code-note">Show this code on the room screen. Scanning it is how a person in the room votes. A poster code does not open the vote.</p>
+          <p class="sub-line" data-testid="votes-code-note">This code changes every minute, so a printed, saved or photographed copy stops working within two minutes. Put the vote screen on the room’s display: it keeps the code current. Scanning it is how a person in the room votes. A poster code does not open the vote.</p>
           <div id="votes-code-show" data-testid="votes-code-show" hidden>
             <img class="pc-qr" id="votes-code-qr" data-testid="votes-code-qr" alt="QR code for the room’s vote code" width="164" height="164" />
             <div class="pd-link"><code id="votes-code-url" data-testid="votes-code-url"></code></div>
@@ -7222,6 +7222,7 @@
           ROOM_SIZE_NEEDED: 'Say how many the room can hold, then open voting.',
           ROOM_SIZE_OUT_OF_RANGE: 'The room size must be from 10 to 50000.',
           LABEL_FIXED: 'A name cannot change once voting has opened, so votes stay with what was voted for.',
+          LABEL_TAKEN: 'That name is already in the vote, and voting has opened. Adding it again would split its votes.',
         };
         return Object.prototype.hasOwnProperty.call(SAID, code) ? SAID[code] : 'Could not save. Nothing was changed. Try again.';
       };

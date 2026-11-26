@@ -93,7 +93,12 @@ ${LAYOUT_CLIENT_JS}
     ? `<script>
 (function () {
   var every = ${VOTE_SCREEN_RELOAD_SECONDS} * 1000;
-  setInterval(function () { if (!document.hidden) location.reload(); }, every);
+  // Reload even when hidden: a screen that stops rotating shows a dead code
+  // within two minutes (CCR loop 2). Coming back into view reloads at once.
+  setInterval(function () { location.reload(); }, every);
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) location.reload();
+  });
 })();
 </script>`
     : '';
