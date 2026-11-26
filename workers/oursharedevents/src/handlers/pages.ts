@@ -2037,8 +2037,6 @@ ${ogMeta}
 ${buildSearchMeta(row, shareUrl)}
   <link rel="stylesheet" href="/ui.css" />
   <style>
-    /* OSE-655 A2: palette driven by @ocr/ui role tokens (from /ui.css), so a
-       [data-brand] on <html> swaps the whole surface. No raw hex here. */
     [data-surface="ose-public"] { --ose-bg: var(--bg); --ose-card: var(--surface); --ose-text: var(--text); --ose-muted: var(--text-muted); --ose-accent: var(--accent); --ose-live: var(--live); --ose-focus: var(--accent); --ose-accent-tint: color-mix(in srgb, var(--accent) 8%, transparent); }
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; background: var(--ose-bg); color: var(--ose-text); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
@@ -2066,7 +2064,7 @@ ${NEVER_WHO_CSS}
 ${SPONSOR_LIST_CSS}
     .ose-section { margin: 0 0 1rem; } .ose-section > h2 { margin: 0; font-size: 1rem; }
     .ose-section p { margin: 0 0 0.5rem; }
-    .ose-venue-map { width: 100%; max-width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
+    .ose-venue-map { width: 100%; max-width: 100%; height: auto; max-height: 10rem; object-fit: cover; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
     .ose-who-image { width: 120px; height: 120px; object-fit: cover; border-radius: 50%; display: block; margin-bottom: 0.75rem; background: var(--ose-accent-tint); }${DARK_MODE_CSS}
   </style>
 </head>

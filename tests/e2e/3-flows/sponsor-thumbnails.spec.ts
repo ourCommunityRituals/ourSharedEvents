@@ -84,7 +84,8 @@ for (const vp of VIEWPORTS) {
       await open(page, CHECK);
       const item = itemWith(page, 'sp_logo_check_b');
       await expect(item.getByRole('link', { name: 'No Logo Hardware' })).toBeVisible();
-      await expect(item.getByTestId('sponsor-item-address')).toHaveCount(0);
+      // The banner holds the name only: no location or short text under it.
+      await expect(item).toHaveText('No Logo Hardware');
       await expect(item.locator('img')).toHaveCount(0);
     });
 
