@@ -166,7 +166,8 @@ describe('wrangler.toml agrees with the code in every environment', () => {
 
   test('every namespace_id is unique, so environments never share counts', () => {
     const ids = [...toml.matchAll(/^namespace_id = "(\d+)"/gm)].map((m) => m[1]);
-    expect(ids.length).toBe(6);
+    // Two edge limiters and VOTE_FLOOD_LIMITER (OSE-2234), each in three environments.
+    expect(ids.length).toBe(9);
     expect(new Set(ids).size).toBe(ids.length);
   });
 });
