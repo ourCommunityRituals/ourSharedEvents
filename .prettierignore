@@ -37,3 +37,4 @@ docs/testing/vitest-pool-triage.json
 # for nothing.
 workers/oursharedevents/docs/security/CONFORMANCE.md
 workers/oursharedevents/docs/security/conformance.json
+workers/oursharedevents/src/lib/ncr/corridor-geographies.generated.ts

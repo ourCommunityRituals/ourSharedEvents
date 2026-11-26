@@ -1256,7 +1256,9 @@
                 const bodyHtml =
                   cm.source === 'suppressed'
                     ? '<p class="report-note" data-testid="corridor-map-suppressed-note">Map hidden to keep things anonymous — not enough scan density yet.</p>'
-                    : '<div class="corridor-map-svg" data-corridor-svg></div>' +
+                    : '<div class="filter-row" role="group" aria-label="Build the map one layer at a time" data-lm-steps></div>' +
+                      '<p class="report-note" data-testid="layer-map-say" data-lm-say aria-live="polite"></p>' +
+                      '<div class="corridor-map-svg" data-corridor-svg></div>' +
                       (cm.source === 'fallback'
                         ? '<p class="report-note" data-testid="corridor-map-source-note">Neighborhood estimate — scan density fills in as events accumulate.</p>'
                         : '');
@@ -1429,17 +1431,84 @@
         // goes in through textContent. Anything else in the payload is dropped.
         const slot = content.querySelector('[data-corridor-svg]');
         const cm = report.corridor_map;
-        if (slot && cm && typeof cm.svg === 'string') mountCorridorSvg(slot, cm.svg);
+        if (slot && cm && typeof cm.svg === 'string') {
+          mountCorridorSvg(slot, cm.svg);
+          wireLayerSteps(content, Array.isArray(cm.layers) ? cm.layers : []);
+        }
       })();
+
+      // OSE ADR-041: walk the layer stack one step at a time (base, hexagons,
+      // corridors, rings), earlier steps faded, later ones hidden, or show all.
+      // The steps and their meanings come from report.corridor_map.layers.
+      function wireLayerSteps(root, layers) {
+        const box = root.querySelector('[data-lm-steps]');
+        const say = root.querySelector('[data-lm-say]');
+        const svg = root.querySelector('[data-corridor-svg] svg');
+        if (!box || !say || !svg || !layers.length) return;
+        const STEPS = [
+          ['base', 'Base map', 'Towns in light tints, kept see-through.'],
+          ['hexagons', 'Hexagons', 'Small (res 7), medium (res 6) and large (res 5) areas, shaded by scans.'],
+          ['corridors', 'Corridors', 'Corridors and their nodes, where the map is measuring, and the poster spots scanned. Dashed ones cross a town line.'],
+          ['rings', 'Rings', 'Rings on top, where traffic runs both ways between areas.'],
+        ].filter((st) => layers.some((l) => l.step === st[0]));
+        const shownIn = (id) =>
+          layers.filter((l) => l.step === id).reduce((n, l) => n + (Number(l.shown) || 0), 0);
+        const groups = Array.from(svg.querySelectorAll('g[data-step]'));
+        let current = STEPS[0][0];
+        function apply() {
+          const i = STEPS.findIndex((st) => st[0] === current);
+          for (const g of groups) {
+            const j = STEPS.findIndex((st) => st[0] === g.getAttribute('data-step'));
+            const hidden = i >= 0 && j > i;
+            g.setAttribute('display', hidden ? 'none' : 'inline');
+            g.setAttribute('opacity', i >= 0 && j < i && j > 0 ? '0.4' : '1');
+          }
+          for (const b of box.querySelectorAll('button')) {
+            const on = b.getAttribute('data-step') === current;
+            b.setAttribute('aria-pressed', String(on));
+            b.classList.toggle('active', on);
+          }
+          if (i < 0) say.textContent = 'All layers.';
+          else {
+            const n = shownIn(current);
+            say.textContent =
+              'Step ' + (i + 1) + ' of ' + STEPS.length + '. ' + STEPS[i][2] +
+              (n ? '' : current === 'rings' ? ' No rings are shown on reports yet.' : ' Nothing to show here for this event.');
+          }
+        }
+        const add = (id, text) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'filter-chip';
+          b.setAttribute('data-step', id);
+          b.setAttribute('data-testid', 'layer-step-' + id);
+          b.textContent = text;
+          b.addEventListener('click', () => {
+            current = id;
+            apply();
+          });
+          box.appendChild(b);
+        };
+        STEPS.forEach((st, k) => add(st[0], k + 1 + '. ' + st[1]));
+        add('all', 'All layers');
+        apply();
+      }
 
       function mountCorridorSvg(slot, markup) {
         const NS = 'http://www.w3.org/2000/svg';
-        const TAGS = { svg: 1, polygon: 1, text: 1, title: 1 };
+        // OSE ADR-041 adds the layer stack's g / path / polyline / circle, its
+        // class and data-layer attributes and the paint attributes that carry
+        // @ocr/ui tokens (ADR-008: no stylesheet of our own). Still no href,
+        // style or on*.
+        const TAGS = { svg: 1, g: 1, polygon: 1, polyline: 1, path: 1, circle: 1, text: 1, title: 1 };
         const ATTRS = {
           viewBox: 1, role: 1, 'aria-label': 1, points: 1, fill: 1, 'fill-opacity': 1,
           stroke: 1, 'stroke-width': 1, 'stroke-dasharray': 1, x: 1, y: 1,
           'text-anchor': 1, 'font-family': 1, 'font-size': 1,
           'data-testid': 1, 'data-cell': 1, 'data-count': 1,
+          class: 1, d: 1, cx: 1, cy: 1, r: 1,
+          'data-layer': 1, 'data-step': 1, 'data-order': 1, 'data-res': 1,
+          'stroke-opacity': 1, 'stroke-linecap': 1, 'stroke-linejoin': 1,
         };
         const decode = (s) =>
           s.replace(/&(amp|lt|gt|quot|#39);/g, (m, e) =>

@@ -1066,6 +1066,8 @@ describe('H3 corridor map + open-question resolutions', () => {
       suppressed: [],
       cell_count: 0,
       source: 'suppressed',
+      layers: [],
+      areas: [],
     });
     expect(JSON.stringify(r.report)).not.toContain('892664cdb13ffff');
   });
@@ -1115,6 +1117,8 @@ describe('H3 corridor map + open-question resolutions', () => {
       suppressed: [],
       cell_count: 0,
       source: 'suppressed',
+      layers: [],
+      areas: [],
     });
     expect(JSON.stringify(r.report)).not.toContain('892664cdb13ffff');
   });
