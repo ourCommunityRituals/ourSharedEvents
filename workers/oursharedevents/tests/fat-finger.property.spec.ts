@@ -421,7 +421,7 @@ const sponsorArb = fc.record({
   address_line: fc.option(printable, { nil: null }),
   header_text: fc.option(printable, { nil: null }),
   has_logo: fc.constantFrom(0, 1, null),
-  has_header_image: fc.constantFrom(0, 1, null),
+  has_wide_logo: fc.constantFrom(0, 1, null),
 });
 
 describe('fat-finger | OSE-1955 sponsor card — any title, any id, any link', () => {
@@ -441,22 +441,21 @@ describe('fat-finger | OSE-1955 sponsor card — any title, any id, any link', (
     );
   });
 
-  test('one banner: configured art through the proxy for the id, the escaped title as alt or as text', () => {
+  test('one banner: the configured logo through the proxy for the id, the escaped title as alt or as text', () => {
     fc.assert(
       fc.property(sponsorArb, (s) => {
         const item = renderOneItem(s);
         const title = oracleEsc((s.display_name ?? '').trim() || s.name);
         const id = encodeURIComponent(s.id);
-        // Owner 2026-11-26: one banner per sponsor. Header art, else the logo,
-        // else the name in type; the art's alt is the name.
-        if (s.has_header_image) {
+        // Owner 2026-11-26: one banner per sponsor. The wide logo (top banner),
+        // else the square logo, else the name in type; the art's alt is the name.
+        if (s.has_wide_logo) {
           expect(item).toContain(
-            `src="${oracleEsc(`/api/v2/sponsors/${id}/logo?slot=header`)}" alt="${title}"`
+            `src="${oracleEsc(`/api/v2/sponsors/${id}/logo`)}" alt="${title}"`
           );
-          expect(item).not.toContain('slot=sidebar');
+          expect(item).not.toContain('slot=');
           expect(item).not.toContain('sponsor-name');
         } else if (s.has_logo) {
-          expect(item).not.toContain('slot=header');
           expect(item).toContain(
             `src="${oracleEsc(`/api/v2/sponsors/${id}/logo?slot=sidebar`)}" alt="${title}"`
           );

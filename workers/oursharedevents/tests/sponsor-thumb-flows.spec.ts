@@ -232,6 +232,8 @@ function handlerAttrs(markup: string): string[] {
 }
 
 const proxyPath = (id: string) => `/api/v2/sponsors/${encodeURIComponent(id)}/logo?slot=sidebar`;
+/** Owner 2026-11-26: the banner asks for the wide logo (the proxy's default slot). */
+const widePath = (id: string) => `/api/v2/sponsors/${encodeURIComponent(id)}/logo`;
 
 async function proxy(src: string, init?: RequestInit): Promise<Response> {
   return SELF.fetch(`https://t.test${src}`, init);
@@ -245,12 +247,13 @@ describe('OSE-1955 happy | the page names art and the proxy serves it', () => {
     const ev = 'evt1955_h_one';
     await seedEvent(ev);
     const compact = logo('one-compact');
+    const wide = logo('one-header');
     await seedSponsor(ev, {
       id: 'sp1955_h_one',
       name: 'Corner Bakery LLC',
       displayName: 'Corner Bakery',
       website: 'https://bakery.example',
-      header: logo('one-header'),
+      header: wide,
       compact,
     });
 
@@ -263,18 +266,21 @@ describe('OSE-1955 happy | the page names art and the proxy serves it', () => {
     expect(item, 'no visible name beside the art').not.toMatch(/>\s*Corner Bakery\s*</);
     expect(item).toContain('href="https://bakery.example"');
     expect(item).toContain('rel="noopener noreferrer nofollow"');
-    expect(thumbSrcs(html)).toEqual([proxyPath('sp1955_h_one')]);
+    expect(thumbSrcs(html)).toEqual([widePath('sp1955_h_one')]);
 
     const res = await proxy(thumbSrcs(html)[0]);
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toMatch(/^image\//);
     expect(res.headers.get('x-content-type-options')).toBe('nosniff');
-    expect(upstream, 'the compact logo wins over the header logo').toEqual([compact]);
+    expect(upstream, 'the wide logo (top banner) is the banner, over the square one').toEqual([
+      wide,
+    ]);
+    expect(compact).not.toBe(wide);
   });
 
   test.each([
-    ['compact only', { compact: true, header: false }],
-    ['header only (the fallback)', { compact: false, header: true }],
+    ['square (compact) only: the fallback', { compact: true, header: false }],
+    ['wide (header) only: the banner', { compact: false, header: true }],
   ])('%s: a thumbnail, and its src serves that logo', async (_label, has) => {
     stubUpstream();
     const ev = `evt1955_h_${has.compact ? 'c' : 'h'}`;
@@ -289,7 +295,7 @@ describe('OSE-1955 happy | the page names art and the proxy serves it', () => {
     });
 
     const { html } = await page(ev);
-    expect(thumbSrcs(html)).toEqual([proxyPath(sid)]);
+    expect(thumbSrcs(html)).toEqual([has.header ? widePath(sid) : proxyPath(sid)]);
     const res = await proxy(thumbSrcs(html)[0]);
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toMatch(/^image\//);

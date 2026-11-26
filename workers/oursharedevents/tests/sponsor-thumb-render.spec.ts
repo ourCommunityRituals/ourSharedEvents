@@ -5,8 +5,8 @@
  *
  * Between the header and "What", each sponsor is one block of the hub's sponsor
  * panel (@ocr/ui `.sponsor-panel-block`) holding one 3:1 banner: the sponsor's
- * configured header art (`has_header_image`, through the proxy's
- * `?slot=header`), else the logo (`has_logo`, `?slot=sidebar`), else the name
+ * configured top-banner art, its wide logo (`has_wide_logo`, the proxy's
+ * default slot), else its square logo (`has_logo`, `?slot=sidebar`), else the name
  * set in type. The art is the visual for people who do not read; its alt is
  * the sponsor's name, so the name is always read out. No short text and no
  * location on the event page: they stay on the sponsor's own card.
@@ -85,14 +85,14 @@ const LIST_OPEN = '<ul class="sponsor-panel ose-sponsor-list" data-testid="spons
 const one = (item: string) => `${LIST_OPEN}${ITEM_OPEN}${item}</li></ul>`;
 const nameSpan = (name: string) =>
   `<span class="sponsor-panel-name" data-testid="sponsor-name">${name}</span>`;
-const logo = (id: string, name: string) =>
-  `<img data-testid="sponsor-thumb" src="/api/v2/sponsors/${id}/logo?slot=sidebar" alt="${name}" width="200" height="72" loading="lazy" decoding="async" referrerpolicy="no-referrer">`;
-const headerImg = (id: string, name: string) =>
-  `<img class="sponsor-panel-header" data-testid="sponsor-header" src="/api/v2/sponsors/${id}/logo?slot=header" alt="${name}" width="600" height="200" loading="lazy" decoding="async" referrerpolicy="no-referrer">`;
-/** The banner: the header art, else the logo in the 3:1 frame, else the name. */
-const withHeader = (id: string, name: string) => headerImg(id, name);
+const img = (src: string, name: string) =>
+  `<img data-testid="sponsor-thumb" src="${src}" alt="${name}" width="600" height="200" loading="lazy" decoding="async" referrerpolicy="no-referrer">`;
+const frame = (art: string) =>
+  `<span class="sponsor-panel-header ose-sponsor-art" data-testid="sponsor-art">${art}</span>`;
+/** The banner: the wide logo, else the square logo, else the name, in one 3:1 frame. */
+const withHeader = (id: string, name: string) => frame(img(`/api/v2/sponsors/${id}/logo`, name));
 const withLogo = (id: string, name: string) =>
-  `<span class="sponsor-panel-header ose-sponsor-art" data-testid="sponsor-art">${logo(id, name)}</span>`;
+  frame(img(`/api/v2/sponsors/${id}/logo?slot=sidebar`, name));
 const nameOnly = (name: string) =>
   `<span class="sponsor-panel-header ose-sponsor-art" data-testid="sponsor-art">${nameSpan(name)}</span>`;
 const site = (href: string, inner: string) =>
@@ -107,36 +107,36 @@ function sponsor(over: Partial<Sponsor> = {}): Sponsor {
     display_name: null,
     address_line: null,
     has_logo: 0,
-    has_header_image: 0,
+    has_wide_logo: 0,
     ...over,
   };
 }
 
 describe('sponsor banner: the art', () => {
-  it('sunny: configured header art is the banner, even with a logo on file', () => {
+  it('sunny: the wide logo (top banner) is the banner, even with a square logo on file', () => {
     expect(
-      listOf([sponsor({ has_header_image: 1, has_logo: 1, website_url: 'https://acme.example/' })])
+      listOf([sponsor({ has_wide_logo: 1, has_logo: 1, website_url: 'https://acme.example/' })])
     ).toBe(one(site('https://acme.example/', withHeader('sp_1', 'Acme'))));
   });
 
-  it('sunny: header art and no logo: the art alone is the banner', () => {
-    expect(listOf([sponsor({ has_header_image: 1 })])).toBe(
+  it('sunny: a wide logo alone is the banner', () => {
+    expect(listOf([sponsor({ has_wide_logo: 1 })])).toBe(
       one(card('sp_1', withHeader('sp_1', 'Acme')))
     );
   });
 
-  it('sunny: no header art, a logo: the logo fills the 3:1 frame', () => {
+  it('sunny: no wide logo, a square logo: it sits whole in the 3:1 frame', () => {
     expect(listOf([sponsor({ has_logo: 1, website_url: 'https://acme.example/' })])).toBe(
       one(site('https://acme.example/', withLogo('sp_1', 'Acme')))
     );
   });
 
   for (const v of [0, null, undefined] as const) {
-    it(`rainy: no art at all (has_logo and has_header_image ${String(v)}): the name is the art, once`, () => {
-      const list = listOf([sponsor({ has_logo: v, has_header_image: v })]);
+    it(`rainy: no art at all (has_logo and has_wide_logo ${String(v)}): the name is the art, once`, () => {
+      const list = listOf([sponsor({ has_logo: v, has_wide_logo: v })]);
       expect(list).toBe(one(card('sp_1', nameOnly('Acme'))));
       expect(list).not.toContain('sponsor-thumb');
-      expect(list).not.toContain('sponsor-header');
+      expect(list).not.toContain('/logo');
       expect(list.match(/data-testid="sponsor-name"/g)).toHaveLength(1);
     });
   }
@@ -147,7 +147,7 @@ describe('sponsor banner: the art', () => {
 
   it('the name is always there: the alt of every image, or the text when there is no art', () => {
     const list = listOf([
-      sponsor({ id: 'a', has_header_image: 1, has_logo: 1 }),
+      sponsor({ id: 'a', has_wide_logo: 1, has_logo: 1 }),
       sponsor({ id: 'b', has_logo: 1 }),
       sponsor({ id: 'c' }),
     ]);
@@ -204,7 +204,7 @@ describe('sponsor card: the title', () => {
     expect(listOf([sponsor({ has_logo: 1, name })])).toBe(
       one(card('sp_1', withLogo('sp_1', escaped)))
     );
-    expect(listOf([sponsor({ has_header_image: 1, name })])).toBe(
+    expect(listOf([sponsor({ has_wide_logo: 1, name })])).toBe(
       one(card('sp_1', withHeader('sp_1', escaped)))
     );
     expect(listOf([sponsor({ name })])).toBe(one(card('sp_1', nameOnly(escaped))));
@@ -221,7 +221,7 @@ describe('sponsor card: the id is encoded in the proxy src and card href', () =>
     const id = "sp 1/../x?y'z";
     // encodeURIComponent leaves ' as is; the escaper then makes it &#39;.
     const enc = 'sp%201%2F..%2Fx%3Fy&#39;z';
-    expect(listOf([sponsor({ id, has_logo: 1, has_header_image: 1 })])).toBe(
+    expect(listOf([sponsor({ id, has_logo: 1, has_wide_logo: 1 })])).toBe(
       one(card(enc, withHeader(enc, 'Acme')))
     );
   });
@@ -248,7 +248,7 @@ describe('sponsor card: the list', () => {
       sponsor({
         id: 'a',
         name: 'Ad One',
-        has_header_image: 1,
+        has_wide_logo: 1,
         website_url: 'https://one.example/',
       }),
       sponsor({ id: 'b', name: 'Ad Two', has_logo: 1 }),

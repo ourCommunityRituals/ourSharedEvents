@@ -241,7 +241,9 @@ describe('OSE-ssp1: pre-event sponsor strip', () => {
     const strip = stripOf(html, 'pre-sponsor-strip');
     expect(strip).toContain('Supported by');
     expect(strip).toContain('data-testid="sponsor-thumb"');
-    expect(strip).toContain(`src="/api/v2/sponsors/${sid}/logo?slot=sidebar"`);
+    expect(strip, 'the wide logo is the banner art').toContain(
+      `src="/api/v2/sponsors/${sid}/logo"`
+    );
     expect(strip, 'the name is the alt text').toContain('alt="Thumb Art Co"');
     expect(strip, 'no visible name text beside the art').not.toContain('>Thumb Art Co<');
     expect(strip).toContain('href="https://thumb.example.com"');
@@ -465,7 +467,9 @@ describe('OSE-ssp1: live-event sponsor strip', () => {
       await (await SELF.fetch(`https://t.test/events/${id}`)).text(),
       'live-sponsor-strip'
     );
-    expect(strip).toContain(`src="/api/v2/sponsors/${sid}/logo?slot=sidebar"`);
+    expect(strip, 'the wide logo is the banner art').toContain(
+      `src="/api/v2/sponsors/${sid}/logo"`
+    );
     expect(strip).toContain('alt="Live Art"');
     expect(strip).not.toContain('>Live Art<');
   });
@@ -672,7 +676,9 @@ describe('OSE-ssp1: post-event stats card and sponsor thank-you', () => {
       await (await SELF.fetch(`https://t.test/events/${id}`)).text(),
       'post-sponsor-thanks'
     );
-    expect(strip).toContain(`src="/api/v2/sponsors/${sid}/logo?slot=sidebar"`);
+    expect(strip, 'the wide logo is the banner art').toContain(
+      `src="/api/v2/sponsors/${sid}/logo"`
+    );
     expect(strip).toContain('alt="Post Art"');
     expect(strip).not.toContain('>Post Art<');
     expect(strip).toContain('>Post Plain</span>');

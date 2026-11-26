@@ -116,7 +116,7 @@
     .ose-sponsor-label { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); margin: 0 0 0.5rem; }
     .ose-sponsor-list { list-style: none; margin: 0; padding: 0; gap: 0.5rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, 10rem), 1fr)); }
     .ose-sponsor-art { position: relative; display: flex; align-items: center; justify-content: center; padding: 0.25rem 0.5rem; text-align: center; overflow: hidden; }
-    .ose-sponsor-art > img { position: absolute; inset: 6px; width: calc(100% - 12px); height: calc(100% - 12px); object-fit: contain; }
+    .ose-sponsor-art > img { position: absolute; inset: 4px; width: calc(100% - 8px); height: calc(100% - 8px); object-fit: contain; }
     .ose-sponsor-art > .sponsor-panel-name { font-size: 0.9375rem; line-height: 1.2; }
     .ose-section { margin: 0 0 1rem; } .ose-section > h2 { margin: 0; font-size: 1rem; }
     .ose-section p { margin: 0 0 0.5rem; }

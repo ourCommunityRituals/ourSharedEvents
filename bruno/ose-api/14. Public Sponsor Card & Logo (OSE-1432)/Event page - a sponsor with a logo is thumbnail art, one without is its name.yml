@@ -37,7 +37,7 @@ runtime:
           expect(start).to.be.above(-1);
         });
         test('the sponsor with a logo is a thumbnail through the proxy', function () {
-          expect(strip).to.include('src="/api/v2/sponsors/sb_pcard_onshow/logo?slot=sidebar"');
+          expect(strip).to.include('src="/api/v2/sponsors/sb_pcard_onshow/logo"');
         });
         test('its name is the alt text, not visible text', function () {
           expect(strip).to.include('alt="Public Card On Show"');

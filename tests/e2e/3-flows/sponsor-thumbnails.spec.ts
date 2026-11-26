@@ -133,7 +133,7 @@ test.describe('OSE-1955 edge: any shape of logo stays inside its card art area, 
   ] as const) {
     test(`a ${shape} logo stays inside the 3:1 art area, object-fit contain`, async ({ page }) => {
       await page.setViewportSize({ width: 375, height: 812 });
-      await page.route('**/api/v2/sponsors/sp_logo_check_a/logo?slot=sidebar', (r) =>
+      await page.route('**/api/v2/sponsors/sp_logo_check_a/logo', (r) =>
         r.fulfill({
           status: 200,
           contentType: 'image/svg+xml',
