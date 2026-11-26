@@ -1,0 +1,36 @@
+info:
+  name: "DEC13 | on | 81 a made-up token gets the same answer, byte for byte"
+  type: http
+  seq: 81
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/vote/access"
+  headers:
+    - name: Content-Type
+      value: "application/json"
+    - name: Sec-Fetch-Site
+      value: same-origin
+  body:
+    type: json
+    data: "{\"token\": \"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        if (bru.getEnvVar('votingSwitch') !== 'on') {
+          console.log('NOT RUN (VOTING_ENABLED off on this environment): the switch-on half of decision 13');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        test('DEC13 on: unknown token, the same 403 body', function () { expect(res.getStatus()).to.eql(403); expect(JSON.stringify(res.getBody())).to.eql(bru.getVar('accessRefusal')); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

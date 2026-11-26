@@ -32,6 +32,7 @@
  */
 
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
+import { linkVenue } from './helpers/link-venue';
 import { describe, test, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { handleQrScan, type QrScanEnv } from '../src/handlers/qr-scan';
 import { route, type RouterEnv } from '../src/router';
@@ -131,6 +132,7 @@ async function seedEvent(id: string): Promise<void> {
     id,
     TOKEN[id]
   );
+  await linkVenue(tenv.DB, id);
 }
 
 function scanEnv(limiter?: VoteFloodLimiter, over: Partial<QrScanEnv> = {}): QrScanEnv {

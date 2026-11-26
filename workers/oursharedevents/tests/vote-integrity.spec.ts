@@ -29,6 +29,7 @@
  */
 
 import { env } from 'cloudflare:test';
+import { linkVenue } from './helpers/link-venue';
 import { describe, test, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { handleQrScan, type QrScanEnv } from '../src/handlers/qr-scan';
 import { signAnonId } from '../src/lib/anonymous-id';
@@ -125,6 +126,7 @@ async function seedEvent(id: string): Promise<void> {
     id,
     TOKEN[id]
   );
+  await linkVenue(tenv.DB, id);
 }
 
 async function clear(id: string): Promise<void> {
@@ -341,7 +343,31 @@ describe('the room size has a ceiling the host cannot set (owner, 2026-11-26)', 
     await run(`UPDATE events SET host_venue_id = ? WHERE id = ?`, venueId, eventId);
   }
 
-  test('SECURITY | no venue: 500 at most; over it is refused and nothing opens', async () => {
+  test('SECURITY | no venue linked: voting does not open at all (owner card 2026-11-26)', async () => {
+    const r = await openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 100);
+    expect(r).toMatchObject({ ok: false, status: 409, code: 'VENUE_NEEDED' });
+    expect(await setRow(EV)).toMatchObject({ room_size: null });
+    // A venue that does not exist is no venue: a dangling id does not count.
+    await run(`UPDATE events SET host_venue_id = 'ven_gone' WHERE id = ?`, EV);
+    expect(await openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 100)).toMatchObject({
+      code: 'VENUE_NEEDED',
+    });
+    // A venue the platform has not set up (a host-made look-alike of a capped
+    // venue) does not open voting either (CCR loop 6, F2; owner card
+    // 2026-11-26, "Yes, platform sets each venue first").
+    await atVenue(EV, null, null);
+    expect(await openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 100)).toMatchObject({
+      ok: false,
+      status: 409,
+      code: 'VENUE_NOT_SET_UP',
+    });
+    expect(await setRow(EV)).toMatchObject({ room_size: null });
+    await atVenue(EV, 'outdoor', null);
+    await ok(openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 100));
+  });
+
+  test('SECURITY | outdoors with no permit limit: 500 at most; over it is refused and nothing opens', async () => {
+    await atVenue(EV, 'outdoor', null);
     expect(ROOM_CEILING_DEFAULT).toBe(500);
     const over = await openVoteSet(tenv.DB, EV, PEPPER, nowIso(), 501);
     expect(over).toMatchObject({ ok: false, code: 'ROOM_SIZE_OVER_CEILING' });

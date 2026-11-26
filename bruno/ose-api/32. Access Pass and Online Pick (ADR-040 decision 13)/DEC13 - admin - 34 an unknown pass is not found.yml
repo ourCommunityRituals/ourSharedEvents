@@ -1,0 +1,32 @@
+info:
+  name: "DEC13 | admin | 34 an unknown pass is not found"
+  type: http
+  seq: 34
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{accessNightId}}/votables/access-passes/vap_00000000000000000000000000000000/revoke"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('DEC13 revoke: unknown id 404', function () { expect(res.getStatus()).to.eql(404); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

@@ -1,0 +1,33 @@
+info:
+  name: "DEC13 | admin | 41 turn the Online Pick on"
+  type: http
+  seq: 41
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{accessNightId}}/votables/online-pick"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"on\": true}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('DEC13 online pick: on, with no number in the answer', function () { expect(res.getStatus()).to.eql(200); expect(b.online_pick.on).to.eql(true); expect(JSON.stringify(b.online_pick)).to.not.match(/\d/); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

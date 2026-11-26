@@ -66,11 +66,20 @@ const OPEN_NOW = `o.id = ? AND o.event_id = ?
      AND s.pepper_epoch IS NOT NULL AND s.pepper_epoch = ?
      AND ${EVENT_LIVE}`;
 
+/**
+ * The last bind is the Access Pass id, or null for a pass from the room (ADR-040
+ * decision 13). The text is the same for both, so no log or query analytics can
+ * tell an Access Pass vote from a room vote. A pass taken back while its vote
+ * was in flight writes no receipt, so it is not counted (CCR loop 4, SEC-4).
+ */
 const RECEIPT_INSERT = `INSERT INTO vote_receipts (object_id, receipt)
    SELECT o.id, ?
      FROM votable_objects o
      JOIN vote_sets s ON s.id = o.set_id AND s.event_id = o.event_id
     WHERE ${OPEN_NOW}
+      AND (? IS NULL OR EXISTS (SELECT 1 FROM vote_access_passes a
+                                 WHERE a.id = ? AND a.event_id = s.event_id
+                                   AND a.set_id = s.id AND a.is_revoked = 0))
    ON CONFLICT DO NOTHING`;
 
 /**
@@ -119,6 +128,8 @@ export interface CastInput {
   /** The epoch running now (pepperEpoch of ANON_ID_HASH_PEPPER). */
   epoch: string;
   nowMs: number;
+  /** The Access Pass behind this pass (claim `a`), checked in the same statement. */
+  accessId?: string | null;
 }
 
 /**
@@ -149,7 +160,9 @@ export async function castVote(
   const nowIso = new Date(input.nowMs).toISOString();
   const open = [objectId, eventId, nowIso, epoch, eventId];
   const statements = [
-    db.prepare(RECEIPT_INSERT).bind(receipt, ...open),
+    db
+      .prepare(RECEIPT_INSERT)
+      .bind(receipt, ...open, input.accessId ?? null, input.accessId ?? null),
     db.prepare(COUNT).bind(side, side, objectId),
     db.prepare(TEAM_MARKER_INSERT).bind(obj.set_id, obj.group_id ?? null, team, team),
     db.prepare(PARTICIPANT_INSERT).bind(obj.set_id, participant, objectId, receipt),

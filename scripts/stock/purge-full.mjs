@@ -83,6 +83,11 @@ export const PURGE_EXEMPT = {
     'made only when an admin opens voting (S3), never by the stock build; a set made by hand on a stock event keeps its foreign key, so the event delete stops rather than drop vote rows',
   'votable_objects.event_id':
     'made only by an admin or the OurWKRP song route under an open set, never by the stock build; its tallies and markers are keyed by object id, so the event delete stops at the foreign key rather than drop vote rows',
+  // 0124 (OSE ADR-040 decision 13). Both hang off a vote set, which the stock build never makes.
+  'vote_access_passes.event_id':
+    'made only when a host gives an Access Pass under a vote set, never by the stock build; its foreign key to vote_sets stops the event delete rather than drop a pass',
+  'vote_crowd_sets.event_id':
+    'made only when a host turns the Online Pick on for a vote set, never by the stock build; its foreign key to vote_sets stops the event delete rather than drop Online Pick rows',
   'sponsor_business_draft.event_id':
     "made only by a sponsor's own invite flow, never by the stock build; event_id has no foreign key (0053), and its sponsor_asset_draft children are keyed by draft_token, not a manifest id",
 };

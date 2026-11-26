@@ -22,6 +22,7 @@ import { fetchFairSponsors, type FairRow } from './booth-page';
 import { renderVotePage } from '../lib/vote-page-render';
 import { readPublicVoteResult, type PublicVoteResult } from '../lib/vote-public-result';
 import { votingEnabled, type VotingSwitchEnv } from '../lib/voting-switch';
+import { readPublicCrowdResult, type PublicCrowdResult } from '../lib/vote-crowd';
 
 export interface VotePageEnv extends VotingSwitchEnv {
   DB?: D1Database;
@@ -80,7 +81,8 @@ export function votePageResponse(body: string): Response {
 export async function handleVotePage(
   _request: Request,
   env: VotePageEnv,
-  eventId: string
+  eventId: string,
+  channel: 'room' | 'crowd' = 'room'
 ): Promise<Response> {
   if (!env.DB) return votePageUnavailable();
   if (!EVENT_ID.test(eventId)) return votePageNotFound();
@@ -104,11 +106,15 @@ export async function handleVotePage(
 
   const on = votingEnabled(env);
   let result: PublicVoteResult | null = null;
+  let crowdResult: PublicCrowdResult | null = null;
   if (on) {
     try {
       result = await readPublicVoteResult(db, event.id);
+      // The Online Pick's result shows only beside the Room Pick's (decision 13).
+      crowdResult = result ? await readPublicCrowdResult(db, event.id) : null;
     } catch {
       result = null;
+      crowdResult = null;
     }
   }
   const sponsors = await fetchFairSponsors(db, event.id);
@@ -119,6 +125,8 @@ export async function handleVotePage(
       sponsors,
       votingOn: on,
       result,
+      channel,
+      crowdResult,
     })
   );
 }

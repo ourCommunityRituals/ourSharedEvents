@@ -80,6 +80,141 @@
       "find": "  AND sp.sponsor_accepted = 1",
       "replace": "  AND 1 = 1",
       "kill": ["tests/playwright/sponsor-surfaces-journey.spec.ts"]
+    },
+    {
+      "id": "access-pass-cap-frees-on-revoke",
+      "layer": "integration",
+      "rule": "An Access Pass cap counts every pass ever given for the set; a revoke never frees a slot (votes cast with a pass stay after a revoke).",
+      "file": "workers/oursharedevents/src/lib/vote-access-pass.ts",
+      "find": "AND (SELECT COUNT(*) FROM vote_access_passes a WHERE a.set_id = s.id) < ?",
+      "replace": "AND (SELECT COUNT(*) FROM vote_access_passes a WHERE a.set_id = s.id AND a.is_revoked = 0) < ?",
+      "kill": ["workers/oursharedevents/tests/vote-access-online.spec.ts"]
+    },
+    {
+      "id": "access-pass-no-cap",
+      "layer": "integration",
+      "rule": "At most four Access Passes per vote set, checked inside the INSERT.",
+      "file": "workers/oursharedevents/src/lib/vote-access-pass.ts",
+      "find": "AND (SELECT COUNT(*) FROM vote_access_passes a WHERE a.set_id = s.id) < ?",
+      "replace": "AND ? > -1",
+      "kill": ["workers/oursharedevents/tests/vote-access-online.spec.ts"]
+    },
+    {
+      "id": "access-pass-revoke-not-checked-at-vote",
+      "layer": "integration",
+      "rule": "A revoked Access Pass stops voting at once, even from a pass already redeemed.",
+      "file": "workers/oursharedevents/src/handlers/vote.ts",
+      "find": "if (claims.access_id && !(await accessPassUsable(db, eventId, claims.access_id)))",
+      "replace": "if (false)",
+      "kill": ["workers/oursharedevents/tests/vote-access-online.spec.ts"]
+    },
+    {
+      "id": "access-pass-redeems-when-revoked",
+      "layer": "integration",
+      "rule": "A revoked Access Pass cannot be redeemed.",
+      "file": "workers/oursharedevents/src/lib/vote-access-pass.ts",
+      "find": "WHERE a.lookup = ? AND a.is_revoked = 0",
+      "replace": "WHERE a.lookup = ?",
+      "kill": ["workers/oursharedevents/tests/vote-access-online.spec.ts"]
+    },
+    {
+      "id": "access-pass-key-is-room-key",
+      "layer": "integration",
+      "rule": "An Access Pass voter key is under its own HKDF label, never the room's.",
+      "file": "workers/oursharedevents/src/lib/vote-pass.ts",
+      "find": "return keyUnder(ACCESS_VOTER_KEY_LABEL, pepper, token, eventId);",
+      "replace": "return keyUnder(VOTER_KEY_LABEL, pepper, token, eventId);",
+      "kill": ["workers/oursharedevents/tests/vote-access-online.spec.ts"]
+    },
+    {
+      "id": "online-pick-pass-opens-as-room-pass",
+      "layer": "integration",
+      "rule": "A crowd pass never opens as a Room Pick pass: its own prefix, bound into the seal, and its own seal key. Each layer alone holds (a mutant that removes only one survives, as designed), so this mutant removes both.",
+      "file": "workers/oursharedevents/src/lib/vote-pass.ts",
+      "find": "const CROWD: Channel = { prefix: CROWD_PREFIX, seal: CROWD_SEAL_LABEL };",
+      "replace": "const CROWD: Channel = ROOM;",
+      "kill": ["workers/oursharedevents/tests/vote-access-online.spec.ts"]
+    },
+    {
+      "id": "online-pick-counts-into-room",
+      "layer": "integration",
+      "rule": "An Online Pick vote raises the crowd's counter only, never the Room Pick's.",
+      "file": "workers/oursharedevents/src/lib/vote-crowd.ts",
+      "find": "const CROWD_COUNT = `UPDATE vote_crowd_tallies",
+      "replace": "const CROWD_COUNT = `UPDATE vote_tallies",
+      "kill": ["workers/oursharedevents/tests/vote-access-online.spec.ts"]
+    },
+    {
+      "id": "online-pick-final-before-room",
+      "layer": "integration",
+      "rule": "The Online Pick's result is decided only after the Room Pick is final.",
+      "file": "workers/oursharedevents/src/lib/vote-crowd.ts",
+      "find": "   AND set_id IN (SELECT id FROM vote_sets WHERE id = ? AND is_final = 1 AND is_void = 0)`;",
+      "replace": "   AND ? IS NOT NULL`;",
+      "kill": ["workers/oursharedevents/tests/vote-access-online.spec.ts"]
+    },
+    {
+      "id": "online-pick-takes-votes-when-off",
+      "layer": "integration",
+      "rule": "The Online Pick takes a vote only while the host has it on.",
+      "file": "workers/oursharedevents/src/lib/vote-crowd.ts",
+      "find": "     AND c.is_on = 1 AND c.is_final = 0\n     AND c.pepper_epoch IS NOT NULL",
+      "replace": "     AND c.is_final = 0\n     AND c.pepper_epoch IS NOT NULL",
+      "kill": ["workers/oursharedevents/tests/vote-access-online.spec.ts"]
+    },
+    {
+      "id": "vote-route-unlimited",
+      "layer": "integration",
+      "rule": "The vote POST is limited per caller (ADR-040 decision 5).",
+      "file": "workers/oursharedevents/src/router.ts",
+      "find": "(await isPublicReadLimited(request, env, 'vote-cast', PUBLIC_PAGE_MAX))",
+      "replace": "(false)",
+      "kill": ["workers/oursharedevents/tests/vote-access-online.spec.ts"]
+    },
+    {
+      "id": "online-pick-alarm-never-trips",
+      "layer": "integration",
+      "rule": "Past a full room's minute of Online Pick passes, the host's swarm alarm trips (vote_crowd_sets.burst_seen), detection only.",
+      "file": "workers/oursharedevents/src/lib/vote-crowd.ts",
+      "find": "    if (success || crowdFlagged.has(eventId)) return false;",
+      "replace": "    if (success || !crowdFlagged.has(eventId)) return false;",
+      "kill": ["workers/oursharedevents/tests/vote-access-online.spec.ts"]
+    },
+    {
+      "id": "access-revoke-in-flight-counts",
+      "layer": "integration",
+      "rule": "A vote whose Access Pass was taken back while it was in flight is not counted: the revoke is checked in the receipt INSERT (ADR-040 decision 13).",
+      "file": "workers/oursharedevents/src/lib/vote-cast.ts",
+      "find": "AND a.set_id = s.id AND a.is_revoked = 0))",
+      "replace": "AND a.set_id = s.id AND 1 = 1))",
+      "kill": ["workers/oursharedevents/tests/vote-access-online.spec.ts"]
+    },
+    {
+      "id": "crowd-vote-any-site",
+      "layer": "integration",
+      "rule": "The Online Pick vote route takes a vote from this site only (SAME_ORIGIN_ONLY).",
+      "file": "workers/oursharedevents/src/handlers/vote.ts",
+      "find": "  if (!sameOrigin(request))\n    return answer(403, 'SAME_ORIGIN_ONLY', 'A vote comes from the vote page');\n  if (!EVENT_ID.test(eventId)) return answer(403, 'VOTE_PASS_INVALID', OPEN_AGAIN);",
+      "replace": "  if (false)\n    return answer(403, 'SAME_ORIGIN_ONLY', 'A vote comes from the vote page');\n  if (!EVENT_ID.test(eventId)) return answer(403, 'VOTE_PASS_INVALID', OPEN_AGAIN);",
+      "kill": ["workers/oursharedevents/tests/vote-access-online.spec.ts"]
+    },
+    {
+      "id": "access-redeem-any-site",
+      "layer": "integration",
+      "rule": "The Access Pass redeem route takes a token from this site only (one refusal).",
+      "file": "workers/oursharedevents/src/handlers/vote-access.ts",
+      "find": "  if (site !== null) return site.trim().toLowerCase() === 'same-origin';",
+      "replace": "  if (site !== null) return true;",
+      "kill": ["workers/oursharedevents/tests/vote-access-online.spec.ts"]
+    },
+    {
+      "id": "online-pick-volume-never-trips",
+      "layer": "integration",
+      "rule": "Past twice the room size of Online Pick voters, the host's swarm flag is set, detection only (SEC-1).",
+      "file": "workers/oursharedevents/src/lib/vote-crowd.ts",
+      "find": "        > ${CROWD_VOLUME_FACTOR} * (SELECT s.room_size",
+      "replace": "        > 1000 * ${CROWD_VOLUME_FACTOR} * (SELECT s.room_size",
+      "kill": ["workers/oursharedevents/tests/vote-access-online.spec.ts"]
     }
   ]
 }

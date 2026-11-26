@@ -15,6 +15,7 @@
  */
 
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
+import { linkVenue } from './helpers/link-venue';
 import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { route, type RouterEnv } from '../src/router';
 import { VOTING_ON } from '../src/lib/voting-switch';
@@ -94,6 +95,7 @@ async function seedEvent(id: string, status: string) {
     id,
     status
   );
+  await linkVenue(tenv.DB, id);
 }
 
 async function openNight(

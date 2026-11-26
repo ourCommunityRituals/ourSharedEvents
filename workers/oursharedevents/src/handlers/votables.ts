@@ -20,6 +20,11 @@
  *   POST /api/v2/admin/events/:id/votables/objects/:oid/open      open it { window_seconds? }
  *   POST /api/v2/admin/events/:id/votables/objects/:oid/reopen    reopen it { window_seconds? }
  *   POST /api/v2/admin/events/:id/votables/objects/:oid/close     close it
+ *   GET  /api/v2/admin/events/:id/votables/access-passes          the Access Passes given, and how
+ *                                                                 many remain (decision 13)
+ *   POST /api/v2/admin/events/:id/votables/access-passes          give one; its link is shown once
+ *   POST /api/v2/admin/events/:id/votables/access-passes/:pid/revoke  revoke one, for good
+ *   POST /api/v2/admin/events/:id/votables/online-pick            { on: true | false } (decision 13)
  *
  * THE BRAND WALL. Every route is under /api/v2/admin/events/:id, so the
  * router's guardAdminObjectScope has proved the event is in the caller's brand
@@ -46,6 +51,8 @@
 import { corsHeaders } from '../lib/cors';
 import { makeVoteCode, readVoteCode, replaceVoteCode } from '../lib/vote-code';
 import { errorLabel } from '../lib/error-label';
+import { giveAccessPass, listAccessPasses, revokeAccessPass } from '../lib/vote-access-pass';
+import { readOnlinePick, setOnlinePick } from '../lib/vote-crowd';
 import {
   adminFinalizeVoteSet,
   closeVoteSet,
@@ -86,7 +93,11 @@ export interface VotablesRoute {
     | 'update-object'
     | 'open-object'
     | 'reopen-object'
-    | 'close-object';
+    | 'close-object'
+    | 'list-access'
+    | 'give-access'
+    | 'revoke-access'
+    | 'online-pick';
   objectId?: string;
   /** null for a read, which is not audited. */
   action: string | null;
@@ -117,6 +128,12 @@ const ACTIONS: Record<VotablesRoute['op'], string | null> = {
   'open-object': 'VOTABLE_OPEN',
   'reopen-object': 'VOTABLE_REOPEN',
   'close-object': 'VOTABLE_CLOSE',
+  // ADR-040 decision 13: each give and revoke is in the audit log with the
+  // admin's identity and the hour. Never the recipient: there is none to write.
+  'list-access': null,
+  'give-access': 'VOTE_ACCESS_PASS_GIVE',
+  'revoke-access': 'VOTE_ACCESS_PASS_REVOKE',
+  'online-pick': 'VOTE_ONLINE_PICK_SET',
 };
 
 /**
@@ -135,7 +152,15 @@ export function matchVotablesRoute(method: string, rest: string): VotablesRoute 
     if (method === 'POST') return make('create-set');
     return null;
   }
+  if (parts.length === 1 && parts[0] === 'access-passes') {
+    if (method === 'GET') return make('list-access');
+    if (method === 'POST') return make('give-access');
+    return null;
+  }
+  if (parts.length === 3 && parts[0] === 'access-passes' && parts[2] === 'revoke')
+    return method === 'POST' ? make('revoke-access', parts[1]) : null;
   if (parts.length === 1 && method === 'POST') {
+    if (parts[0] === 'online-pick') return make('online-pick');
     if (parts[0] === 'objects') return make('create-object');
     if (parts[0] === 'code') return make('create-code');
     const op = SET_OPS[parts[0]];
@@ -212,8 +237,11 @@ export async function handleVotables(
     if (route.op === 'list') {
       const { set, objects, event_live } = await listVotables(db, eventId);
       const code = await readVoteCode(db, eventId, origin, clock);
-      return reply(request, 200, { set, objects, event_live, code });
+      const online_pick = await readOnlinePick(db, eventId);
+      return reply(request, 200, { set, objects, event_live, code, online_pick });
     }
+    if (route.op === 'list-access')
+      return answer(request, await listAccessPasses(db, eventId), 'access');
 
     const parsed = await readJson(request);
     if (!parsed.ok) return badJson(request);
@@ -239,6 +267,41 @@ export async function handleVotables(
       case 'create-code': {
         const { made, code } = await makeVoteCode(db, eventId, origin, clock);
         return reply(request, made ? 201 : 200, { code });
+      }
+      case 'give-access': {
+        // No field is taken: a pass has no name, note or reason to type.
+        const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+        if (Object.keys(b).length)
+          return reply(request, 400, {
+            code: 'UNKNOWN_FIELD',
+            error: 'An Access Pass takes no details',
+          });
+        return answer(
+          request,
+          await giveAccessPass(db, env.ANON_ID_HASH_PEPPER, eventId, origin),
+          'access_pass',
+          201
+        );
+      }
+      case 'revoke-access':
+        return answer(
+          request,
+          await revokeAccessPass(db, eventId, route.objectId ?? ''),
+          'access_pass'
+        );
+      case 'online-pick': {
+        const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+        const extra = Object.keys(b).filter((k) => k !== 'on');
+        if (extra.length || typeof b.on !== 'boolean')
+          return reply(request, 400, {
+            code: 'INVALID_ONLINE_PICK',
+            error: 'Send { on: true } or { on: false }',
+          });
+        return answer(
+          request,
+          await setOnlinePick(db, eventId, b.on, env.ANON_ID_HASH_PEPPER, nowIso),
+          'online_pick'
+        );
       }
       case 'replace-code':
         return reply(request, 201, { code: await replaceVoteCode(db, eventId, origin, clock) });
@@ -288,7 +351,8 @@ export async function handleVotables(
         const move = route.op.replace('-object', '') as ObjectMove;
         const kind = await votableKind(db, eventId, route.objectId ?? '');
         if (!kind) return refuse(request, NO_OBJECT);
-        const window = move === 'close' ? { ok: true as const, value: 0 } : parseWindow(body, kind);
+        // Only an open takes a window: close and reopen are refused as WINDOW_FIXED.
+        const window = move === 'open' ? parseWindow(body, kind) : { ok: true as const, value: 0 };
         if (!window.ok) return refuse(request, window);
         return answer(
           request,

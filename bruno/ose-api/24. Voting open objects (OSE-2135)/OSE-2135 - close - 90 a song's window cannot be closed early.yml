@@ -1,0 +1,32 @@
+info:
+  name: "OSE-2135 | close | close the song"
+  type: http
+  seq: 90
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteReadNightId}}/votables/objects/{{voteReadSongOneId}}/close"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2135 close: refused, WINDOW_FIXED: a window runs its full length (owner card 2026-11-26)', function () { expect(res.getStatus()).to.eql(409); expect((res.getBody() || {}).code).to.eql('WINDOW_FIXED'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

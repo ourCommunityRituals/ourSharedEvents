@@ -1,0 +1,34 @@
+info:
+  name: OSE-2234 | create | add a second song
+  type: http
+  seq: 46
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteNightId}}/votables/objects"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"kind\": \"song\", \"label\": \"Song two\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2234 create: 201, the second song is in draft', function () { expect(res.getStatus()).to.eql(201); expect(b.object.state).to.eql('draft'); });
+        bru.setVar('voteSongTwoId', (b.object && b.object.id) || 'missing-song');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

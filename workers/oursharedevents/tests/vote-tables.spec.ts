@@ -236,9 +236,12 @@ describe('OSE-2125 | the vote tables: where they live and what they hold', () =>
     }
     expect(found).toEqual([]);
     // The set and the object hold only these times: the hour, and a song's window.
+    // opened_at (0123, CCR loop 5) is the set's first-open hour, for the 30-day
+    // final backstop: a time of the night, never of a voter.
     expect((await columns('vote_sets')).filter(timeShaped).sort()).toEqual([
       'created_at',
       'final_at',
+      'opened_at',
       'updated_at',
     ]);
     expect((await columns('votable_objects')).filter(timeShaped).sort()).toEqual([
@@ -276,6 +279,7 @@ describe('OSE-2125 | the vote tables: where they live and what they hold', () =>
       'flood_seen', // 0122 (OSE-2234): a one-way flag: more voters than the room holds (public at final)
       'room_size', // 0122: the room size the host gave at the first open, fixed from then on
       'burst_seen', // 0122: a one-way flag: a burst of passes (the host's alarm only)
+      'opened_at', // 0123: the hour the set first opened, written once (the 30-day final backstop)
     ]);
     expect(await columns('votable_objects')).toEqual([
       'id',
@@ -290,6 +294,7 @@ describe('OSE-2125 | the vote tables: where they live and what they hold', () =>
       'sort',
       'created_at',
       'updated_at',
+      'window_seconds', // 0123: the window length it opened with, one per kind per set
     ]);
   });
 

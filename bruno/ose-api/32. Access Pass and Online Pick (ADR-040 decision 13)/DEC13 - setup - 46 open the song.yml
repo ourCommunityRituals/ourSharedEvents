@@ -1,0 +1,32 @@
+info:
+  name: "DEC13 | setup | 46 open the song"
+  type: http
+  seq: 46
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{accessNightId}}/votables/objects/{{accessSongId}}/open"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"window_seconds\": 600}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('DEC13 setup: the song is open now', function () { expect(res.getStatus()).to.eql(200); expect((res.getBody() || {}).object.open_now).to.eql(true); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

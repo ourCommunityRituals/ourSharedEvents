@@ -1,11 +1,11 @@
 info:
-  name: OSE-2127 | close | close the vote set again
+  name: "DEC13 | cleanup | 905 the night is archived"
   type: http
-  seq: 82
+  seq: 905
 
 http:
-  method: POST
-  url: "{{baseUrl}}/api/v2/admin/events/{{voteNightId}}/votables/close"
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/{{accessNightId}}"
   headers:
     - name: CF-Access-Client-Id
       value: "{{cfAccessClientId}}"
@@ -15,19 +15,18 @@ http:
       value: "application/json"
   body:
     type: json
-    data: "{}"
+    data: "{\"status\": \"archived\"}"
   auth: inherit
 
 runtime:
   scripts:
     - type: after-response
       code: |-
-        const b = res.getBody() || {};
-        test('OSE-2127 close: 200', function () { expect(res.getStatus()).to.eql(200); expect(b.set.state).to.eql('closed'); });
+        test('DEC13 cleanup: archived', function () { expect(res.getStatus()).to.be.below(300); });
 
 settings:
   encodeUrl: true
   timeout: 0
-  followRedirects: true
-  maxRedirects: 5
+  followRedirects: false
+  maxRedirects: 0
   forwardAuthorizationHeader: false

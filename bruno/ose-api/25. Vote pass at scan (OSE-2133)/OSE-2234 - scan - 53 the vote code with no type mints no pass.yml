@@ -1,0 +1,58 @@
+info:
+  name: "OSE-2234 | scan | the vote code with its stamp but no type mints no pass"
+  type: http
+  seq: 53
+
+# The vote code read without type=vote (CCR loop 6, L2): the same token and the
+# same fresh stamp that minted a pass in 50 seconds ago, with the type cut off.
+# The server treats it as a stale scan, so a code cannot be passed off as an
+# ordinary poster code. No fragment, no cookie, the voter page that says scan
+# again. Never prints the Location header: every check compares booleans.
+
+http:
+  method: GET
+  url: "{{baseUrl}}/q/{{votePassToken}}?w={{votePassStamp}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: X-OCR-CI
+      value: "{{ocrCiEdgeToken}}"
+    - name: Accept
+      value: text/html
+    - name: User-Agent
+      value: ose-bruno-vote-pass
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        var status = res.getStatus();
+        var edge = status === 403 && (res.getHeader('cf-mitigated') || '').length > 0;
+        if (edge) { test('EDGE: the scan was challenged before the Worker ran (OSE-939); nothing below was checked', function () { expect(edge).to.equal(true); }); }
+        if (edge && String(bru.getEnvVar('edgeStrict')) === '1') { test('EDGE (strict, OSE-2022): the scan reached the Worker, not an edge challenge', function () { expect('edge challenge').to.eql('the Worker'); }); }
+        var loc = String(res.getHeader('location') || '');
+        var hashAt = loc.indexOf('#');
+        var beforeHash = hashAt < 0 ? loc : loc.slice(0, hashAt);
+        var frag = hashAt < 0 ? '' : loc.slice(hashAt + 1);
+        var queryAt = beforeHash.indexOf('?');
+        var pathOnly = (queryAt < 0 ? beforeHash : beforeHash.slice(0, queryAt)).replace(/^https?:\/\/[^/]+/, '');
+        var night = bru.getVar('votePassNightId');
+        loc = null;
+        if (!edge) {
+          test('OSE-2234 scan: 302 and no-store', function () { expect(status === 302).to.eql(true); expect(String(res.getHeader('cache-control') || '').indexOf('no-store') >= 0).to.eql(true); });
+          test('OSE-2234 scan: the vote code with no type mints no pass: no fragment, and the voter page that says scan again', function () {
+            expect(frag === '').to.eql(true);
+            expect(pathOnly === '/events/' + night + '/vote').to.eql(true);
+          });
+          test('OSE-2234 scan: a stale scan sets no cookie', function () { expect(!res.getHeader('set-cookie')).to.eql(true); });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

@@ -1,11 +1,11 @@
 info:
-  name: "OSE-2135 | close | close the song"
+  name: "DEC13 | setup | 45 open the vote set"
   type: http
-  seq: 90
+  seq: 45
 
 http:
   method: POST
-  url: "{{baseUrl}}/api/v2/admin/events/{{voteReadNightId}}/votables/objects/{{voteReadSongOneId}}/close"
+  url: "{{baseUrl}}/api/v2/admin/events/{{accessNightId}}/votables/open"
   headers:
     - name: CF-Access-Client-Id
       value: "{{cfAccessClientId}}"
@@ -15,14 +15,14 @@ http:
       value: "application/json"
   body:
     type: json
-    data: "{}"
+    data: "{\"room_size\": 200}"
   auth: inherit
 
 runtime:
   scripts:
     - type: after-response
       code: |-
-        test('OSE-2135 close: the song closes', function () { expect(res.getStatus()).to.eql(200); });
+        test('DEC13 setup: the set opens', function () { expect(res.getStatus()).to.eql(200); });
 
 settings:
   encodeUrl: true

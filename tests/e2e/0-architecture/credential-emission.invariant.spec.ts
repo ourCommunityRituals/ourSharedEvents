@@ -953,9 +953,10 @@ const EXEMPTIONS: ReadonlyArray<{ file: string; sink: string; carries: string; r
     sink: 'setAnonCookie',
     carries: '`newCookie`',
     reason:
-      'GET /q/:token on the room vote code only (OSE-2214: a poster code sets none) sends the ' +
+      'GET /q/:token on the room vote code only (OSE-2214: a poster code sets none), and GET ' +
+      "/q/crowd/:eventId, the Online Pick's way in (OSE ADR-040 decision 13), send the " +
       'anonymous id back as the ose_anon cookie: the same cookie, the same rule (invariant 4), ' +
-      'listed in cookie-setters.invariant.spec.ts.',
+      'still on /q, listed in cookie-setters.invariant.spec.ts.',
   },
 ];
 
@@ -1014,6 +1015,26 @@ const MINT_SITES: ReadonlyArray<{
       '`/events/:id/vote#t=`, and nowhere else: no body, no other header, no query string, no ' +
       'log line (OSE ADR-040 decision 6). The test below holds the source to that one path.',
     runtime: '\\/vote#t=$',
+  },
+  {
+    file: 'handlers/qr-scan.ts',
+    callee: 'mintCrowdPass',
+    product:
+      'GET /q/crowd/:eventId (OSE ADR-040 decision 13), with voting on and the Online Pick on and ' +
+      'open, answers 302 with a 30-minute Online Pick pass (`vc1.`) for that browser at that event. ' +
+      'It sits at the end of `Location`, after `/events/:id/online-pick#t=`, and nowhere else. ' +
+      'Another prefix and another seal: it never opens in the Room Pick.',
+    runtime: '\\/online-pick#t=$',
+  },
+  {
+    file: 'lib/vote-access-pass.ts',
+    callee: 'mintAccessVotePass',
+    product:
+      'POST /api/v2/vote/access (OSE ADR-040 decision 13) takes an Access Pass token in a ' +
+      'same-origin JSON body and answers that same browser with a 30-minute room pass under ' +
+      '`pass`; its page puts it straight into the voter page fragment. One refusal for anything ' +
+      'else; limited per caller; no log line names the token or the pass.',
+    runtime: '\\/api\\/v2\\/vote\\/access$',
   },
   {
     file: 'google/auth.ts',

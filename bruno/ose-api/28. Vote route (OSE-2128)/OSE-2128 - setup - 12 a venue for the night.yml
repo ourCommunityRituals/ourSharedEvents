@@ -1,0 +1,39 @@
+info:
+  name: OSE-2128 | setup | a venue for the night
+  type: http
+  seq: 12
+
+# OSE-2234 (owner card 2026-11-26): voting opens only on an event linked to
+# its venue. The shared public brand holds no venue, so the night is made in
+# the brand ose-vote-staging and held at a venue that brand owns. The venue has no
+# room limit set, so the 500 default is its ceiling.
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/venues"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"brand_id\": \"ose-vote-staging\", \"name\": \"OSE-2128 Hall (staging, synthetic)\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2128 setup: the venue is made for the night\'s brand', function () { expect(res.getStatus()).to.eql(201); expect(b.owner_brand).to.eql('ose-vote-staging'); expect(b.id).to.match(/^ven_[0-9a-f]{32}$/); });
+        bru.setVar('voteRouteNightVenueId', b.id || 'missing-venue');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -30,6 +30,11 @@
  *          D1's remote runner cannot take one, migration 0025);
  *        - room_size (OSE-2234) is set only by a write whose WHERE says
  *          `room_size IS NULL`, so it is written once and never changed;
+ *          opened_at the same, with `opened_at IS NULL` (CCR loop 5);
+ *        - a write to votable_objects that sets state (other than 'closed')
+ *          or a non-null closes_at says `state = 'draft'`, and window_seconds
+ *          is set only under `window_seconds IS NULL`: a window runs its full
+ *          length, once (owner card 2026-11-26);
  *        - pepper_epoch and played_by are set only by a write whose WHERE says
  *          the column IS NULL (stamped once, never restamped);
  *        - secret_margin and secret_floor are set to a value only by a write
@@ -177,6 +182,8 @@ const VOTE_HANDLER = 'src/handlers/vote.ts';
 const PUBLIC_RESULT_LIB = 'src/lib/vote-public-result.ts';
 const VOTE_PAGE_HANDLER = 'src/handlers/vote-page.ts';
 const VOTE_PAGE_RENDER = 'src/lib/vote-page-render.ts';
+const ACCESS_LIB = 'src/lib/vote-access-pass.ts';
+const CROWD_LIB = 'src/lib/vote-crowd.ts';
 const VOTE_FLOOD_LIB = 'src/lib/vote-flood.ts';
 
 /**
@@ -195,6 +202,10 @@ const VOTE_TABLE_FILES: Record<string, string> = {
     "S5 (OSE-2130): the night's result. Two UPDATEs, run in finalizeVoteSet's batch, that reads the tallies, the team and participant markers, T and V inside SQL and writes only the outcome and the winner's id.",
   [PUBLIC_RESULT_LIB]:
     "S4b (OSE-2129): the voter page's result. Reads outcome, the winner's id, the room check flag and the host's room size (OSE-2234) from a final, non-void vote_sets row, and labels from votable_objects. No write, no counter, no secret.",
+  [ACCESS_LIB]:
+    "ADR-040 decision 13: the Access Pass. Gives (one INSERT with the cap inside it, against vote_sets), lists, revokes and redeems rows of vote_access_passes, and deletes a final set's passes. It reads no counter and no secret.",
+  [CROWD_LIB]:
+    "ADR-040 decision 13: the Online Pick. Writes and reads only the vote_crowd_* tables, plus the room set's state and objects' windows; its result UPDATE reads crowd counters, markers, T and V inside SQL. Never a room counter or marker table.",
   [VOTE_FLOOD_LIB]:
     'OSE-2234: the host-only burst alarm. One UPDATE that sets burst_seen to the literal 1 on a set not final and not flagged, touching no other column. No read, no counter, no secret.',
 };
@@ -209,6 +220,8 @@ const SECRET_READERS: Record<string, string> = {
     'S3 (OSE-2127) writes T and V once, at the first open, and nulls them at final. It never reads them back.',
   [RESULTS_LIB]:
     'S5 (OSE-2130) compares the lead with T and the voters with V inside its result UPDATE. Neither leaves the database.',
+  [CROWD_LIB]:
+    'ADR-040 decision 13: the Online Pick draws its own T and V once, when first turned on, compares them inside its result UPDATE, and nulls them at final. Neither leaves the database.',
 };
 
 /**
@@ -220,6 +233,8 @@ const COUNT_READERS: Record<string, string> = {
     'S4a (OSE-2128) raises up_count or down_count by one inside the vote batch. It reads no counter back.',
   [RESULTS_LIB]:
     'S5 (OSE-2130) reads up_count inside the result UPDATE, to rank objects. No count leaves the database.',
+  [CROWD_LIB]:
+    "ADR-040 decision 13: raises the Online Pick's own up_count or down_count inside its vote batch, and ranks them inside its result UPDATE. No count leaves the database, and never a room counter.",
 };
 
 const SECRET_COLUMNS = ['secret_margin', 'secret_floor'];
@@ -396,6 +411,18 @@ const normalize = (sql: string, sqlComments = true) =>
     .trim();
 
 /** Why a statement could reopen, revive or restamp a vote set. Empty when it cannot. */
+/** The text of a WHERE clause outside every parenthesis: its top level. */
+function topLevelOf(where: string): string {
+  let depth = 0;
+  let out = '';
+  for (const ch of where) {
+    if (ch === '(') depth++;
+    else if (ch === ')') depth = Math.max(0, depth - 1);
+    else if (depth === 0) out += ch;
+  }
+  return out;
+}
+
 function flagProblems(raw: string, sqlComments = true): string[] {
   const out: string[] = [];
   for (const sql of normalize(raw, sqlComments)
@@ -419,7 +446,7 @@ function flagProblems(raw: string, sqlComments = true): string[] {
       for (const part of splitTop(setPart.replace(/\bRETURNING\b.*$/i, ''))) {
         if (
           /^\(/.test(part) &&
-          /\b(?:is_final|is_void|flood_seen|burst_seen|pepper_epoch|played_by|room_size)\b/i.test(
+          /\b(?:is_final|is_void|flood_seen|burst_seen|pepper_epoch|played_by|room_size|opened_at)\b/i.test(
             part
           )
         )
@@ -451,7 +478,7 @@ function flagProblems(raw: string, sqlComments = true): string[] {
         // room_size (OSE-2234): written once, by the first open, so it needs a
         // "room_size IS NULL" guard; D1's remote runner cannot take a trigger
         // (migration 0025), so this gate is what holds it fixed.
-        for (const col of ['pepper_epoch', 'played_by', 'room_size']) {
+        for (const col of ['pepper_epoch', 'played_by', 'room_size', 'opened_at']) {
           if (
             new RegExp(`^${col}\\s*=`, 'i').test(part) &&
             !new RegExp(`\\b${col}\\s+IS\\s+NULL\\b`, 'i').test(where)
@@ -466,6 +493,32 @@ function flagProblems(raw: string, sqlComments = true): string[] {
       );
     if (obj && !/\bis_final\s*=\s*0\b/i.test(sql))
       out.push('writes votable_objects without an "is_final = 0" guard on its set');
+    // A window runs its full length (owner card 2026-11-26): an object is put
+    // into 'open', or given a closes_at, only from draft, and its window length
+    // is written once. Nothing re-arms or stretches a window that has run.
+    const objUpd = sql.match(/\bUPDATE(?:\s+OR\s+\w+)?\s+votable_objects\b\s+SET\s+(.*)$/i);
+    if (objUpd) {
+      const [setPart, where = ''] = objUpd[1].split(/\bWHERE\b/i);
+      if (/\$\{/.test(setPart))
+        out.push('sets votable_objects columns this gate cannot read (${...})');
+      for (const part of splitTop(setPart.replace(/\bRETURNING\b.*$/i, ''))) {
+        if (/^\(/.test(part) && /\b(?:state|closes_at|window_seconds)\b/i.test(part))
+          out.push(`sets an object's window in a tuple: ${part}`);
+        const opens = /^state\s*=/i.test(part) && !/^state\s*=\s*'closed'$/i.test(part);
+        const arms = /^closes_at\s*=/i.test(part) && !/^closes_at\s*=\s*NULL$/i.test(part);
+        // The draft guard must hold for the whole statement: at the top level
+        // of the WHERE, with no top-level OR beside it (CCR loop 6, F3), so
+        // "(state = 'closed' OR state = 'draft')" or a subquery's draft does
+        // not count.
+        const top = topLevelOf(where);
+        if ((opens || arms) && (!/\bstate\s*=\s*'draft'/i.test(top) || /\bOR\b/i.test(top)))
+          out.push(
+            `opens or re-arms an object's window without a "state = 'draft'" guard: ${part}`
+          );
+        if (/^window_seconds\s*=/i.test(part) && !/\bwindow_seconds\s+IS\s+NULL\b/i.test(where))
+          out.push('window_seconds is set without a "window_seconds IS NULL" guard');
+      }
+    }
   }
   return out;
 }
@@ -585,6 +638,11 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
       'vote_receipts',
       'vote_participants',
       'vote_team_markers',
+      'vote_access_passes',
+      'vote_crowd_sets',
+      'vote_crowd_tallies',
+      'vote_crowd_receipts',
+      'vote_crowd_participants',
     ]);
     expect(SOURCES.length).toBeGreaterThan(50);
     expect(dbSql.length).toBeGreaterThan(100);
@@ -751,7 +809,13 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
     expect(labels.length - new Set(labels).size, `a label is reused: ${labels.join(', ')}`).toBe(0);
     const vote = labels.filter((l) => l.startsWith('ose:vote:'));
     expect(vote.sort()).toEqual([
+      'ose:vote:access-lookup:v1',
+      'ose:vote:access-voter-key:v1',
       'ose:vote:code-window:v1', // the rotating vote code's stamp (lib/vote-code-window.ts)
+      'ose:vote:crowd-participant:v1',
+      'ose:vote:crowd-pass-seal:v1',
+      'ose:vote:crowd-receipt:v1',
+      'ose:vote:crowd-voter-key:v1',
       'ose:vote:participant:v1',
       'ose:vote:pass-seal:v1',
       'ose:vote:receipt:v1',
@@ -759,6 +823,60 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
       'ose:vote:voter-key:v1',
     ]);
     expect(labels).toContain('ose:scan:node-key:v1');
+  });
+
+  // ADR-040 decision 13 (owner, 2026-11-26): the Online Pick never touches the
+  // Room Pick. Two tables, not a channel column, and this rule on top:
+  //   - only lib/vote-crowd.ts (and the table list in lib/votes.ts) names a
+  //     crowd table, so no room path can read or write one;
+  //   - lib/vote-crowd.ts names no room counter or marker table in any string,
+  //     SQL or not, so an interpolated constant cannot smuggle one in;
+  //   - the room's write and result files never import the crowd's module.
+  test('decision 13 | channels never mix: no file names a crowd table and a room counter or marker table', () => {
+    const CROWD = [
+      'vote_crowd_sets',
+      'vote_crowd_tallies',
+      'vote_crowd_receipts',
+      'vote_crowd_participants',
+    ];
+    const ROOM = ['vote_tallies', 'vote_receipts', 'vote_participants', 'vote_team_markers'];
+    const literals = (code: string) =>
+      code.match(/`(?:\\[\s\S]|[^`\\])*`|'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"/g) ?? [];
+    const crowdNamers = SOURCES.filter(({ code }) =>
+      literals(stripTs(code)).some((l) => nameRe(CROWD).test(l))
+    ).map((s) => s.file);
+    expect(
+      crowdNamers.sort(),
+      'Only the Online Pick module and the table list name a crowd table'
+    ).toEqual([CROWD_LIB, VOTES_LIB].sort());
+    const crowd = SOURCES.find((s) => s.file === CROWD_LIB)!.code;
+    const leaks = literals(stripTs(crowd)).filter((l) => nameRe(ROOM).test(l));
+    expect(leaks, 'lib/vote-crowd.ts names a room counter or marker table').toEqual([]);
+    for (const file of [CAST_LIB, RESULTS_LIB, PUBLIC_RESULT_LIB, VOTE_SETS_LIB]) {
+      const code = stripTs(SOURCES.find((s) => s.file === file)!.code);
+      expect(
+        literals(code).some((l) => nameRe(CROWD).test(l)),
+        `${file} names a crowd table`
+      ).toBe(false);
+    }
+    for (const file of [CAST_LIB, RESULTS_LIB, PUBLIC_RESULT_LIB]) {
+      const code = SOURCES.find((s) => s.file === file)!.code;
+      expect(/from\s+['"]\.\/vote-crowd['"]/.test(code), `${file} imports the Online Pick`).toBe(
+        false
+      );
+    }
+    // Negative controls: the detectors see a mixed statement and an interpolated room name.
+    expect(
+      nameRe(ROOM).test(
+        'UPDATE vote_crowd_tallies SET up_count = (SELECT up_count FROM vote_tallies)'
+      )
+    ).toBe(true);
+    expect(
+      literals("const T = 'vote_tallies'; const q = `UPDATE ${T}`;").some((l) =>
+        nameRe(ROOM).test(l)
+      )
+    ).toBe(true);
+    expect(nameRe(CROWD).test('SELECT * FROM vote_crowd_tallies_x')).toBe(false);
   });
 
   test('OSE-2133 | keys | the vote pass declares its own two labels and borrows no *_CONTEXT', () => {
@@ -1005,6 +1123,18 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
       'UPDATE vote_sets SET room_size = ? WHERE id = ?',
       'UPDATE vote_sets SET room_size = 50000 WHERE event_id = ? AND is_final = 0',
       "UPDATE vote_sets SET (room_size, state) = (?, 'open') WHERE id = ? AND room_size IS NULL",
+      // CCR loop 5: the first-open hour (the 30-day final backstop) is written once.
+      'UPDATE vote_sets SET opened_at = ? WHERE id = ?',
+      "UPDATE vote_sets SET opened_at = datetime('now') WHERE event_id = ? AND is_final = 0",
+      // Owner card 2026-11-26: a window runs its full length, once.
+      "UPDATE votable_objects SET state = 'open', closes_at = ? WHERE id = ? AND state = 'closed' AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)",
+      'UPDATE votable_objects SET closes_at = ? WHERE id = ? AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)',
+      'UPDATE votable_objects SET state = ? WHERE id = ? AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)',
+      "UPDATE votable_objects SET window_seconds = ? WHERE id = ? AND state = 'draft' AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)",
+      "UPDATE votable_objects SET (state, closes_at) = ('open', ?) WHERE id = ? AND state = 'draft' AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)",
+      "UPDATE votable_objects SET state = 'open', closes_at = ? WHERE id = ? AND (state = 'closed' OR state = 'draft') AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)",
+      "UPDATE votable_objects SET state = 'open', closes_at = ? WHERE id = ? AND state = 'closed' OR state = 'draft' AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)",
+      "UPDATE votable_objects SET closes_at = ? WHERE id = ? AND set_id IN (SELECT o.set_id FROM votable_objects o WHERE o.state = 'draft' AND o.set_id IN (SELECT id FROM vote_sets WHERE is_final = 0))",
     ];
     expect(reopen.filter((sql) => flagProblems(sql).length === 0)).toEqual([]);
     // A shell line: its --command flag is not a SQL comment.
@@ -1021,12 +1151,15 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
       "UPDATE vote_sets SET state = 'open', pepper_epoch = ?, secret_margin = ?, secret_floor = ? WHERE id = ? AND is_final = 0 AND pepper_epoch IS NULL",
       "UPDATE vote_sets SET state = 'open' WHERE event_id = ? AND state = 'closed' AND is_final = 0",
       "UPDATE vote_sets SET state = 'closed' WHERE event_id = ? AND state = 'open'",
-      "UPDATE votable_objects SET state = 'open' WHERE id = ? AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)",
+      "UPDATE votable_objects SET state = 'open' WHERE id = ? AND state = 'draft' AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)",
+      "UPDATE votable_objects SET state = 'open', closes_at = ?, window_seconds = ? WHERE id = ? AND state = 'draft' AND window_seconds IS NULL AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)",
+      "UPDATE votable_objects SET state = 'closed', closes_at = NULL WHERE set_id = ? AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)",
       'INSERT INTO vote_sets (id, event_id) VALUES (?, ?)',
       'SELECT is_final FROM vote_sets WHERE id = ?',
       'UPDATE vote_sets SET flood_seen = 1 WHERE event_id = ? AND flood_seen = 0 AND is_final = 0',
       'UPDATE vote_sets SET burst_seen = 1 WHERE event_id = ? AND burst_seen = 0 AND is_final = 0',
       "UPDATE vote_sets SET state = 'open', pepper_epoch = ?, room_size = ? WHERE id = ? AND is_final = 0 AND pepper_epoch IS NULL AND room_size IS NULL",
+      "UPDATE vote_sets SET state = 'open', pepper_epoch = ?, room_size = ?, opened_at = ? WHERE id = ? AND is_final = 0 AND pepper_epoch IS NULL AND room_size IS NULL AND opened_at IS NULL",
     ];
     expect(fine.filter((sql) => flagProblems(sql).length > 0)).toEqual([]);
 

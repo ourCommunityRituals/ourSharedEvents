@@ -8,8 +8,9 @@
  *
  *   1. Set up voting; a label with an email address is refused at its field;
  *      a song is added and listed.
- *   2. Open voting, open the song ("Open until …"), close it, reopen it, close
- *      voting, reopen voting. The summary follows each step.
+ *   2. Open voting, open the song ("Open until …"); the song has no Close or
+ *      Reopen (a window runs its full length); close voting, and a reopen is
+ *      refused once a window has run. The summary follows each step.
  *   3. The card never shows a count: no "vote" or "votes" next to a number.
  *   4. At 375px: no sideways scroll, every control 44px or more, every field's
  *      text 16px or more, and axe finds nothing serious, light and dark.
@@ -24,6 +25,10 @@
  *      hidden on a normal night and show, with no number, when the set says so.
  *   9. The room size: voting does not open without it, and once open it is
  *      shown as fixed and no longer asked for (2026-11-26).
+ *  10. OSE ADR-040 decision 13: an Access Pass is given from the card, its
+ *      link shown once; it is taken back and the place is not freed; the
+ *      Online Pick is turned on and off; its host-only swarm warning shows
+ *      only when the server says so.
  *
  * Runs in the blocking phone audit (playwright.mobile.config.ts), against the
  * local worker that config starts with a local pepper. The event is made here.
@@ -33,6 +38,7 @@ import AxeBuilder from '@axe-core/playwright';
 
 const ADMIN_BEARER = process.env.OSE_ADMIN_BEARER || '';
 const AUTH = { Authorization: `Bearer ${ADMIN_BEARER}` };
+const VOTE_BRAND = 'pw-vote-night';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -45,6 +51,7 @@ test.describe('admin: the Voting card', () => {
       headers: { ...AUTH, 'Content-Type': 'application/json' },
       data: {
         attendance_mode: 'in_person',
+        brand_id: VOTE_BRAND,
         title: `Vote night ${Date.now()}`,
         start_date: '2027-05-15',
         start_time: '19:00',
@@ -56,7 +63,37 @@ test.describe('admin: the Voting card', () => {
     expect(res.ok(), await res.text()).toBe(true);
     eventId = ((await res.json()) as { id?: string }).id ?? '';
     expect(eventId).not.toBe('');
+    await linkVenue(request, eventId);
   });
+
+  /**
+   * Voting opens only on an event linked to its venue (owner card 2026-11-26,
+   * VENUE_NEEDED). The shared public brand holds no venue, so the events here
+   * get a brand of their own and a venue it owns.
+   */
+  async function linkVenue(
+    request: import('@playwright/test').APIRequestContext,
+    id: string
+  ): Promise<void> {
+    const venue = await request.post('/api/v2/admin/venues', {
+      headers: { ...AUTH, 'Content-Type': 'application/json' },
+      data: { brand_id: VOTE_BRAND, name: 'Eagles Hall' },
+    });
+    expect(venue.status(), await venue.text()).toBe(201);
+    const venueId = ((await venue.json()) as { id: string }).id;
+    // The platform sets each venue up first (owner card 2026-11-26,
+    // VENUE_NOT_SET_UP): outdoors with no permit limit, so 500 is the ceiling.
+    const setUp = await request.put(`/api/v2/admin/venues/${venueId}/room-ceiling`, {
+      headers: { ...AUTH, 'Content-Type': 'application/json' },
+      data: { room_kind: 'outdoor', room_cap: null },
+    });
+    expect(setUp.status(), await setUp.text()).toBe(200);
+    const linked = await request.put(`/api/v2/admin/events/${id}/venue`, {
+      headers: { ...AUTH, 'Content-Type': 'application/json' },
+      data: { venue_id: venueId },
+    });
+    expect(linked.status(), await linked.text()).toBe(200);
+  }
 
   async function makeEvent(
     request: import('@playwright/test').APIRequestContext,
@@ -67,6 +104,7 @@ test.describe('admin: the Voting card', () => {
       headers: { ...AUTH, 'Content-Type': 'application/json' },
       data: {
         attendance_mode: 'in_person',
+        brand_id: VOTE_BRAND,
         title,
         status,
         is_published: false,
@@ -78,7 +116,9 @@ test.describe('admin: the Voting card', () => {
       },
     });
     expect(res.ok(), await res.text()).toBe(true);
-    return ((await res.json()) as { id: string }).id;
+    const id = ((await res.json()) as { id: string }).id;
+    await linkVenue(request, id);
+    return id;
   }
 
   async function selectEvent(page: Page, id: string): Promise<void> {
@@ -218,7 +258,9 @@ test.describe('admin: the Voting card', () => {
     );
   });
 
-  test('open, close and reopen voting and the song; the summary follows', async ({ page }) => {
+  test('open voting and the song, then close voting for good; the summary follows', async ({
+    page,
+  }) => {
     await openCard(page);
     // The song cannot open before voting does: its only button appears once voting is open.
     await expect(rows(page).first().getByTestId('vote-row-open')).toHaveCount(0);
@@ -238,18 +280,70 @@ test.describe('admin: the Voting card', () => {
 
     await rows(page).first().getByTestId('vote-row-open').click();
     await expect(rows(page).first().getByTestId('vote-row-state')).toHaveText(/^Open until /);
-    await rows(page).first().getByTestId('vote-row-close').click();
-    await expect(rows(page).first().getByTestId('vote-row-state')).toHaveText('Closed');
-    await rows(page).first().getByTestId('vote-row-reopen').click();
-    await expect(rows(page).first().getByTestId('vote-row-state')).toHaveText(/^Open until /);
+    // A window runs its full length (owner, 2026-11-26): no Close, no Reopen on the row.
+    await expect(rows(page).first().getByTestId('vote-row-close')).toHaveCount(0);
+    await expect(rows(page).first().getByTestId('vote-row-reopen')).toHaveCount(0);
 
+    // Closing voting is an emergency stop: once a window has run it stays closed.
     await page.getByTestId('votes-close').click();
-    await expect(summary(page)).toHaveText(
-      'Voting is closed. You can reopen it while the event is on.'
-    );
+    await expect(summary(page)).toHaveText('Voting is closed.');
     await page.getByTestId('votes-reopen').click();
-    await expect(summary(page)).toHaveText('Voting is open.');
-    await expect(page.getByTestId('votes-msg')).toHaveText('Voting is open again.');
+    await expect(page.getByTestId('votes-msg')).toHaveText(
+      'Voting already ran here, so once closed it stays closed. Finish the vote to see the result.'
+    );
+    await expect(summary(page)).toHaveText('Voting is closed.');
+  });
+
+  test('Access Pass and Online Pick: give, take back, on and off (ADR-040 decision 13)', async ({
+    page,
+  }) => {
+    await openCard(page);
+    await expect(page.getByTestId('votes-away')).toBeVisible();
+    await expect(page.getByTestId('votes-access-left')).toHaveText('4 Access Passes left to give.');
+    await page.getByTestId('votes-access-give').click();
+    await expect(page.getByTestId('votes-access-new')).toBeVisible();
+    await expect(page.getByTestId('votes-access-url')).toHaveText(/\/access#[A-Za-z0-9_-]{43}$/);
+    await expect(page.getByTestId('votes-access-left')).toHaveText('3 Access Passes left to give.');
+    const passRows = page.locator('[data-testid="vote-access-row"]');
+    await expect(passRows).toHaveCount(1);
+    await expect(passRows.first().getByTestId('vote-access-row-state')).toHaveText('Can vote');
+    // Taking it back is for good, and does not free a place.
+    await passRows.first().getByTestId('vote-access-row-revoke').click();
+    await expect(passRows.first().getByTestId('vote-access-row-state')).toHaveText('Taken back');
+    await expect(passRows.first().getByTestId('vote-access-row-revoke')).toHaveCount(0);
+    await expect(page.getByTestId('votes-access-left')).toHaveText('3 Access Passes left to give.');
+    // The link is shown once: opening the admin again never shows it.
+    // A new browser, as the next test would get: the admin would otherwise reopen the event it remembers.
+    await page.evaluate(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
+    await openCard(page);
+    await expect(page.getByTestId('votes-access-new')).toBeHidden();
+    expect(await page.getByTestId('votes-card').innerText()).not.toMatch(/\/access#/);
+
+    await expect(page.getByTestId('votes-online-state')).toHaveText('The Online Pick is off.');
+    await expect(page.getByTestId('votes-online-burst')).toBeHidden();
+    await page.getByTestId('votes-online-on').click();
+    await expect(page.getByTestId('votes-online-state')).toHaveText('The Online Pick is on.');
+    await page.getByTestId('votes-online-off').click();
+    await expect(page.getByTestId('votes-online-state')).toHaveText('The Online Pick is off.');
+  });
+
+  test('the Online Pick swarm warning shows only when the server says so, with no number', async ({
+    page,
+  }) => {
+    await page.route(`**/api/v2/admin/events/${eventId}/votables`, async (route) => {
+      const res = await route.fetch();
+      const body = (await res.json()) as { online_pick?: Record<string, unknown> };
+      body.online_pick = { on: true, final: false, burst_seen: true };
+      await route.fulfill({ response: res, json: body });
+    });
+    await openCard(page);
+    const burst = page.getByTestId('votes-online-burst');
+    await expect(burst).toBeVisible();
+    await expect(burst).toContainText('Only you see this');
+    expect(await burst.innerText()).not.toMatch(/\d/);
   });
 
   test('a write that ends after another event is selected leaves the new card alone', async ({

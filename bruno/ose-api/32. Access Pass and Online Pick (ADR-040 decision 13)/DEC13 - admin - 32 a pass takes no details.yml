@@ -1,0 +1,32 @@
+info:
+  name: "DEC13 | admin | 32 a pass takes no details"
+  type: http
+  seq: 32
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{accessNightId}}/votables/access-passes"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"name\": \"someone\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('DEC13 give: a name is refused, 400 UNKNOWN_FIELD', function () { expect(res.getStatus()).to.eql(400); expect(res.getBody().code).to.eql('UNKNOWN_FIELD'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

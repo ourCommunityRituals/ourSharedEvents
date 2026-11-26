@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-11-26 — 806 ids.
+ * Generated 2026-11-26 — 823 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -43,7 +43,7 @@
   root.OCR_TESTID = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const TESTID = Object.freeze({
-    // admin.html — 578 ids
+    // admin.html — 595 ids
     ADMIN: Object.freeze([
       'add-poster-deployment-toggle',
       'add-sponsor-toggle',
@@ -493,6 +493,10 @@
       'tv-save',
       'tv-screen-row',
       'tv-screens',
+      'vote-access-row',
+      'vote-access-row-name',
+      'vote-access-row-revoke',
+      'vote-access-row-state',
       'vote-add-btn',
       'vote-kind-input',
       'vote-label-error',
@@ -507,7 +511,15 @@
       'vote-row-open',
       'vote-row-reopen',
       'vote-row-state',
+      'votes-access-give',
+      'votes-access-left',
+      'votes-access-list',
+      'votes-access-new',
+      'votes-access-new-note',
+      'votes-access-note',
+      'votes-access-url',
       'votes-add',
+      'votes-away',
       'votes-body',
       'votes-burst',
       'votes-card',
@@ -528,6 +540,11 @@
       'votes-make-hint',
       'votes-msg',
       'votes-note',
+      'votes-online-burst',
+      'votes-online-note',
+      'votes-online-off',
+      'votes-online-on',
+      'votes-online-state',
       'votes-open',
       'votes-played-by',
       'votes-publish-hint',

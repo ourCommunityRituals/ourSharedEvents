@@ -1,0 +1,36 @@
+info:
+  name: "DEC13 | on | 83 the Access Pass votes in the Room Pick like anyone in the room"
+  type: http
+  seq: 83
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/vote/{{accessNightId}}"
+  headers:
+    - name: Content-Type
+      value: "application/json"
+    - name: Sec-Fetch-Site
+      value: same-origin
+  body:
+    type: json
+    data: "{\"object_id\": \"{{accessSongId}}\", \"side\": \"up\", \"pass\": \"{{accessRoomPass}}\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        if (bru.getEnvVar('votingSwitch') !== 'on') {
+          console.log('NOT RUN (VOTING_ENABLED off on this environment): the switch-on half of decision 13');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        test('DEC13 on: counted, 200, no number', function () { expect(res.getStatus()).to.eql(200); expect(/\d/.test(JSON.stringify(res.getBody()))).to.eql(false); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

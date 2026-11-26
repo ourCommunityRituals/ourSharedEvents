@@ -1,5 +1,5 @@
 info:
-  name: OSE-2127 | reopen | reopen the vote set before final
+  name: OSE-2127 | reopen | a set closed after a window ran stays closed
   type: http
   seq: 81
 
@@ -34,7 +34,7 @@ runtime:
           }
           return out;
         }
-        test('OSE-2127 reopen: 200, open, still not final', function () { expect(res.getStatus()).to.eql(200); expect(b.set.state).to.eql('open'); expect(b.set.final).to.eql(false); });
+        test('OSE-2127 reopen: 409 WINDOWS_STARTED, a close after a window ran is no pause button', function () { expect(res.getStatus()).to.eql(409); expect(b.code).to.eql('WINDOWS_STARTED'); });
         test('OSE-2127 no guarded key in the answer (no count, secret, epoch, void, receipt or marker)', function () { expect(guardedKeys(b)).to.eql([]); });
 
 settings:

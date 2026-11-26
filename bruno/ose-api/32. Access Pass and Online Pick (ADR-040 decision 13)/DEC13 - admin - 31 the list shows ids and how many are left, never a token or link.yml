@@ -1,0 +1,32 @@
+info:
+  name: "DEC13 | admin | 31 the list shows ids and how many are left, never a token or link"
+  type: http
+  seq: 31
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/{{accessNightId}}/votables/access-passes"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        const text = JSON.stringify(b);
+        test('DEC13 list: 200, one pass, 3 left of 4', function () { expect(res.getStatus()).to.eql(200); expect(b.access.passes.length).to.eql(1); expect(b.access.remaining).to.eql(3); expect(b.access.cap).to.eql(4); });
+        test('DEC13 list: no token and no link in the answer', function () { expect(text).to.not.contain('/access#'); expect(text).to.not.contain(bru.getVar('accessPassToken')); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

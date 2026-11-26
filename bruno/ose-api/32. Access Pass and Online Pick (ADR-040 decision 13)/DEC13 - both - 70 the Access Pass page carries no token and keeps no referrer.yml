@@ -1,0 +1,23 @@
+info:
+  name: "DEC13 | both | 70 the Access Pass page carries no token and keeps no referrer"
+  type: http
+  seq: 70
+
+http:
+  method: GET
+  url: "{{baseUrl}}/access"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('DEC13 page: 200, no-store, no-referrer, no framing', function () { expect(res.getStatus()).to.eql(200); expect(String(res.getHeader('cache-control'))).to.contain('no-store'); expect(res.getHeader('referrer-policy')).to.eql('no-referrer'); expect(res.getHeader('x-frame-options')).to.eql('DENY'); });
+        test('DEC13 page: no cookie', function () { expect(res.getHeader('set-cookie')).to.be.undefined; });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

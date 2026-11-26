@@ -478,6 +478,11 @@ describe('OSE-1313 update is guarded against a concurrent time edit (PR #657 rev
           },
         };
       },
+      // The edit is batched with the vote-set close (OSE-2142, CCR loop 6 F1):
+      // the race makes every statement in the batch match nothing.
+      async batch(stmts: { run(): Promise<unknown> }[]) {
+        return Promise.all(stmts.map((s) => s.run()));
+      },
     } as unknown as D1Database;
   }
 

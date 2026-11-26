@@ -45,8 +45,10 @@ const PATTERNS: Array<[string, RegExp]> = [
 const ALLOWED: Record<string, Record<string, number>> = {
   // The setter itself: the definition, and the one Set-Cookie header it writes.
   'lib/anonymous-id.ts': { setAnonCookie: 1, 'Set-Cookie header': 1 },
-  // /q: the import and the one call for a new visitor.
-  'handlers/qr-scan.ts': { setAnonCookie: 2 },
+  // /q: the import, the one call for a new visitor at the vote code, and (OSE ADR-040
+  // decision 13, owner 2026-11-26) the one call for a new visitor at /q/crowd/:eventId, the
+  // Online Pick's way in. Still on /q, so AGENTS.md invariant 4's words are unchanged.
+  'handlers/qr-scan.ts': { setAnonCookie: 3 },
   // Forms routes (register, check-in, survey, email sign-up): the import and five call sites.
   'handlers/forms.ts': { setAnonCookie: 6 },
 };

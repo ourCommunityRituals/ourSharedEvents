@@ -1,0 +1,36 @@
+info:
+  name: "DEC13 | on | 85 an Online Pick vote counts in the Online Pick"
+  type: http
+  seq: 85
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/vote/{{accessNightId}}/crowd"
+  headers:
+    - name: Content-Type
+      value: "application/json"
+    - name: Sec-Fetch-Site
+      value: same-origin
+  body:
+    type: json
+    data: "{\"object_id\": \"{{accessSongId}}\", \"side\": \"up\", \"pass\": \"{{accessCrowdPass}}\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        if (bru.getEnvVar('votingSwitch') !== 'on') {
+          console.log('NOT RUN (VOTING_ENABLED off on this environment): the switch-on half of decision 13');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        test('DEC13 on: crowd vote counted, 200, no number', function () { expect(res.getStatus()).to.eql(200); expect(/\d/.test(JSON.stringify(res.getBody()))).to.eql(false); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

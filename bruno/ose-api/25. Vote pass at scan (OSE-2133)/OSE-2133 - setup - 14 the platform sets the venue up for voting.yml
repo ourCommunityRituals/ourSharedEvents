@@ -1,0 +1,36 @@
+info:
+  name: OSE-2133 | setup | the platform sets the venue up for voting, outdoors with no permit limit
+  type: http
+  seq: 14
+
+# Voting opens only at a venue the platform has set up (owner card 2026-11-26).
+# The CI key is a platform actor; a brand admin is refused (folder 23, 163).
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/venues/{{votePassNightVenueId}}/room-ceiling"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"room_kind\": \"outdoor\", \"room_cap\": null}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2133 setup: 200, the venue is outdoor with no permit limit, so 500 is its ceiling', function () { expect(res.getStatus()).to.eql(200); expect(b.room_kind).to.eql('outdoor'); expect(b.room_cap).to.eql(null); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

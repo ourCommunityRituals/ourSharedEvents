@@ -1,0 +1,25 @@
+info:
+  name: Access Pass and Online Pick (ADR-040 decision 13)
+  type: folder
+request: {}
+docs: |-
+  The Access Pass and the Online Pick (OSE ADR-040 decision 13, part of
+  OSE-2234 and OSE-1193), on staging.
+
+  The host routes do not read VOTING_ENABLED, so they run on staging today:
+  give a pass (the link is this site's /access page, the token in the
+  fragment only, no-store), list (ids and how many are left, never a token),
+  a pass takes no details, revoke, an unknown pass, and the Online Pick switch.
+
+  The public routes follow votingSwitch in the environment file (a copy of
+  VOTING_ENABLED in [env.staging.vars], "on" on staging since #1552).
+  On: a revoked pass and a made-up token get the same 403, byte for byte (80,
+  81); a live pass gives a room pass with no cookie (82) that votes in the
+  Room Pick (83); /q/crowd puts a crowd pass in the fragment (84) that votes
+  in the Online Pick (85); neither pass votes on the other's route (86, 87).
+  Off: a redeem and an Online Pick vote are the router 404, byte for byte the
+  answer to a path that never existed, and /q/crowd sends the browser to the
+  event page with no pass (60 to 62).
+
+  No fixture. Seq 10 makes one synthetic, unlisted live event; seq 905
+  archives it. Mock-layer twin: workers/oursharedevents/tests/vote-access-online.spec.ts.

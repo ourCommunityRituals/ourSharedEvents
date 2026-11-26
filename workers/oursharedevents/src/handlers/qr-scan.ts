@@ -53,10 +53,12 @@ import { enqueueOrWriteScan, scanDedupKey, type ScanMessage } from '../lib/scan-
 import { scanNodeKey } from '../lib/scan-node-key';
 import {
   issueVotePass,
+  mintCrowdPass,
   staleVotePageTarget,
   votePageTarget,
   VOTE_CODE_TYPE,
 } from '../lib/vote-pass';
+import { noteCrowdPassMinted, onlinePickMayMint } from '../lib/vote-crowd';
 import { votingEnabled, type VotingSwitchEnv } from '../lib/voting-switch';
 import { noteVotePassMinted, type VoteFloodLimiter } from '../lib/vote-flood';
 import { voteCodeStampOk } from '../lib/vote-code-window';
@@ -207,12 +209,14 @@ export async function handleQrScan(
   // screen again, so an honest voter is told rather than dropped silently.
   // With no pepper no stamp can be checked and no pass can exist, so that
   // scan keeps today's answer (the event page) rather than "scan again".
+  // A vote code with its `type=vote` cut off (CCR loop 5, L2) is the same: the
+  // room screen never shows that URL, so it is a copy, and it counts nothing.
   if (
     isVoteCode &&
     votingEnabled(env) &&
     !!env.ANON_ID_HASH_PEPPER &&
-    url.searchParams.get('type') === VOTE_CODE_TYPE &&
-    !(await voteCodeStampOk(env.ANON_ID_HASH_PEPPER, qrToken, url.searchParams.get('w'), nowMs))
+    (url.searchParams.get('type') !== VOTE_CODE_TYPE ||
+      !(await voteCodeStampOk(env.ANON_ID_HASH_PEPPER, qrToken, url.searchParams.get('w'), nowMs)))
   ) {
     console.log(JSON.stringify({ type: 'SCAN_NOT_COUNTED', reason: 'vote_code_changed' }));
     return new Response(null, {
@@ -384,4 +388,74 @@ export async function handleQrScan(
   // Only the vote code sets the cookie, and only for a browser without one.
   if (newCookie) return setAnonCookie(redirectResponse, newCookie);
   return redirectResponse;
+}
+
+/**
+ * GET /q/crowd/<eventId>: the way into the Online Pick (OSE ADR-040 decision
+ * 13). The event page's "Vote in the Online Pick" link lands here, so the
+ * anonymous cookie is still read only inside /q (AGENTS.md invariant 4).
+ *
+ * With voting on, the pepper set and the Online Pick open (onlinePickMayMint),
+ * it mints a CROWD pass (lib/vote-pass.ts, mintCrowdPass: the crowd's own key
+ * and seal, never a room pass) and sends the browser to
+ * `/events/<id>/online-pick#t=<pass>`, the pass in the fragment only.
+ * Otherwise it sends the browser to the event page, with no pass. It stores
+ * no scan: an Online Pick visit is not a scan of anything, and is in no count.
+ * It sets the cookie only for a browser without one, as the vote code does.
+ * No log line names the pass, the key or the Location. Only the host-only
+ * swarm alarm names the event, as the room's flood alarm does.
+ *
+ * Dedup is one Online Pick vote per entry per browser. That is weak on purpose
+ * and the page says so: anyone can open it many times from many browsers. The
+ * Room Pick never reads anything this makes.
+ */
+export async function handleCrowdEntry(
+  request: Request,
+  env: QrScanEnv,
+  eventId: string,
+  ctx?: Pick<ExecutionContext, 'waitUntil'>,
+  nowMs: number = Date.now()
+): Promise<Response> {
+  const url = new URL(request.url);
+  const home = (to: string) =>
+    new Response(null, { status: 302, headers: { Location: to, 'Cache-Control': 'no-store' } });
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(eventId)) return home('/events');
+  const eventPage = `${url.origin}/events/${encodeURIComponent(eventId)}`;
+  if (!env.DB || !votingEnabled(env) || !env.ANON_ID_HASH_PEPPER) return home(eventPage);
+  let may = false;
+  try {
+    may = await onlinePickMayMint(env.DB, eventId);
+  } catch (err) {
+    console.warn(JSON.stringify({ type: 'CROWD_PASS_SKIPPED', error: errorLabel(err) }));
+  }
+  if (!may) return home(eventPage);
+  // A public route never answers 500: any failure sends the browser to the
+  // event page with no pass (backend seat, CCR loop 4).
+  try {
+    const {
+      anonId,
+      isNew,
+      cookieValue: newCookie,
+    } = await getOrCreateAnonId(request, env.ANON_ID_HASH_PEPPER);
+    const crowdPass = await mintCrowdPass(env.ANON_ID_HASH_PEPPER, anonId, eventId, nowMs);
+    if (crowdPass) {
+      // F1 (2026-11-26 sweep): count the pass toward the Online Pick's swarm
+      // alarm, the host's only. Detection only, never throws, off the answer path.
+      const noted = noteCrowdPassMinted(env, eventId).then((wrote) => {
+        if (wrote)
+          console.warn(JSON.stringify({ type: 'ONLINE_PICK_FLOOD_SEEN', event_id: eventId }));
+      });
+      if (ctx) ctx.waitUntil(noted);
+      else await noted;
+    }
+    const res = home(
+      crowdPass
+        ? `${url.origin}/events/${encodeURIComponent(eventId)}/online-pick#t=${crowdPass}`
+        : eventPage
+    );
+    return isNew ? setAnonCookie(res, newCookie) : res;
+  } catch (err) {
+    console.warn(JSON.stringify({ type: 'CROWD_PASS_SKIPPED', error: errorLabel(err) }));
+    return home(eventPage);
+  }
 }

@@ -1,0 +1,33 @@
+info:
+  name: OSE-2234 | open | a booth change after voting opens is refused
+  type: http
+  seq: 65
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteNightId}}/votables/objects/{{voteSongId}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"booth_id\": \"bth-ose2234-staging\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2234 open: 409 BOOTH_FIXED, the stall a vote counts for is fixed', function () { expect(res.getStatus()).to.eql(409); expect(b.code).to.eql('BOOTH_FIXED'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

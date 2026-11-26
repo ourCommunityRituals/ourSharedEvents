@@ -51,12 +51,12 @@ describe('the production migration plan matches the migration files', () => {
     expect(range.forms.length).toBeGreaterThan(0);
   });
 
-  test('the range is 0078–0122 (45 files) and 0015–0018 (4 files), as its first table says', () => {
+  test('the range is 0078–0124 (47 files) and 0015–0018 (4 files), as its first table says', () => {
     expect(range.main.map((m) => m.file.slice(0, 4))).toEqual(
-      Array.from({ length: 45 }, (_, i) => String(78 + i).padStart(4, '0'))
+      Array.from({ length: 47 }, (_, i) => String(78 + i).padStart(4, '0'))
     );
     expect(range.forms.map((m) => m.file.slice(0, 4))).toEqual(['0015', '0016', '0017', '0018']);
-    expect(plan).toMatch(/\| Main \(`ocr-db-production`\)\s+\| 77\s+\| 122\s+\| 45\s+\|/);
+    expect(plan).toMatch(/\| Main \(`ocr-db-production`\)\s+\| 77\s+\| 124\s+\| 47\s+\|/);
     expect(plan).toMatch(
       /\| Forms \(`ocr-forms-db-production`\)\s+\| 14 \(see note\)\s+\| 18\s+\| 4\s+\|/
     );
@@ -178,5 +178,18 @@ describe('the deployment runbook points at the preflight and the plan, once', ()
     expect(runbook).toContain('three bad readings in a row');
     expect(t.MAX_READINGS * t.SECONDS_BETWEEN_READINGS).toBe(120);
     expect(runbook).toContain('did not settle in two minutes');
+  });
+});
+
+describe('the rollback plan keeps up with the newest main migration (CCR OSE-2234 loop 6)', () => {
+  test('it names the newest migration as the highest, and has an entry for it', () => {
+    const newest = readdirSync(join(WORKER, 'migrations'))
+      .filter((f) => /^\d{4}_.*\.sql$/.test(f))
+      .sort()
+      .pop()
+      .slice(0, 4);
+    const rollback = read('workers/oursharedevents/migrations/ROLLBACK_PLAN.md');
+    expect(rollback).toContain(`(highest migration: ${newest};`);
+    expect(rollback).toMatch(new RegExp(`^-- ${newest}: `, 'm'));
   });
 });

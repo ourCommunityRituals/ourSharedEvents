@@ -36,6 +36,7 @@
  */
 
 import { env, SELF, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
+import { linkVenue } from './helpers/link-venue';
 import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
 import { route, type RouterEnv } from '../src/router';
 import { handleQrScan, qrScanTarget, type QrScanEnv } from '../src/handlers/qr-scan';
@@ -148,6 +149,7 @@ async function seedEvent(id: string, status: string, date = '2099-06-01') {
     date,
     date
   );
+  await linkVenue(tenv.DB, id);
 }
 
 function makeKV(): KVNamespace {
@@ -547,7 +549,12 @@ describe('OSE-2142 | a vote set follows its event status', () => {
   }
 
   test('OSE-2142 | SECURITY | unpublishing an event leaves no set readable as open by the admin card or the pass', async () => {
-    await openNight();
+    // The set opens with its song still in draft: once a window has run, a
+    // closed set stays closed (WINDOWS_STARTED, checked at the end).
+    expect((await call('POST', vp(NIGHT), { played_by: 'object' })).status).toBe(201);
+    const song = await call('POST', vp(NIGHT, '/objects'), { kind: 'song', label: 'Song one' });
+    expect(song.status).toBe(201);
+    expect((await call('POST', vp(NIGHT, '/open'), { room_size: 200 })).status).toBe(200);
     const code = await makeCode();
     // Each way out of Published, and back: Ready; Archived; Ready then Draft.
     const ways: [string[], string[]][] = [
@@ -575,6 +582,45 @@ describe('OSE-2142 | a vote set follows its event status', () => {
       expect(re.status, label).toBe(200);
       expect(passOf(await scan(code.token)), label).not.toBeNull();
     }
+    // A window runs; an unpublish then closes the set, and it stays closed:
+    // a status change is no pause button on a running window.
+    const opened = await call('POST', vp(NIGHT, `/objects/${song.json.object.id}/open`), {});
+    expect(opened.status).toBe(200);
+    await moveTo('ready');
+    await moveTo('active');
+    const re = await call('POST', vp(NIGHT, '/reopen'), {});
+    expect(re.status).toBe(409);
+    expect(re.json.code).toBe('WINDOWS_STARTED');
+    expect(await setState(NIGHT)).toBe('closed');
+    expect(passOf(await scan(code.token))).toBeNull();
+  });
+
+  test('SECURITY | a date moved into the past is no pause button: the set closes and stays closed (CCR loop 6, F1)', async () => {
+    await openNight();
+    const code = await makeCode();
+    expect(await setState(NIGHT)).toBe('open');
+    // A field-only edit that keeps the event on its dates leaves voting alone.
+    expect(
+      (await call('PUT', `/api/v2/admin/events/${NIGHT}`, { title: 'Song night, renamed' })).status
+    ).toBe(200);
+    expect(await setState(NIGHT)).toBe('open');
+    // The end date moved into the past, mid-window: the set closes in the same batch.
+    const past = await call('PUT', `/api/v2/admin/events/${NIGHT}`, {
+      start_date: '2000-01-01',
+      end_date: '2000-01-01',
+    });
+    expect(past.status, JSON.stringify(past.json)).toBe(200);
+    expect(await setState(NIGHT)).toBe('closed');
+    // Moved back, it stays closed, and a window has run, so it cannot reopen.
+    const back = await call('PUT', `/api/v2/admin/events/${NIGHT}`, {
+      start_date: '2099-06-01',
+      end_date: '2099-06-01',
+    });
+    expect(back.status, JSON.stringify(back.json)).toBe(200);
+    expect(await setState(NIGHT)).toBe('closed');
+    expect(passOf(await scan(code.token))).toBeNull();
+    const re = await call('POST', vp(NIGHT, '/reopen'), {});
+    expect(re.json.code).toBe('WINDOWS_STARTED');
   });
 
   test('OSE-2142 | SECURITY | the QR verify undo (active to ready) closes the set in the same batch', async () => {

@@ -80,6 +80,7 @@
  */
 
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
+import { linkVenue } from './helpers/link-venue';
 import { describe, test, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 
 const fault = vi.hoisted(() => ({
@@ -374,6 +375,21 @@ const SIGNED_LINK_PRODUCTS: readonly SignedLinkProduct[] = [
     path: /^\/q\/[^/]+$/,
     votePass: { header: 'location', before: /^https?:\/\/[^/?#]+\/events\/[^/?#]+\/vote#t=$/ },
     why: "A scan of the event's own vote code (OSE-2140; no other placement mints), with voting on, the set open and the event Published (OSE-2142), is answered 302 with a 30-minute pass for that browser at that event. It rides only in the fragment, which a browser sends to no server.",
+  },
+  {
+    method: 'GET',
+    path: /^\/q\/crowd\/[^/]+$/,
+    votePass: {
+      header: 'location',
+      before: /^https?:\/\/[^/?#]+\/events\/[^/?#]+\/online-pick#t=$/,
+    },
+    why: "OSE ADR-040 decision 13: the Online Pick's way in. With voting on and the Online Pick on and open, a 302 with a 30-minute crowd pass (vc1.) in the fragment only. It never opens in the Room Pick.",
+  },
+  {
+    method: 'POST',
+    path: /^\/api\/v2\/vote\/access$/,
+    jsonFields: ['pass'],
+    why: 'OSE ADR-040 decision 13: redeeming an Access Pass. A same-origin JSON body with the token is answered with a room pass for that browser, which the page puts straight into the voter page fragment.',
   },
 ];
 
@@ -1003,6 +1019,7 @@ describe('the vote pass rides only in the fragment of the /q redirect', () => {
     )
       .bind(`pd-${EVENT}`, EVENT, CODE)
       .run();
+    await linkVenue(E.DB, EVENT);
     const made = await createVoteSet(E.DB, EVENT, 'object');
     const opened = await openVoteSet(
       E.DB,

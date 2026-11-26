@@ -1,0 +1,33 @@
+info:
+  name: OSE-2133 | setup | the night is held at its venue
+  type: http
+  seq: 13
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/{{votePassNightId}}/venue"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"venue_id\": \"{{votePassNightVenueId}}\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2133 setup: the night is linked to its venue, so voting can open', function () { expect(res.getStatus()).to.eql(200); expect(b.venue_id).to.eql(bru.getVar('votePassNightVenueId')); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
