@@ -148,6 +148,9 @@
  *   POST /signup /newsletter      → email capture at two more addresses
  *   GET /display                  → TV/kiosk live event display
  *   GET /tv /kiosk /screen        → the same display at three more addresses
+ *   GET /q/crowd/:eventId         → the way into the Online Pick: with it open, a crowd pass in the fragment of /events/:id/online-pick, else the event page; reads the cookie only here inside /q (OSE ADR-040 decision 13). Limited per caller
+ *   GET /access                   → the Access Pass page: its script reads the token from the fragment and redeems it (OSE ADR-040 decision 13); no-store, no referrer, never framed
+ *   GET /events/:id/online-pick   → the Online Pick's voter page: the voter page with the crowd's fixed words and route (OSE ADR-040 decision 13); rate-limited
  *   GET /q/:token                 → poster QR scan: records an anonymous scan, 302 to the event page; per-caller count limit, never a 429 (OSE-625, OSE-1496)
  *   GET /s/*code                  → shortlink resolver: 302, counts a click (counter and time only); per-caller count limit (OSE-240, OSE-1496)
  *   GET /e/:code /p/:code         → 302 to the event page / poster; a share open (what + when, never who; OSE-1684)
@@ -202,7 +205,9 @@
  *   GET    /api/v2/maps/venue-image?event=<id> → venue map image, proxied so the key stays server-side; rate-limited, edge-cached (OSE-217)
  *   GET    /api/v2/events/:id/poster-bundle    → poster bundle (QR data URIs + form links)
  *   GET    /api/v2/events/:id/display-config   → TV order + dwell + league/donate links + event QR (ETag, 304)
- *   POST   /api/v2/vote/:eventId                → one vote {object_id, side: up|down, pass}: 200 {ok:true} for counted and already counted alike, no count, no cookie read or set (OSE-2128, OSE ADR-040). Routed only while VOTING_ENABLED is "on"
+ *   POST   /api/v2/vote/:eventId                → one vote {object_id, side: up|down, pass}: 200 {ok:true} for counted and already counted alike, no count, no cookie read or set (OSE-2128, OSE ADR-040). Routed only while VOTING_ENABLED is "on". Limited per caller: 600 a minute (ADR-040 decision 5)
+ *   POST   /api/v2/vote/:eventId/crowd          → one Online Pick vote, the same body and answers, with a crowd pass; never touches the Room Pick (OSE ADR-040 decision 13). Routed only while VOTING_ENABLED is "on". Limited per caller: 600 a minute
+ *   POST   /api/v2/vote/access                  → redeem an Access Pass {token}: 200 {ok,event_id,pass} or one 403 for any refusal; no cookie (OSE ADR-040 decision 13). Routed only while VOTING_ENABLED is "on". Limited per caller
  *   GET    /api/v2/vote/:eventId/objects        → what a voter can vote on now: {objects:[{id,kind,label}]}; no count, no time (OSE-2135, OSE ADR-040). Routed only while VOTING_ENABLED is "on" (lib/voting-switch.ts); off, it is the router's own 404. Limited per caller: 600 a minute
  *
  *   Poster Deployments Admin (auth required):
@@ -335,7 +340,8 @@ import {
 } from './handlers/event-booths';
 import { handleVotables, matchVotablesRoute } from './handlers/votables';
 import { handleVoteObjects } from './handlers/vote-objects';
-import { handleVote } from './handlers/vote';
+import { handleCrowdVote, handleVote } from './handlers/vote';
+import { handleAccessPage, handleAccessRedeem } from './handlers/vote-access';
 import { handleVotePage } from './handlers/vote-page';
 import { votingEnabled, type VotingSwitchEnv } from './lib/voting-switch';
 import { handlePortfolioRollup } from './handlers/portfolio-rollup';
@@ -515,7 +521,7 @@ import {
 import { handleAdminEventStats } from './handlers/event-stats';
 import { handleAdminGetPosterCodes, handleAdminPutPosterCodes } from './handlers/poster-codes';
 import { handleAdminPreEventActivity } from './handlers/pre-event-activity';
-import { handleQrScan, type QrScanEnv } from './handlers/qr-scan';
+import { handleCrowdEntry, handleQrScan, type QrScanEnv } from './handlers/qr-scan';
 import { bindCorsEnv, corsOrigin } from './lib/cors';
 import { guardPublicReadOnly } from './lib/public-readonly';
 import {
@@ -830,6 +836,13 @@ export async function route(
   // page with ?type=<form>&deployment=<id> so the CTA can continue to the
   // attributed form. qr_token starts with 'qrt_' (distinguishes from /s/
   // shortlink codes). Set-Cookie for anon_id if the visitor is new.
+  // GET /q/crowd/:eventId: the Online Pick's way in (ADR-040 decision 13).
+  // Before the poster scan below, which would read "crowd/…" as a token.
+  const crowdEntryMatch = pathname.match(/^\/q\/crowd\/([^/]+)$/);
+  if (crowdEntryMatch && method === 'GET') {
+    if (await isPublicReadLimited(request, env, 'crowd-entry')) return publicReadLimitResponse();
+    return handleCrowdEntry(request, env, crowdEntryMatch[1]);
+  }
   if (pathname.startsWith('/q/') && method === 'GET') {
     const qrToken = pathname.slice('/q/'.length);
     // Limited per caller (OSE-1496): past the limit the visitor is still sent
@@ -2529,9 +2542,32 @@ export async function route(
   // is the router's own 404. Only POST votes; GET and HEAD fall through to the
   // 404. The handler reads the pass from the body and no browser state; its
   // route limit is S4c's (OSE-2134).
+  // POST /api/v2/vote/access: redeem an Access Pass (ADR-040 decision 13).
+  // Before the vote route, whose pattern would read "access" as an event id.
+  // Limited per caller at the default read limit with the edge layer: a person
+  // redeems once a visit, a guesser is slowed, and 256-bit tokens are not
+  // guessable anyway.
+  if (pathname === '/api/v2/vote/access' && method === 'POST' && votingEnabled(env)) {
+    if (await isPublicReadLimited(request, env, 'vote-access')) return publicReadLimitResponse();
+    return handleAccessRedeem(request, env);
+  }
+  // The route limit (ADR-040 decision 5; red-team finding RT-RP-01: until now
+  // the vote POST had none). 600 a minute per caller, above the edge layer: a
+  // whole room behind one venue address votes on the same song inside a
+  // minute. The address is a bucket key only, never stored or logged.
   const voteMatch = pathname.match(/^\/api\/v2\/vote\/([^/]+)$/);
   if (voteMatch && method === 'POST' && votingEnabled(env)) {
-    return handleVote(request, env, voteMatch[1]);
+    return (await isPublicReadLimited(request, env, 'vote-cast', PUBLIC_PAGE_MAX))
+      ? publicReadLimitResponse()
+      : handleVote(request, env, voteMatch[1]);
+  }
+  // POST /api/v2/vote/:eventId/crowd: one Online Pick vote (decision 13). Its
+  // own bucket, so a crowd flood never spends the room's.
+  const crowdVoteMatch = pathname.match(/^\/api\/v2\/vote\/([^/]+)\/crowd$/);
+  if (crowdVoteMatch && method === 'POST' && votingEnabled(env)) {
+    if (await isPublicReadLimited(request, env, 'vote-crowd', PUBLIC_PAGE_MAX))
+      return publicReadLimitResponse();
+    return handleCrowdVote(request, env, crowdVoteMatch[1]);
   }
 
   // GET /api/v2/vote/:eventId/objects — what a voter can vote on now (OSE-2135,
@@ -3013,6 +3049,20 @@ export async function route(
   // take "vote" as a name (canonical.ts keeps "vote" out of event names).
   // Rate-limited like the stall pages; past the limit, the house page. Not on
   // the language layer yet: under /es/ it is the ordinary 404.
+  // GET /access: the Access Pass page (decision 13). No token reaches the server here.
+  if (pathname === '/access' && method === 'GET') {
+    if (await isPublicReadLimited(request, env, 'vote-access-page', PUBLIC_PAGE_MAX))
+      return publicReadLimitResponse();
+    return handleAccessPage();
+  }
+  // GET /events/:id/online-pick: the Online Pick's page (decision 13).
+  const onlinePickMatch = pathname.match(/^\/events\/([^/]{1,200})\/online-pick$/);
+  if (onlinePickMatch && method === 'GET') {
+    if (await isPublicReadLimited(request, env, 'vote-page')) {
+      return renderErrorPage(429, 'Too many requests', 'Give it a minute and try again.');
+    }
+    return handleVotePage(request, env, onlinePickMatch[1], 'crowd');
+  }
   const votePageMatch = pathname.match(/^\/events\/([^/]{1,200})\/vote$/);
   if (votePageMatch && method === 'GET') {
     if (await isPublicReadLimited(request, env, 'vote-page')) {

@@ -28,6 +28,9 @@ export type VoteResult =
 export interface VotePageOptions {
   votingOn?: boolean;
   result?: VoteResult | null;
+  /** 'crowd' renders the Online Pick page (OSE ADR-040 decision 13). */
+  channel?: 'room' | 'crowd';
+  crowdResult?: { outcome: 'winner'; label: string } | { outcome: 'too_close' } | null;
   sponsors?: {
     id: string;
     name: string;
@@ -39,6 +42,7 @@ export interface VotePageOptions {
 
 interface Bundle {
   renderVotePage: (input: unknown) => string;
+  handleAccessPage: () => Response;
   serveCss: () => Response;
 }
 
@@ -53,6 +57,7 @@ function load(): Promise<Bundle> {
       stdin: {
         contents:
           "export { renderVotePage } from './src/lib/vote-page-render.ts';\n" +
+          "export { handleAccessPage } from './src/handlers/vote-access.ts';\n" +
           "export { serveCss } from '@ocr/ui';\n",
         resolveDir: WORKER_DIR,
         loader: 'ts',
@@ -78,7 +83,16 @@ export async function renderVote(eventId: string, opts: VotePageOptions = {}): P
     sponsors: opts.sponsors ?? [],
     votingOn: opts.votingOn ?? true,
     result: opts.result ?? null,
+    channel: opts.channel ?? 'room',
+    crowdResult: opts.crowdResult ?? null,
   });
+}
+
+/** The Access Pass page (`GET /access`) as the Worker sends it: its HTML and headers. */
+export async function renderAccess(): Promise<{ html: string; headers: Record<string, string> }> {
+  const b = await load();
+  const res = b.handleAccessPage();
+  return { html: await res.text(), headers: Object.fromEntries(res.headers.entries()) };
 }
 
 export async function voteUiCss(): Promise<string> {

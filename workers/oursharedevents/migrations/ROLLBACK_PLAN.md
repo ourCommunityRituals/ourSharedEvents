@@ -110,6 +110,24 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0123: vote_access_passes and the Online Pick tables vote_crowd_sets,
+-- vote_crowd_tallies, vote_crowd_receipts, vote_crowd_participants (OSE ADR-040
+-- decision 13). Additive: five new tables, one index, no column. THE ROLLBACK
+-- IS: revert the Worker and LEAVE THE TABLES. The older Worker never reads
+-- them: no Access Pass can be given or redeemed, no Online Pick is offered, and
+-- the Room Pick is unchanged (it never read these tables). Rows left behind
+-- hold no person: a pass is an HMAC lookup, a crowd row is a counter or an
+-- HMAC marker. (0122 is OSE-2234's room-size migration, in its own PR.)
+--
+-- Surgical reverse, only if the tables themselves must go (given passes stop
+-- working; an unfinished Online Pick is lost):
+DROP TABLE IF EXISTS vote_crowd_participants;
+DROP TABLE IF EXISTS vote_crowd_receipts;
+DROP TABLE IF EXISTS vote_crowd_tallies;
+DROP TABLE IF EXISTS vote_crowd_sets;
+DROP INDEX IF EXISTS idx_vote_access_passes_set;
+DROP TABLE IF EXISTS vote_access_passes;
+
 -- 0121: brand_addons (OSE-2232, the paid add-ons the platform has turned on
 -- for a brand; today only 'skins'). Additive: one new table, no index, no
 -- column. THE ROLLBACK IS: revert the Worker and LEAVE THE TABLE. The older

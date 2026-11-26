@@ -913,6 +913,7 @@ jobs:
             tests/e2e/2-pages/street-map-pan.component.spec.ts \
             tests/e2e/2-pages/wcag-map.component.spec.ts \
             tests/e2e/2-pages/voter-page.component.spec.ts \
+            tests/e2e/2-pages/access-and-online-pick.component.spec.ts \
             tests/e2e/2-pages/landing-menu.component.spec.ts \
             tests/e2e/2-pages/landing-tabs.component.spec.ts \
             tests/e2e/2-pages/wcag-slider.component.spec.ts \

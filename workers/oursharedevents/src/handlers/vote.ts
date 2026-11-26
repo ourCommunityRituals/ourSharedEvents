@@ -38,9 +38,11 @@
 
 import { pepperEpoch } from '../lib/anon-id-hash';
 import { errorLabel } from '../lib/error-label';
-import { openVotePass } from '../lib/vote-pass';
+import { openCrowdPass, openVotePass } from '../lib/vote-pass';
 import { castVote, VOTE_SIDES, type VoteSide } from '../lib/vote-cast';
 import { voidOnEpochChange } from '../lib/vote-sets';
+import { accessPassUsable } from '../lib/vote-access-pass';
+import { castCrowdVote } from '../lib/vote-crowd';
 
 export interface VoteEnv {
   DB?: D1Database;
@@ -71,6 +73,7 @@ function answer(status: number, code: string, error: string): Response {
 }
 
 const SCAN_AGAIN = 'Scan the code on the screen again.';
+const OPEN_AGAIN = 'Open the Online Pick from the event page again.';
 
 /** Same-origin, by Sec-Fetch-Site, or by Origin when a browser sends no Sec-Fetch-Site. */
 function sameOrigin(request: Request): boolean {
@@ -142,6 +145,11 @@ export async function handleVote(
   const claims = await openVotePass(pepper, body.pass, nowMs, eventId);
   if (!claims) return answer(403, 'VOTE_PASS_INVALID', SCAN_AGAIN);
   try {
+    // ADR-040 decision 13: a pass redeemed from an Access Pass votes only while
+    // that Access Pass is not revoked, so a revoke stops it at once. The vote
+    // itself is counted exactly like any other: nothing below knows.
+    if (claims.access_id && !(await accessPassUsable(db, eventId, claims.access_id)))
+      return answer(403, 'VOTE_PASS_INVALID', SCAN_AGAIN);
     const outcome = await castVote(db, pepper, {
       eventId,
       objectId: body.object_id,
@@ -165,6 +173,62 @@ export async function handleVote(
       JSON.stringify({
         type: 'DB_ERROR',
         handler: 'handleVote',
+        error: errorLabel(err),
+        timestamp: new Date().toISOString(),
+      })
+    );
+    return answer(503, 'VOTING_UNAVAILABLE', 'Voting is not available right now');
+  }
+}
+
+/**
+ * POST /api/v2/vote/:eventId/crowd: one Online Pick vote (ADR-040 decision 13).
+ * The room route's checks, in the same order, with the crowd's own pass
+ * (openCrowdPass: another prefix, another seal) and the crowd's own write
+ * (lib/vote-crowd.ts). A room pass is refused here and a crowd pass is refused
+ * by the room route, so neither channel can vote in the other.
+ */
+export async function handleCrowdVote(
+  request: Request,
+  env: VoteEnv,
+  eventId: string,
+  nowMs: number = Date.now()
+): Promise<Response> {
+  if (request.method !== 'POST') return answer(405, 'METHOD_NOT_ALLOWED', 'Votes are POSTed');
+  if (!isJson(request)) return answer(415, 'JSON_ONLY', 'A vote is sent as JSON');
+  if (!sameOrigin(request))
+    return answer(403, 'SAME_ORIGIN_ONLY', 'A vote comes from the vote page');
+  if (!EVENT_ID.test(eventId)) return answer(403, 'VOTE_PASS_INVALID', OPEN_AGAIN);
+  const db = env.DB;
+  const pepper = env.ANON_ID_HASH_PEPPER;
+  const epoch = await pepperEpoch(pepper);
+  if (!db || !pepper || !epoch)
+    return answer(503, 'VOTING_UNAVAILABLE', 'Voting is not available right now');
+  const body = await readBody(request);
+  if (!body) return answer(400, 'INVALID_VOTE', 'A vote names an object, a side and a pass');
+  const claims = await openCrowdPass(pepper, body.pass, nowMs, eventId);
+  if (!claims) return answer(403, 'VOTE_PASS_INVALID', OPEN_AGAIN);
+  try {
+    const outcome = await castCrowdVote(db, pepper, {
+      eventId,
+      objectId: body.object_id,
+      side: body.side,
+      k: claims.k,
+      epoch,
+      nowMs,
+    });
+    if (outcome === null)
+      return answer(503, 'VOTING_UNAVAILABLE', 'Voting is not available right now');
+    if (outcome === 'closed') return answer(409, 'VOTE_CLOSED', 'Voting on this is closed');
+    return new Response(COUNTED, {
+      status: 200,
+      headers: { ...HEADERS, 'Content-Type': 'application/json' },
+    });
+  } catch (err) {
+    console.error(
+      JSON.stringify({
+        type: 'DB_ERROR',
+        handler: 'handleCrowdVote',
         error: errorLabel(err),
         timestamp: new Date().toISOString(),
       })

@@ -36,6 +36,12 @@ import { eventPagePath } from './canonical';
 import { renderSponsorStrip, type BoothPageSponsor } from './booth-page-render';
 import { TOO_CLOSE_WORDS } from './vote-results';
 import type { PublicVoteResult } from './vote-public-result';
+import {
+  ONLINE_PICK_GAMEABLE_NOTE,
+  ONLINE_PICK_WORDS,
+  ROOM_PICK_WORDS,
+  type PublicCrowdResult,
+} from './vote-crowd';
 
 export interface VotePageInput {
   event: { id: string; title: string; slug: string | null };
@@ -46,10 +52,25 @@ export interface VotePageInput {
   votingOn: boolean;
   /** The night's result, once its set is final; null before then. */
   result: PublicVoteResult | null;
+  /**
+   * ADR-040 decision 13. `room` (the default) is the Room Pick's page at
+   * /events/:id/vote; `crowd` is the Online Pick's page at
+   * /events/:id/online-pick. The words for each are fixed platform text.
+   */
+  channel?: 'room' | 'crowd';
+  /** The Online Pick's result, once both are final; shown under the Room Pick's. */
+  crowdResult?: PublicCrowdResult | null;
 }
 
 /** The words for a page opened with no pass, or one that has run out. */
 export const SCAN_AGAIN_WORDS = 'Scan the code on the screen again.';
+
+/** The Online Pick's words for a page opened with no pass. */
+export const OPEN_AGAIN_WORDS = 'Open the Online Pick from the event page again.';
+
+/** The one line an Access Pass voter sees (decision 13): the same vote, the same weight. */
+export const ACCESS_PASS_LINE =
+  "You're voting with an Access Pass. Your vote counts the same as everyone in the room.";
 
 /** The words for a vote that went in (counted or already counted alike). */
 export const VOTE_IN_WORDS = 'Thanks. Your vote is in.';
@@ -97,6 +118,16 @@ export const VOTE_PAGE_SCRIPT = `(function () {
     var app = document.getElementById('vote-app');
     if (!app || app.getAttribute('data-voting') !== 'on') return;
     var eventId = app.getAttribute('data-event') || '';
+    var crowd = app.getAttribute('data-channel') === 'crowd';
+    var castPath = '/api/v2/vote/' + encodeURIComponent(eventId) + (crowd ? '/crowd' : '');
+    var access = document.getElementById('vote-access-line');
+    if (access && pass && !crowd) {
+      try {
+        var mid = pass.split('.')[1] || '';
+        var claims = JSON.parse(atob(mid.replace(/-/g, '+').replace(/_/g, '/')));
+        if (claims && typeof claims.a === 'string') access.hidden = false;
+      } catch (e) {}
+    }
     var hasResult = app.getAttribute('data-result') === '1';
     var list = document.getElementById('vote-list');
     var status = document.getElementById('vote-status');
@@ -179,7 +210,7 @@ export const VOTE_PAGE_SCRIPT = `(function () {
       busy = true;
       Array.prototype.forEach.call(btns.querySelectorAll('button'), function (b) { b.disabled = true; });
       say('Sending your vote.');
-      fetch('/api/v2/vote/' + encodeURIComponent(eventId), {
+      fetch(castPath, {
         method: 'POST',
         credentials: 'omit',
         cache: 'no-store',
@@ -231,7 +262,20 @@ function renderResult(result: PublicVoteResult | null): string {
           .join('')}</ul>`;
   }
   return `<section class="card vp-gap" aria-labelledby="vote-result-title" data-testid="vote-result" data-outcome="${result.outcome}">
-        <h2 class="section-title" id="vote-result-title">The result</h2>
+        <h2 class="section-title" id="vote-result-title">${esc(ROOM_PICK_WORDS)}: the result</h2>
+        ${body}
+      </section>`;
+}
+
+function renderCrowdResult(result: PublicCrowdResult | null | undefined): string {
+  if (!result) return '';
+  const body =
+    result.outcome === 'too_close'
+      ? `<p class="detail-card-sub" data-testid="vote-crowd-result-words">${esc(TOO_CLOSE_WORDS)}</p>`
+      : `<p class="detail-card-sub" data-testid="vote-crowd-result-words">${esc(result.label)}</p>`;
+  return `<section class="card vp-gap" aria-labelledby="vote-crowd-result-title" data-testid="vote-crowd-result" data-outcome="${result.outcome}">
+        <h2 class="section-title" id="vote-crowd-result-title">${esc(ONLINE_PICK_WORDS)}</h2>
+        <p class="detail-card-sub" data-testid="vote-crowd-result-note">For fun. It never changes the ${esc(ROOM_PICK_WORDS)}.</p>
         ${body}
       </section>`;
 }
@@ -260,6 +304,16 @@ export function renderVotePage(input: VotePageInput): string {
   const eventPath = eventPagePath(encodeURIComponent(event.id), event.slug);
   const voting = input.votingOn ? 'on' : 'off';
 
+  const crowd = input.channel === 'crowd';
+  const heading = crowd ? ONLINE_PICK_WORDS : 'Vote';
+  const againWords = crowd ? OPEN_AGAIN_WORDS : SCAN_AGAIN_WORDS;
+  const channelNote = crowd
+    ? `<p class="vp-gap" data-testid="vote-crowd-note">${esc(ONLINE_PICK_GAMEABLE_NOTE)}</p>`
+    : `<p class="vp-gap" id="vote-access-line" data-testid="vote-access-line" hidden>${esc(ACCESS_PASS_LINE)}</p>`;
+  // Both pages show both results once final, and the Room Pick's always comes
+  // first and as the main card; the Online Pick's is below it, in the smaller
+  // text, with its "for fun" note (decision 13). No skin input reaches here.
+  const results = `${renderResult(input.result)}${renderCrowdResult(input.crowdResult)}`;
   const closedNote = input.votingOn
     ? ''
     : `<p class="vp-gap" data-testid="vote-off">Voting is not open right now.</p>`;
@@ -272,7 +326,7 @@ export function renderVotePage(input: VotePageInput): string {
     <meta name="robots" content="noindex" />
     <meta name="referrer" content="no-referrer" />
     <script>${VOTE_PAGE_SCRIPT}</script>
-    <title>Vote · ${eventTitle}</title>
+    <title>${esc(heading)} · ${eventTitle}</title>
     <link rel="stylesheet" href="/ui.css" />
     <style>${VOTE_PAGE_CSS}</style>
   </head>
@@ -287,11 +341,12 @@ export function renderVotePage(input: VotePageInput): string {
         ${input.when ? `<p class="detail-card-sub" data-testid="vote-event-when">${esc(input.when)}</p>` : ''}
       </section>
       ${renderSponsorStrip(input.sponsors)}
-      <h1 class="vp-title" id="vote-title" data-testid="vote-title">Vote</h1>
-      <div id="vote-app" data-event="${esc(event.id)}" data-voting="${voting}" data-result="${input.result ? '1' : '0'}">
-        ${renderResult(input.result)}
+      <h1 class="vp-title" id="vote-title" data-testid="vote-title">${esc(heading)}</h1>
+      <div id="vote-app" data-event="${esc(event.id)}" data-voting="${voting}" data-channel="${crowd ? 'crowd' : 'room'}" data-result="${input.result ? '1' : '0'}">
+        ${results}
+        ${channelNote}
         ${closedNote}
-        <p class="vp-gap" id="vote-scan-again" data-testid="vote-scan-again" hidden>${esc(SCAN_AGAIN_WORDS)}</p>
+        <p class="vp-gap" id="vote-scan-again" data-testid="vote-scan-again" hidden>${esc(againWords)}</p>
         <p class="vp-gap" id="vote-status" role="status" aria-live="polite" data-testid="vote-status"></p>
         <ul class="vp-list" id="vote-list" data-testid="vote-list" aria-labelledby="vote-title"></ul>
       </div>

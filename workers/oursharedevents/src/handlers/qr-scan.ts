@@ -48,7 +48,9 @@ import { getOrCreateAnonId, setAnonCookie, type AnonCookieValue } from '../lib/a
 import { scanHourOf, takePosterHourPlace } from '../lib/poster-hour-cap';
 import { enqueueOrWriteScan, scanDedupKey, type ScanMessage } from '../lib/scan-buffer';
 import { scanNodeKey } from '../lib/scan-node-key';
-import { issueVotePass, votePageTarget, VOTE_CODE_TYPE } from '../lib/vote-pass';
+import { issueVotePass, mintCrowdPass, votePageTarget, VOTE_CODE_TYPE } from '../lib/vote-pass';
+import { onlinePickMayMint } from '../lib/vote-crowd';
+import { votingEnabled } from '../lib/voting-switch';
 import type { VotingSwitchEnv } from '../lib/voting-switch';
 
 import { errorLabel } from '../lib/error-label';
@@ -324,4 +326,49 @@ export async function handleQrScan(
   // Only the vote code sets the cookie, and only for a browser without one.
   if (newCookie) return setAnonCookie(redirectResponse, newCookie);
   return redirectResponse;
+}
+
+/**
+ * GET /q/crowd/<eventId>: the way into the Online Pick (OSE ADR-040 decision
+ * 13). The event page's "Vote in the Online Pick" link lands here, so the
+ * anonymous cookie is still read only inside /q (AGENTS.md invariant 4).
+ *
+ * With voting on, the pepper set and the Online Pick open (onlinePickMayMint),
+ * it mints a CROWD pass (lib/vote-pass.ts, mintCrowdPass: the crowd's own key
+ * and seal, never a room pass) and sends the browser to
+ * `/events/<id>/online-pick#t=<pass>`, the pass in the fragment only.
+ * Otherwise it sends the browser to the event page, with no pass. It stores
+ * no scan: an Online Pick visit is not a scan of anything, and is in no count.
+ * It sets the cookie only for a browser without one, as the vote code does.
+ * No log line names the event, the pass, the key or the Location.
+ *
+ * Dedup is one Online Pick vote per entry per browser. That is weak on purpose
+ * and the page says so: anyone can open it many times from many browsers. The
+ * Room Pick never reads anything this makes.
+ */
+export async function handleCrowdEntry(
+  request: Request,
+  env: QrScanEnv,
+  eventId: string,
+  nowMs: number = Date.now()
+): Promise<Response> {
+  const url = new URL(request.url);
+  const home = (to: string) =>
+    new Response(null, { status: 302, headers: { Location: to, 'Cache-Control': 'no-store' } });
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(eventId)) return home('/events');
+  const eventPage = `${url.origin}/events/${encodeURIComponent(eventId)}`;
+  if (!env.DB || !votingEnabled(env) || !env.ANON_ID_HASH_PEPPER) return home(eventPage);
+  let may = false;
+  try {
+    may = await onlinePickMayMint(env.DB, eventId);
+  } catch (err) {
+    console.warn(JSON.stringify({ type: 'CROWD_PASS_SKIPPED', error: errorLabel(err) }));
+  }
+  if (!may) return home(eventPage);
+  const { anonId, isNew, cookieValue } = await getOrCreateAnonId(request, env.ANON_ID_HASH_PEPPER);
+  const pass = await mintCrowdPass(env.ANON_ID_HASH_PEPPER, anonId, eventId, nowMs);
+  const res = home(
+    pass ? `${url.origin}/events/${encodeURIComponent(eventId)}/online-pick#t=${pass}` : eventPage
+  );
+  return isNew ? setAnonCookie(res, cookieValue) : res;
 }

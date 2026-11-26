@@ -107,6 +107,18 @@ export const PAGE_SURFACES: Readonly<Record<string, PageSurface>> = {
     'The voter page (OSE-2129): the vote page of a live event, or its 404 when unknown.',
     '/events/no-such-event/vote'
   ),
+  '/events/:param/online-pick': page(
+    "The Online Pick's voter page (OSE ADR-040 decision 13), or its 404 when unknown.",
+    '/events/no-such-event/online-pick'
+  ),
+  '/access': page(
+    'The Access Pass page (decision 13): one <h1>, the token read from the fragment.',
+    '/access'
+  ),
+  '/q/crowd/:param': notPage(
+    "The Online Pick's way in (decision 13): always a forward.",
+    '/q/crowd/no-such-event'
+  ),
   '/events/:param/calendar.ics': notPage(
     'Calendar download.',
     '/events/no-such-event/calendar.ics'

@@ -474,4 +474,7 @@ export const NODE_SPECS = [
   // OSE-826: when a registration expires (the later of 90 days and the day
   // after the event). A pure function, no runtime.
   'tests/registration-expiry.spec.ts',
+  // OSE ADR-040 decision 13: seeded attacker simulations of the publishing
+  // rule (Access Pass cap, swarms, tiny nights). Pure model, no runtime.
+  'tests/vote-swarm-simulation.spec.ts',
 ];

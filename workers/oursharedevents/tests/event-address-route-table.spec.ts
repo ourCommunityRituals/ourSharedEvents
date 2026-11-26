@@ -56,6 +56,16 @@ const OUTSIDE_THE_FOLDER: Readonly<Record<string, { why: Why; reason: string }>>
   },
 
   // ── Signed links ─────────────────────────────────────────────────────────
+  '/access': {
+    why: 'signed-link',
+    reason:
+      'The Access Pass page (OSE ADR-040 decision 13). The pass is a private key: it rides in the fragment and the page takes it out of the address bar, so it names no event.',
+  },
+  '/q/crowd/:param': {
+    why: 'signed-link',
+    reason:
+      "The Online Pick's way in (decision 13). It must sit inside /q, the only reader of the anonymous cookie (AGENTS.md invariant 4); it forwards into /events/<id>/online-pick.",
+  },
   '/sponsor': {
     why: 'signed-link',
     reason: "The sponsor's own page; the token is dropped from the address bar.",
