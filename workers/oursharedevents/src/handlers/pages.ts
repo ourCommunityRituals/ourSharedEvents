@@ -1539,9 +1539,8 @@ ${EVENT_ACTIONS_CSS}
 ${NEXT_AT_VENUE_CSS}
 ${NEVER_WHO_CSS}
 ${SPONSOR_LIST_CSS}
+    .ose-section { margin: 0 0 1rem; } .ose-section > h2 { margin: 0; font-size: 1rem; }
     .ose-section p { margin: 0; }
-    /* OSE-655: WHO host photo (the conversion engine gets a face) + WHAT video
-       link-out. Circular avatar; tasteful, mobile-first, 44px tap target on the link. */
     .ose-who-image { width: 120px; height: 120px; object-fit: cover; border-radius: 50%; display: block; margin-bottom: 0.75rem; background: var(--ose-accent-tint); }
     .ose-what-video { color: var(--ose-accent); text-decoration: none; font-weight: 600; display: inline-block; min-height: 44px; line-height: 44px; }
     .ose-what-video:hover { text-decoration: underline; }
@@ -1572,33 +1571,39 @@ ${SPONSOR_LIST_CSS}
 
     ${
       whatShort || whatVideo || whatLink
-        ? `<section class="ose-card ose-section" data-testid="event-what" aria-labelledby="what-heading">
-           <h2 id="what-heading">${msg(lang, 'section.what')}</h2>
+        ? `<section class="card card--sectioned ose-section" data-testid="event-what" aria-labelledby="what-heading">
+           <h2 class="card-header" id="what-heading">${msg(lang, 'section.what')}</h2>
+           <div class="card-body">
            ${whatShort ? `<p>${isolateTyped(lang, whatShort)}</p>` : ''}
            ${whatVideo ? `<p><a class="ose-what-video" data-testid="event-what-video" href="${esc(whatVideo)}" target="_blank" rel="noopener noreferrer nofollow">${msg(lang, 'video.watch')}</a></p>` : ''}
            ${whatLink}
+         </div>
          </section>`
         : ''
     }
 
     ${
       // OSE-2012: every event says how people take part, so the card always shows.
-      `<section class="ose-card ose-section" data-testid="event-where" aria-labelledby="where-heading">
-           <h2 id="where-heading">${msg(lang, 'section.where')}</h2>
+      `<section class="card card--sectioned ose-section" data-testid="event-where" aria-labelledby="where-heading">
+           <h2 class="card-header" id="where-heading">${msg(lang, 'section.where')}</h2>
+           <div class="card-body">
            ${mapImg}
            ${attendanceModeLine(row, lang, venueDisplay)}
            ${whereAddress && whereAddress !== venueDisplay ? `<p>${isolateTyped(lang, whereAddress)}</p>` : ''}
            ${geoLink}
+         </div>
          </section>`
     }
 
     ${
       whoHost || whoStory || whoImage
-        ? `<section class="ose-card ose-section" data-testid="event-who" aria-labelledby="who-heading">
-           <h2 id="who-heading">${msg(lang, 'section.who')}</h2>
+        ? `<section class="card card--sectioned ose-section" data-testid="event-who" aria-labelledby="who-heading">
+           <h2 class="card-header" id="who-heading">${msg(lang, 'section.who')}</h2>
+           <div class="card-body">
            ${whoImage ? `<img class="ose-who-image" data-testid="event-who-image" src="${esc(whoImage)}" alt="${whoHost ? fmt(lang, 'who.photoOf', { host: whoHost }) : msg(lang, 'who.host')}" loading="lazy" width="120" height="120" />` : ''}
            ${whoHost ? `<p data-testid="event-who-host">${isolateTyped(lang, whoHost)}</p>` : ''}
            ${whoStory ? `<p class="ose-who-story" data-testid="event-who-story">${isolateTyped(lang, whoStory)}</p>` : ''}
+         </div>
          </section>`
         : ''
     }
@@ -1610,9 +1615,11 @@ ${SPONSOR_LIST_CSS}
       const howMuch = formatEventPrice(row, lang);
       return howMuch === null
         ? ''
-        : `<section class="ose-card ose-section" data-testid="event-how-much" aria-labelledby="how-much-heading">
-           <h2 id="how-much-heading">${msg(lang, 'section.howMuch')}</h2>
+        : `<section class="card card--sectioned ose-section" data-testid="event-how-much" aria-labelledby="how-much-heading">
+           <h2 class="card-header" id="how-much-heading">${msg(lang, 'section.howMuch')}</h2>
+           <div class="card-body">
            <p>${esc(howMuch)}</p>
+         </div>
          </section>`;
     })()}
 
@@ -1628,18 +1635,22 @@ ${SPONSOR_LIST_CSS}
 
     ${
       whyPurpose
-        ? `<section class="ose-card ose-section" data-testid="event-why" aria-labelledby="why-heading">
-           <h2 id="why-heading">${msg(lang, 'section.why')}</h2>
+        ? `<section class="card card--sectioned ose-section" data-testid="event-why" aria-labelledby="why-heading">
+           <h2 class="card-header" id="why-heading">${msg(lang, 'section.why')}</h2>
+           <div class="card-body">
            <p>${whyPurpose}</p>
+         </div>
          </section>`
         : ''
     }
 
     ${
       howDetails
-        ? `<section class="ose-card ose-section" data-testid="event-how" aria-labelledby="how-heading">
-           <h2 id="how-heading">${msg(lang, 'section.how')}</h2>
+        ? `<section class="card card--sectioned ose-section" data-testid="event-how" aria-labelledby="how-heading">
+           <h2 class="card-header" id="how-heading">${msg(lang, 'section.how')}</h2>
+           <div class="card-body">
            <p>${howDetails}</p>
+         </div>
          </section>`
         : ''
     }
@@ -1748,9 +1759,8 @@ ${EVENT_ACTIONS_CSS}
 ${NEXT_AT_VENUE_CSS}
 ${NEVER_WHO_CSS}
 ${SPONSOR_LIST_CSS}
+    .ose-section { margin: 0 0 1rem; } .ose-section > h2 { margin: 0; font-size: 1rem; }
     .ose-section p { margin: 0; }
-    /* OSE-655: WHO host photo (the conversion engine gets a face) + WHAT video
-       link-out. Circular avatar; tasteful, mobile-first, 44px tap target on the link. */
     .ose-who-image { width: 120px; height: 120px; object-fit: cover; border-radius: 50%; display: block; margin-bottom: 0.75rem; background: var(--ose-accent-tint); }
     .ose-what-video { color: var(--ose-accent); text-decoration: none; font-weight: 600; display: inline-block; min-height: 44px; line-height: 44px; }
     .ose-what-video:hover { text-decoration: underline; }
@@ -1785,30 +1795,36 @@ ${SPONSOR_LIST_CSS}
 
     ${
       whatShort || whatLink
-        ? `<section class="ose-card ose-section" data-testid="event-what-live" aria-labelledby="what-heading-live">
-           <h2 id="what-heading-live">${msg(lang, 'section.what')}</h2>
+        ? `<section class="card card--sectioned ose-section" data-testid="event-what-live" aria-labelledby="what-heading-live">
+           <h2 class="card-header" id="what-heading-live">${msg(lang, 'section.what')}</h2>
+           <div class="card-body">
            ${whatShort ? `<p>${isolateTyped(lang, whatShort)}</p>` : ''}
            ${whatLink}
+         </div>
          </section>`
         : ''
     }
 
     ${
       // OSE-2012: every event says how people take part, so the card always shows.
-      `<section class="ose-card ose-section" data-testid="event-where-live" aria-labelledby="where-heading-live">
-           <h2 id="where-heading-live">${msg(lang, 'section.where')}</h2>
+      `<section class="card card--sectioned ose-section" data-testid="event-where-live" aria-labelledby="where-heading-live">
+           <h2 class="card-header" id="where-heading-live">${msg(lang, 'section.where')}</h2>
+           <div class="card-body">
            ${mapImg}
            ${attendanceModeLine(row, lang, venueDisplay)}
            ${whereAddress && whereAddress !== venueDisplay ? `<p>${isolateTyped(lang, whereAddress)}</p>` : ''}
            ${geoLink}
+         </div>
          </section>`
     }
 
     ${
       whoHost
-        ? `<section class="ose-card ose-section" data-testid="event-who-live" aria-labelledby="who-heading-live">
-           <h2 id="who-heading-live">${msg(lang, 'section.who')}</h2>
+        ? `<section class="card card--sectioned ose-section" data-testid="event-who-live" aria-labelledby="who-heading-live">
+           <h2 class="card-header" id="who-heading-live">${msg(lang, 'section.who')}</h2>
+           <div class="card-body">
            <p>${isolateTyped(lang, whoHost)}</p>
+         </div>
          </section>`
         : ''
     }
@@ -1820,9 +1836,11 @@ ${SPONSOR_LIST_CSS}
       const howMuch = formatEventPrice(row, lang);
       return howMuch === null
         ? ''
-        : `<section class="ose-card ose-section" data-testid="event-how-much-live" aria-labelledby="how-much-heading-live">
-           <h2 id="how-much-heading-live">${msg(lang, 'section.howMuch')}</h2>
+        : `<section class="card card--sectioned ose-section" data-testid="event-how-much-live" aria-labelledby="how-much-heading-live">
+           <h2 class="card-header" id="how-much-heading-live">${msg(lang, 'section.howMuch')}</h2>
+           <div class="card-body">
            <p>${esc(howMuch)}</p>
+         </div>
          </section>`;
     })()}
 
@@ -1832,18 +1850,22 @@ ${SPONSOR_LIST_CSS}
 
     ${
       whyPurpose
-        ? `<section class="ose-card ose-section" data-testid="event-why-live" aria-labelledby="why-heading-live">
-           <h2 id="why-heading-live">${msg(lang, 'section.why')}</h2>
+        ? `<section class="card card--sectioned ose-section" data-testid="event-why-live" aria-labelledby="why-heading-live">
+           <h2 class="card-header" id="why-heading-live">${msg(lang, 'section.why')}</h2>
+           <div class="card-body">
            <p>${whyPurpose}</p>
+         </div>
          </section>`
         : ''
     }
 
     ${
       howDetails
-        ? `<section class="ose-card ose-section" data-testid="event-how-live" aria-labelledby="how-heading-live">
-           <h2 id="how-heading-live">${msg(lang, 'section.how')}</h2>
+        ? `<section class="card card--sectioned ose-section" data-testid="event-how-live" aria-labelledby="how-heading-live">
+           <h2 class="card-header" id="how-heading-live">${msg(lang, 'section.how')}</h2>
+           <div class="card-body">
            <p>${howDetails}</p>
+         </div>
          </section>`
         : ''
     }
@@ -2055,7 +2077,7 @@ ${NEXT_AT_VENUE_CSS}
 ${EVENT_ACTIONS_CSS}
 ${NEVER_WHO_CSS}
 ${SPONSOR_LIST_CSS}
-    /* OSE-1136: the recap's WHERE/WHO cards reuse the pre-event 5W styling. */
+    .ose-section { margin: 0 0 1rem; } .ose-section > h2 { margin: 0; font-size: 1rem; }
     .ose-section p { margin: 0 0 0.5rem; }
     .ose-venue-map { width: 100%; max-width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 0.75rem; }
     .ose-who-image { width: 120px; height: 120px; object-fit: cover; border-radius: 50%; display: block; margin-bottom: 0.75rem; background: var(--ose-accent-tint); }${DARK_MODE_CSS}
@@ -2097,22 +2119,26 @@ ${SPONSOR_LIST_CSS}
 
       ${
         // OSE-2012: every event says how people take part, so the card always shows.
-        `<section class="ose-card ose-section" data-testid="event-where-post" aria-labelledby="where-heading-post">
-             <h2 id="where-heading-post">${msg(lang, 'section.where')}</h2>
+        `<section class="card card--sectioned ose-section" data-testid="event-where-post" aria-labelledby="where-heading-post">
+             <h2 class="card-header" id="where-heading-post">${msg(lang, 'section.where')}</h2>
+             <div class="card-body">
              ${mapImg}
              ${attendanceModeLine(row, lang, venueDisplay)}
              ${whereAddress && whereAddress !== venueDisplay ? `<p>${isolateTyped(lang, whereAddress)}</p>` : ''}
-           </section>`
+           </div>
+         </section>`
       }
 
       ${
         whoHost || whoStory || whoImage
-          ? `<section class="ose-card ose-section" data-testid="event-who-post" aria-labelledby="who-heading-post">
-             <h2 id="who-heading-post">${msg(lang, 'section.who')}</h2>
+          ? `<section class="card card--sectioned ose-section" data-testid="event-who-post" aria-labelledby="who-heading-post">
+             <h2 class="card-header" id="who-heading-post">${msg(lang, 'section.who')}</h2>
+             <div class="card-body">
              ${whoImage ? `<img class="ose-who-image" data-testid="event-who-image-post" src="${esc(whoImage)}" alt="${whoHost ? fmt(lang, 'who.photoOf', { host: whoHost }) : msg(lang, 'who.host')}" loading="lazy" width="120" height="120" />` : ''}
              ${whoHost ? `<p data-testid="event-who-host-post">${isolateTyped(lang, whoHost)}</p>` : ''}
              ${whoStory ? `<p class="ose-who-story" data-testid="event-who-story-post">${isolateTyped(lang, whoStory)}</p>` : ''}
-           </section>`
+           </div>
+         </section>`
           : ''
       }
 
@@ -2121,10 +2147,12 @@ ${SPONSOR_LIST_CSS}
         // string; #6 inert_monetization holds — display only, no charge logic).
         howMuch === null
           ? ''
-          : `<section class="ose-card ose-section" data-testid="event-how-much-post" aria-labelledby="how-much-heading-post">
-             <h2 id="how-much-heading-post">${msg(lang, 'section.howMuch')}</h2>
+          : `<section class="card card--sectioned ose-section" data-testid="event-how-much-post" aria-labelledby="how-much-heading-post">
+             <h2 class="card-header" id="how-much-heading-post">${msg(lang, 'section.howMuch')}</h2>
+             <div class="card-body">
              <p>${esc(howMuch)}</p>
-           </section>`
+           </div>
+         </section>`
       }
 
       ${(() => {
@@ -2193,9 +2221,11 @@ ${SPONSOR_LIST_CSS}
     <!-- WHY — deeper detail, below the ask (mirrors pre/live: facts → ask → detail). -->
     ${
       whyPurpose
-        ? `<section class="ose-card ose-section" data-testid="event-why-post" aria-labelledby="why-heading-post">
-           <h2 id="why-heading-post">${msg(lang, 'section.why')}</h2>
+        ? `<section class="card card--sectioned ose-section" data-testid="event-why-post" aria-labelledby="why-heading-post">
+           <h2 class="card-header" id="why-heading-post">${msg(lang, 'section.why')}</h2>
+           <div class="card-body">
            <p>${whyPurpose}</p>
+         </div>
          </section>`
         : ''
     }

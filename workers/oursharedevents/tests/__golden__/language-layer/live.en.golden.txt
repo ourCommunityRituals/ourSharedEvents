@@ -122,9 +122,8 @@
     .ose-sponsor-art > img { position: absolute; inset: 12px; width: calc(100% - 24px); height: calc(100% - 24px); object-fit: contain; }
     .ose-sponsor-art > .sponsor-panel-name { font-size: 1.375rem; }
     .sponsor-panel-main:has(> .ose-sponsor-art:last-child) + .sponsor-panel-text { padding-top: 10px; }
+    .ose-section { margin: 0 0 1rem; } .ose-section > h2 { margin: 0; font-size: 1rem; }
     .ose-section p { margin: 0; }
-    /* OSE-655: WHO host photo (the conversion engine gets a face) + WHAT video
-       link-out. Circular avatar; tasteful, mobile-first, 44px tap target on the link. */
     .ose-who-image { width: 120px; height: 120px; object-fit: cover; border-radius: 50%; display: block; margin-bottom: 0.75rem; background: var(--ose-accent-tint); }
     .ose-what-video { color: var(--ose-accent); text-decoration: none; font-weight: 600; display: inline-block; min-height: 44px; line-height: 44px; }
     .ose-what-video:hover { text-decoration: underline; }
@@ -164,14 +163,17 @@
     </header>
     
 
-    <section class="ose-card ose-section" data-testid="event-what-live" aria-labelledby="what-heading-live">
-           <h2 id="what-heading-live">What</h2>
+    <section class="card card--sectioned ose-section" data-testid="event-what-live" aria-labelledby="what-heading-live">
+           <h2 class="card-header" id="what-heading-live">What</h2>
+           <div class="card-body">
            <p>Come support the cause.</p>
            
+         </div>
          </section>
 
-    <section class="ose-card ose-section" data-testid="event-where-live" aria-labelledby="where-heading-live">
-           <h2 id="where-heading-live">Where</h2>
+    <section class="card card--sectioned ose-section" data-testid="event-where-live" aria-labelledby="where-heading-live">
+           <h2 class="card-header" id="where-heading-live">Where</h2>
+           <div class="card-body">
            <img src="/api/v2/maps/venue-image?event=evt_golden" alt="Map of St. Barnabas Hall" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="venue-map-live" />
            <p><span data-testid="event-mode" data-mode="in_person">In person</span> · <strong>St. Barnabas Hall</strong></p>
            <p>123 Main St</p>
@@ -182,11 +184,14 @@
       <a class="ose-calendar-option" data-testid="geo-link-live-apple" href="https://maps.apple.com/?ll=41.70147,-87.70031&amp;q=St.%20Barnabas%20Hall" target="_blank" rel="noopener noreferrer">Apple Maps</a>
     </div>
   </details>
+         </div>
          </section>
 
-    <section class="ose-card ose-section" data-testid="event-who-live" aria-labelledby="who-heading-live">
-           <h2 id="who-heading-live">Who</h2>
+    <section class="card card--sectioned ose-section" data-testid="event-who-live" aria-labelledby="who-heading-live">
+           <h2 class="card-header" id="who-heading-live">Who</h2>
+           <div class="card-body">
            <p>The Parish Council</p>
+         </div>
          </section>
 
     
