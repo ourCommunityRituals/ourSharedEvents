@@ -1,0 +1,36 @@
+info:
+  name: "DEC13 | on | 86 a room pass never votes in the Online Pick"
+  type: http
+  seq: 86
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/vote/{{accessNightId}}/crowd"
+  headers:
+    - name: Content-Type
+      value: "application/json"
+    - name: Sec-Fetch-Site
+      value: same-origin
+  body:
+    type: json
+    data: "{\"object_id\": \"{{accessSongId}}\", \"side\": \"up\", \"pass\": \"{{accessRoomPass}}\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        if (bru.getEnvVar('votingSwitch') !== 'on') {
+          console.log('NOT RUN (VOTING_ENABLED off on this environment): the switch-on half of decision 13');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        test('DEC13 on: room pass on the crowd route, 403', function () { expect(res.getStatus()).to.eql(403); expect(res.getBody().code).to.eql('VOTE_PASS_INVALID'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

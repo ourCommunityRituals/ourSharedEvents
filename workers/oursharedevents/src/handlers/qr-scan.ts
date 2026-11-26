@@ -371,7 +371,8 @@ export async function handleQrScan(
  * Otherwise it sends the browser to the event page, with no pass. It stores
  * no scan: an Online Pick visit is not a scan of anything, and is in no count.
  * It sets the cookie only for a browser without one, as the vote code does.
- * No log line names the event, the pass, the key or the Location.
+ * No log line names the pass, the key or the Location. Only the host-only
+ * swarm alarm names the event, as the room's flood alarm does.
  *
  * Dedup is one Online Pick vote per entry per browser. That is weak on purpose
  * and the page says so: anyone can open it many times from many browsers. The
@@ -397,26 +398,33 @@ export async function handleCrowdEntry(
     console.warn(JSON.stringify({ type: 'CROWD_PASS_SKIPPED', error: errorLabel(err) }));
   }
   if (!may) return home(eventPage);
-  const {
-    anonId,
-    isNew,
-    cookieValue: newCookie,
-  } = await getOrCreateAnonId(request, env.ANON_ID_HASH_PEPPER);
-  const crowdPass = await mintCrowdPass(env.ANON_ID_HASH_PEPPER, anonId, eventId, nowMs);
-  if (crowdPass) {
-    // F1 (2026-11-26 sweep): count the pass toward the Online Pick's swarm
-    // alarm, the host's only. Detection only, never throws, off the answer path.
-    const noted = noteCrowdPassMinted(env, eventId).then((wrote) => {
-      if (wrote)
-        console.warn(JSON.stringify({ type: 'ONLINE_PICK_FLOOD_SEEN', event_id: eventId }));
-    });
-    if (ctx) ctx.waitUntil(noted);
-    else await noted;
+  // A public route never answers 500: any failure sends the browser to the
+  // event page with no pass (backend seat, CCR loop 4).
+  try {
+    const {
+      anonId,
+      isNew,
+      cookieValue: newCookie,
+    } = await getOrCreateAnonId(request, env.ANON_ID_HASH_PEPPER);
+    const crowdPass = await mintCrowdPass(env.ANON_ID_HASH_PEPPER, anonId, eventId, nowMs);
+    if (crowdPass) {
+      // F1 (2026-11-26 sweep): count the pass toward the Online Pick's swarm
+      // alarm, the host's only. Detection only, never throws, off the answer path.
+      const noted = noteCrowdPassMinted(env, eventId).then((wrote) => {
+        if (wrote)
+          console.warn(JSON.stringify({ type: 'ONLINE_PICK_FLOOD_SEEN', event_id: eventId }));
+      });
+      if (ctx) ctx.waitUntil(noted);
+      else await noted;
+    }
+    const res = home(
+      crowdPass
+        ? `${url.origin}/events/${encodeURIComponent(eventId)}/online-pick#t=${crowdPass}`
+        : eventPage
+    );
+    return isNew ? setAnonCookie(res, newCookie) : res;
+  } catch (err) {
+    console.warn(JSON.stringify({ type: 'CROWD_PASS_SKIPPED', error: errorLabel(err) }));
+    return home(eventPage);
   }
-  const res = home(
-    crowdPass
-      ? `${url.origin}/events/${encodeURIComponent(eventId)}/online-pick#t=${crowdPass}`
-      : eventPage
-  );
-  return isNew ? setAnonCookie(res, newCookie) : res;
 }

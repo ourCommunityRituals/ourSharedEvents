@@ -34,6 +34,8 @@ import { ACCESS_PASS_CAP, accessLookup } from '../src/lib/vote-access-pass';
 import { VOTING_ON } from '../src/lib/voting-switch';
 import { runVoteFinalJob } from '../src/lib/vote-sets';
 import { resetCrowdFloodMemo } from '../src/lib/vote-crowd';
+import { castVote } from '../src/lib/vote-cast';
+import { pepperEpoch } from '../src/lib/anon-id-hash';
 
 interface TestEnv {
   DB: D1Database;
@@ -717,4 +719,147 @@ describe('RT-RP-01: the vote route is limited per caller', () => {
     expect(last).toBe(429);
     expect((await roomVote(N1, a, 'up', p, '203.0.113.202')).status).toBe(200);
   }, 120_000);
+});
+
+// ── Every refusal answered (CCR loop 4, QA seat: refusals with no test) ─────
+
+async function adminWith(over: Partial<RouterEnv>, method: string, path: string, body?: unknown) {
+  const res = await routed(
+    new Request(`${ORIGIN}${path}`, {
+      method,
+      headers: body === undefined ? ADMIN : { ...ADMIN, 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }),
+    over
+  );
+  return { status: res.status, json: (await res.json().catch(() => ({}))) as Json };
+}
+
+describe('every refusal of the host routes has its own answer', () => {
+  test('no pepper: no pass is given and the Online Pick does not turn on (503) [pepper check removed]', async () => {
+    await makeSet(N1, ['One']);
+    const noPepper = { ANON_ID_HASH_PEPPER: '' } as Partial<RouterEnv>;
+    const g = await adminWith(noPepper, 'POST', vp(N1, '/access-passes'), {});
+    expect(g.status).toBe(503);
+    expect(g.json.code).toBe('ACCESS_PASS_UNAVAILABLE');
+    const o = await adminWith(noPepper, 'POST', vp(N1, '/online-pick'), { on: true });
+    expect(o.status).toBe(503);
+    expect(o.json.code).toBe('VOTING_UNAVAILABLE');
+    expect(await n(`SELECT COUNT(*) AS n FROM vote_access_passes WHERE event_id = ?`, N1)).toBe(0);
+    expect(await n(`SELECT COUNT(*) AS n FROM vote_crowd_sets WHERE event_id = ?`, N1)).toBe(0);
+  });
+
+  test('an event with no vote set: give, list and the Online Pick answer VOTE_SET_NOT_FOUND', async () => {
+    for (const [method, tail, body] of [
+      ['POST', '/access-passes', {}],
+      ['GET', '/access-passes', undefined],
+      ['POST', '/online-pick', { on: true }],
+    ] as const) {
+      const r = await admin(method, vp(N1, tail), body);
+      expect(r.status, `${method} ${tail}`).toBe(404);
+      expect(r.json.code, `${method} ${tail}`).toBe('VOTE_SET_NOT_FOUND');
+    }
+  });
+
+  test('revoke: an unknown id and a bad id are not found; a second revoke changes nothing', async () => {
+    await makeSet(N1, ['One']);
+    const id = (await give(N1)).json.access_pass.id as string;
+    const unknown = `vap_${'0'.repeat(32)}`;
+    for (const pid of [unknown, 'vap_nothex', 'x'.repeat(40)]) {
+      const r = await admin('POST', vp(N1, `/access-passes/${encodeURIComponent(pid)}/revoke`), {});
+      expect(r.status, pid).toBe(404);
+      if (r.json.code !== undefined) expect(r.json.code, pid).not.toBe('VOTE_SET_NOT_FOUND');
+    }
+    expect((await admin('POST', vp(N1, `/access-passes/${id}/revoke`), {})).status).toBe(200);
+    expect((await admin('POST', vp(N1, `/access-passes/${id}/revoke`), {})).status).toBe(200);
+    const list = await admin('GET', vp(N1, '/access-passes'));
+    expect(list.json.access.remaining).toBe(ACCESS_PASS_CAP - 1);
+    expect(list.json.access.passes).toEqual([{ id, revoked: true }]);
+  });
+});
+
+describe('RT-OP-07: the crowd vote route takes JSON from this site only [crowd guards removed]', () => {
+  test('wrong method, wrong type, another site, a bad body, a bad event id, no pepper', async () => {
+    const [a] = await openNight(N1, ['One']);
+    expect((await admin('POST', vp(N1, '/online-pick'), { on: true })).status).toBe(200);
+    const pass = await crowdPass(N1);
+    const path = `/api/v2/vote/${N1}/crowd`;
+    const body = JSON.stringify({ object_id: a, side: 'up', pass });
+    const send = (init: RequestInit, p = path, over: Partial<RouterEnv> = {}) =>
+      routed(new Request(`${ORIGIN}${p}`, init), over);
+    const same = { 'Content-Type': 'application/json', 'Sec-Fetch-Site': 'same-origin' };
+
+    // The router takes only a POST here: a GET never reaches the counter.
+    expect([404, 405]).toContain((await send({ method: 'GET' })).status);
+    expect(
+      (await send({ method: 'POST', headers: { ...same, 'Content-Type': 'text/plain' }, body }))
+        .status
+    ).toBe(415);
+    const cross = await send({
+      method: 'POST',
+      headers: { ...same, 'Sec-Fetch-Site': 'cross-site' },
+      body,
+    });
+    expect(cross.status).toBe(403);
+    expect(((await cross.json()) as Json).code).toBe('SAME_ORIGIN_ONLY');
+    const bad = await send({ method: 'POST', headers: same, body: '{"object_id":1}' });
+    expect(bad.status).toBe(400);
+    expect(((await bad.json()) as Json).code).toBe('INVALID_VOTE');
+    const off = await send({ method: 'POST', headers: same, body }, path, {
+      ANON_ID_HASH_PEPPER: '',
+    } as Partial<RouterEnv>);
+    expect(off.status).toBe(503);
+    // A malformed event id never reaches the counter.
+    const odd = await send({ method: 'POST', headers: same, body }, `/api/v2/vote/x%27/crowd`);
+    expect(odd.status).toBeGreaterThanOrEqual(400);
+    // None of these moved a counter.
+    expect(await crowdTally(a)).toBeNull();
+    // And the same pass still counts once, through the front door.
+    expect((await crowdVote(N1, a, 'up', pass)).status).toBe(200);
+    expect((await crowdTally(a))?.up_count).toBe(1);
+  });
+});
+
+describe('SEC-4: a revoke stops a vote already in flight [revoke checked only before the vote]', () => {
+  test('a vote whose Access Pass was taken back after the first check is not counted', async () => {
+    const [a] = await openNight(N1, ['One']);
+    const id = (await give(N1)).json.access_pass.id as string;
+    // The route's own check passed; then the host takes the pass back.
+    expect((await admin('POST', vp(N1, `/access-passes/${id}/revoke`), {})).status).toBe(200);
+    const epoch = (await pepperEpoch(PEPPER)) as string;
+    const k = await accessVoterKey(PEPPER, 'in-flight-token', N1);
+    const base = { eventId: N1, objectId: a, side: 'up' as const, k, epoch, nowMs: Date.now() };
+    expect(await castVote(tenv.DB, PEPPER, { ...base, accessId: id })).toBe('closed');
+    expect((await roomTally(a)).up_count).toBe(0);
+    // A room pass (no Access Pass) still counts through the same statement.
+    const roomK = await voterKey(PEPPER, cookie(9), N1);
+    expect(await castVote(tenv.DB, PEPPER, { ...base, k: roomK })).toBe('accepted');
+    expect((await roomTally(a)).up_count).toBe(1);
+  });
+});
+
+describe('SEC-1: the Online Pick alarm sees volume, not only a burst [no volume trip]', () => {
+  test('more than twice the room size of crowd voters trips the host-only flag; up to it does not', async () => {
+    const [a] = await makeSet(N1, ['One']);
+    expect((await admin('POST', vp(N1, '/open'), { room_size: 10 })).status).toBe(200);
+    expect((await admin('POST', vp(N1, `/objects/${a}/open`), {})).status).toBe(200);
+    expect((await admin('POST', vp(N1, '/online-pick'), { on: true })).status).toBe(200);
+    const burst = async () =>
+      Number(
+        (await one(`SELECT burst_seen FROM vote_crowd_sets WHERE event_id = ?`, N1))?.burst_seen
+      );
+    // The smallest room the host can give is 10: up to 20 crowd voters is not an alarm.
+    for (let i = 1; i <= 20; i++)
+      expect((await crowdVote(N1, a, 'up', await crowdPass(N1, 100 + i))).status).toBe(200);
+    expect(await burst()).toBe(0);
+    // A second vote by a voter already in is not a new voter.
+    expect((await crowdVote(N1, a, 'up', await crowdPass(N1, 101))).status).toBe(200);
+    expect(await burst()).toBe(0);
+    expect((await crowdVote(N1, a, 'up', await crowdPass(N1, 121))).status).toBe(200);
+    expect(await burst()).toBe(1);
+    // The host sees the flag and no number; the Room Pick did not move.
+    const view = await admin('GET', vp(N1));
+    expect(view.json.online_pick).toEqual({ on: true, final: false, burst_seen: true });
+    expect((await roomTally(a)).up_count).toBe(0);
+  });
 });

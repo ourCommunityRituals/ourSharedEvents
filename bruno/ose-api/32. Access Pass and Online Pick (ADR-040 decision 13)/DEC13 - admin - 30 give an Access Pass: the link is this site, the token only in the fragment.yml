@@ -1,0 +1,39 @@
+info:
+  name: "DEC13 | admin | 30 give an Access Pass: the link is this site, the token only in the fragment"
+  type: http
+  seq: 30
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{accessNightId}}/votables/access-passes"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        const p = b.access_pass || {};
+        const base = bru.getEnvVar('baseUrl');
+        test('DEC13 give: 201 with an id and a link', function () { expect(res.getStatus()).to.eql(201); expect(p.id).to.match(/^vap_[0-9a-f]{32}$/); });
+        test('DEC13 give: the link is this site\'s /access page, the token in the fragment only', function () { expect(String(p.url).indexOf(base + '/access#')).to.eql(0); expect(String(p.url).slice((base + '/access#').length)).to.match(/^[A-Za-z0-9_-]{43}$/); });
+        test('DEC13 give: no-store, no cookie', function () { expect(String(res.getHeader('cache-control'))).to.contain('no-store'); expect(res.getHeader('set-cookie')).to.be.undefined; });
+        bru.setVar('accessPassId', p.id || 'missing-pass');
+        bru.setVar('accessPassToken', String(p.url || '').split('#')[1] || '');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

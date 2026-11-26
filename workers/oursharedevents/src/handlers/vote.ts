@@ -157,6 +157,7 @@ export async function handleVote(
       k: claims.k,
       epoch,
       nowMs,
+      accessId: claims.access_id ?? null,
     });
     if (outcome === null)
       return answer(503, 'VOTING_UNAVAILABLE', 'Voting is not available right now');

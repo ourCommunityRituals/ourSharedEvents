@@ -179,6 +179,42 @@
       "find": "    if (success || crowdFlagged.has(eventId)) return false;",
       "replace": "    if (success || !crowdFlagged.has(eventId)) return false;",
       "kill": ["workers/oursharedevents/tests/vote-access-online.spec.ts"]
+    },
+    {
+      "id": "access-revoke-in-flight-counts",
+      "layer": "integration",
+      "rule": "A vote whose Access Pass was taken back while it was in flight is not counted: the revoke is checked in the receipt INSERT (ADR-040 decision 13).",
+      "file": "workers/oursharedevents/src/lib/vote-cast.ts",
+      "find": "AND a.set_id = s.id AND a.is_revoked = 0))",
+      "replace": "AND a.set_id = s.id AND 1 = 1))",
+      "kill": ["workers/oursharedevents/tests/vote-access-online.spec.ts"]
+    },
+    {
+      "id": "crowd-vote-any-site",
+      "layer": "integration",
+      "rule": "The Online Pick vote route takes a vote from this site only (SAME_ORIGIN_ONLY).",
+      "file": "workers/oursharedevents/src/handlers/vote.ts",
+      "find": "  if (!sameOrigin(request))\n    return answer(403, 'SAME_ORIGIN_ONLY', 'A vote comes from the vote page');\n  if (!EVENT_ID.test(eventId)) return answer(403, 'VOTE_PASS_INVALID', OPEN_AGAIN);",
+      "replace": "  if (false)\n    return answer(403, 'SAME_ORIGIN_ONLY', 'A vote comes from the vote page');\n  if (!EVENT_ID.test(eventId)) return answer(403, 'VOTE_PASS_INVALID', OPEN_AGAIN);",
+      "kill": ["workers/oursharedevents/tests/vote-access-online.spec.ts"]
+    },
+    {
+      "id": "access-redeem-any-site",
+      "layer": "integration",
+      "rule": "The Access Pass redeem route takes a token from this site only (one refusal).",
+      "file": "workers/oursharedevents/src/handlers/vote-access.ts",
+      "find": "  if (site !== null) return site.trim().toLowerCase() === 'same-origin';",
+      "replace": "  if (site !== null) return true;",
+      "kill": ["workers/oursharedevents/tests/vote-access-online.spec.ts"]
+    },
+    {
+      "id": "online-pick-volume-never-trips",
+      "layer": "integration",
+      "rule": "Past twice the room size of Online Pick voters, the host's swarm flag is set, detection only (SEC-1).",
+      "file": "workers/oursharedevents/src/lib/vote-crowd.ts",
+      "find": "        > ${CROWD_VOLUME_FACTOR} * (SELECT s.room_size",
+      "replace": "        > 1000 * ${CROWD_VOLUME_FACTOR} * (SELECT s.room_size",
+      "kill": ["workers/oursharedevents/tests/vote-access-online.spec.ts"]
     }
   ]
 }

@@ -1,0 +1,30 @@
+info:
+  name: "DEC13 | off | 62 with voting off the way in sends the browser to the event page with no pass"
+  type: http
+  seq: 62
+
+http:
+  method: GET
+  url: "{{baseUrl}}/q/crowd/{{accessNightId}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        if (bru.getEnvVar('votingSwitch') === 'on') {
+          console.log('NOT RUN (VOTING_ENABLED is on on this environment): the switch-off half runs only while it is off');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        const loc = String(res.getHeader('location') || '');
+        test('DEC13 off: a redirect to the event page', function () { expect(res.getStatus()).to.be.within(300, 399); expect(loc).to.contain('/events/'); });
+        test('DEC13 off: no pass in the Location', function () { expect(loc).to.not.contain('#t='); expect(loc).to.not.contain('online-pick'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

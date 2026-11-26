@@ -1,0 +1,34 @@
+info:
+  name: "DEC13 | setup | 10 a synthetic live night for this run"
+  type: http
+  seq: 10
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"attendance_mode\": \"in_person\", \"location\": \"DEC13 Hall\", \"title\": \"DEC13 Access Pass night (staging, synthetic)\", \"status\": \"active\", \"is_published\": false, \"data_class\": \"synthetic\", \"start_date\": \"2099-01-01\", \"start_time\": \"18:00\", \"timezone\": \"America/Chicago\", \"event_type_id\": \"etr-rec-bocce\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('DEC13 setup: the live night is created', function () { expect(res.getStatus()).to.eql(201); });
+        bru.setVar('accessNightId', b.id || 'missing-night');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

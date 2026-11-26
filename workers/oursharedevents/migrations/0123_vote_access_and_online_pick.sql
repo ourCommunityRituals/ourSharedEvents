@@ -7,8 +7,8 @@
 --    no column to put one in. The token itself is never stored. `lookup` is
 --    HMAC(K_access_lookup, token) under a server-only subkey
 --    (src/lib/vote-access-pass.ts), so a copy of the database cannot be used
---    to vote, or to test a guessed token offline. At most 4 live passes a set
---    (the cap is checked inside the INSERT, src/lib/vote-access-pass.ts). The
+--    to vote, or to test a guessed token offline. At most 4 passes a set, ever:
+--    a revoked one still counts (the cap is checked inside the INSERT, src/lib/vote-access-pass.ts). The
 --    rows of a set are deleted when the set becomes final; only the audit log's
 --    "a pass was given by this admin at this hour" lines stay.
 --

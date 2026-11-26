@@ -75,7 +75,7 @@ export interface OnlinePickView {
 
 /** The host's words when the swarm alarm tripped. Only the host sees them. */
 export const ONLINE_PICK_BURST_WORDS =
-  'More Online Pick links were opened in one minute than a full room would. Someone may be gaming the Online Pick. The Room Pick is not affected.';
+  'More people came to the Online Pick, or came faster, than a full room would. Someone may be gaming the Online Pick. The Room Pick is not affected.';
 
 const NO_SET = fail(404, 'VOTE_SET_NOT_FOUND', 'This event has no vote set');
 const SET_DONE = fail(409, 'VOTE_SET_FINAL', 'This vote is over');
@@ -205,6 +205,19 @@ const CROWD_PARTICIPANT_INSERT = `INSERT INTO vote_crowd_participants (set_id, m
     WHERE EXISTS (SELECT 1 FROM vote_crowd_receipts WHERE object_id = ? AND receipt = ?)
    ON CONFLICT DO NOTHING`;
 
+/**
+ * SEC-1 (CCR loop 4): the swarm alarm also sees volume, not only a burst. When a
+ * new crowd voter joins (the statement before changed one row) and the Online
+ * Pick now has more than twice as many voters as the room can hold, the host's
+ * flag is set. Detection only: no vote is refused, no number is kept or shown.
+ * A set with no room size never trips it.
+ */
+export const CROWD_VOLUME_FACTOR = 2;
+const CROWD_VOLUME_ALARM = `UPDATE vote_crowd_sets SET burst_seen = 1
+  WHERE set_id = ? AND burst_seen = 0 AND is_final = 0 AND changes() = 1
+    AND (SELECT COUNT(*) FROM vote_crowd_participants p WHERE p.set_id = vote_crowd_sets.set_id)
+        > ${CROWD_VOLUME_FACTOR} * (SELECT s.room_size FROM vote_sets s WHERE s.id = vote_crowd_sets.set_id)`;
+
 const CROWD_AFTER = `SELECT
      EXISTS (SELECT 1 FROM vote_crowd_receipts WHERE object_id = ? AND receipt = ?) AS held,
      EXISTS (SELECT 1 ${CROWD_FROM} WHERE ${CROWD_OPEN_NOW}) AS open_now`;
@@ -244,10 +257,11 @@ export async function castCrowdVote(
     db.prepare(CROWD_RECEIPT_INSERT).bind(receipt, ...open),
     db.prepare(CROWD_COUNT).bind(side, side, objectId),
     db.prepare(CROWD_PARTICIPANT_INSERT).bind(obj.set_id, participant, objectId, receipt),
+    db.prepare(CROWD_VOLUME_ALARM).bind(obj.set_id),
     db.prepare(CROWD_AFTER).bind(objectId, receipt, ...open),
   ]);
   if ((results[2]?.meta?.changes ?? 0) === 1) return 'accepted';
-  const after = (results[4]?.results?.[0] ?? {}) as { held?: number; open_now?: number };
+  const after = (results[5]?.results?.[0] ?? {}) as { held?: number; open_now?: number };
   return Number(after.held) === 1 && Number(after.open_now) === 1 ? 'accepted' : 'closed';
 }
 

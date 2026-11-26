@@ -1,0 +1,31 @@
+info:
+  name: "DEC13 | on | 84 the way into the Online Pick puts a crowd pass in the fragment"
+  type: http
+  seq: 84
+
+http:
+  method: GET
+  url: "{{baseUrl}}/q/crowd/{{accessNightId}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        if (bru.getEnvVar('votingSwitch') !== 'on') {
+          console.log('NOT RUN (VOTING_ENABLED off on this environment): the switch-on half of decision 13');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        const loc = String(res.getHeader('location') || '');
+        test('DEC13 on: a redirect to the Online Pick page, the pass in the fragment', function () { expect(res.getStatus()).to.be.within(300, 399); expect(loc).to.match(/\/events\/[^/]+\/online-pick#t=vc1\./); });
+        test('DEC13 on: nothing after the path but the fragment', function () { expect(loc.split('#')[0]).to.not.contain('?'); });
+        bru.setVar('accessCrowdPass', loc.split('#t=')[1] || '');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

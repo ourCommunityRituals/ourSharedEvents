@@ -1,0 +1,39 @@
+info:
+  name: "DEC13 | on | 82 a live pass gives a room pass for this event, with no cookie"
+  type: http
+  seq: 82
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/vote/access"
+  headers:
+    - name: Content-Type
+      value: "application/json"
+    - name: Sec-Fetch-Site
+      value: same-origin
+  body:
+    type: json
+    data: "{\"token\": \"{{accessPassToken2}}\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        if (bru.getEnvVar('votingSwitch') !== 'on') {
+          console.log('NOT RUN (VOTING_ENABLED off on this environment): the switch-on half of decision 13');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('DEC13 on: 200, this event, a room pass', function () { expect(res.getStatus()).to.eql(200); expect(b.event_id).to.eql(bru.getVar('accessNightId')); expect(String(b.pass)).to.match(/^vp1\./); });
+        test('DEC13 on: no cookie, no-store', function () { expect(res.getHeader('set-cookie')).to.be.undefined; expect(String(res.getHeader('cache-control'))).to.contain('no-store'); });
+        bru.setVar('accessRoomPass', b.pass || '');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false
