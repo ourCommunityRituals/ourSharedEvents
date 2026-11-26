@@ -1,0 +1,33 @@
+info:
+  name: OSE-2234 | dates | the set does not reopen, a window has run
+  type: http
+  seq: 95
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{voteReadNightId}}/votables/reopen"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('OSE-2234 dates: 409 WINDOWS_STARTED, voting ended for the night', function () { expect(res.getStatus()).to.eql(409); expect(b.code).to.eql('WINDOWS_STARTED'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

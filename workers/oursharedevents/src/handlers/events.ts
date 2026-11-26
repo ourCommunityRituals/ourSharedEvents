@@ -1941,9 +1941,16 @@ export async function handleUpdateEvent(
     const update = env.DB.prepare('UPDATE events SET ' + sets.join(', ') + where).bind(...values);
     // OSE-2142: nothing is more live than its container. Every edit closes
     // the event's open vote set in the same batch (one transaction) unless the
-    // event is live after it: Published and on its dates. A date moved into
-    // the past is no pause button on one entry's window (CCR loop 6, F1).
-    const result = (await env.DB.batch([update, closeVoteSetUnlessPublished(env.DB, eventId)]))[0];
+    // event is live both before and after it: Published and on its dates.
+    // Voting follows the event: once it is not live, voting for the night
+    // ends, and a later edit does not bring it back.
+    const result = (
+      await env.DB.batch([
+        closeVoteSetUnlessPublished(env.DB, eventId),
+        update,
+        closeVoteSetUnlessPublished(env.DB, eventId),
+      ])
+    )[1];
 
     if ((result.meta?.changes ?? 0) === 0) {
       if (observedStatus !== undefined) {

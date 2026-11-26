@@ -623,6 +623,29 @@ describe('OSE-2142 | a vote set follows its event status', () => {
     expect(re.json.code).toBe('WINDOWS_STARTED');
   });
 
+  test('dates that have passed: the next edit closes the set, and it stays closed', async () => {
+    await openNight();
+    const code = await makeCode();
+    expect(await setState(NIGHT)).toBe('open');
+    // The event's last date passes with no edit (written here directly).
+    await run(
+      `UPDATE events SET start_date = '2000-01-01', end_date = '2000-01-01' WHERE id = ?`,
+      NIGHT
+    );
+    expect(await setState(NIGHT)).toBe('open');
+    // The dates are moved forward: the edit closes the set first, because the
+    // event was not live when it came in.
+    const back = await call('PUT', `/api/v2/admin/events/${NIGHT}`, {
+      start_date: '2099-06-01',
+      end_date: '2099-06-01',
+    });
+    expect(back.status, JSON.stringify(back.json)).toBe(200);
+    expect(await setState(NIGHT)).toBe('closed');
+    expect(passOf(await scan(code.token))).toBeNull();
+    const re = await call('POST', vp(NIGHT, '/reopen'), {});
+    expect(re.json.code).toBe('WINDOWS_STARTED');
+  });
+
   test('OSE-2142 | SECURITY | the QR verify undo (active to ready) closes the set in the same batch', async () => {
     await openNight();
     const undo = await call('POST', `/api/v2/admin/events/${NIGHT}/unverify-qr`, {});

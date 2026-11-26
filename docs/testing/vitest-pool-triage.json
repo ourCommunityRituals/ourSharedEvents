@@ -4192,7 +4192,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch, createExecutionContext, waitOnExecutionContext",
-      "testCount": 26
+      "testCount": 27
     },
     {
       "file": "workers/oursharedevents/tests/vote-flood.spec.ts",
@@ -4269,7 +4269,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
-      "testCount": 64
+      "testCount": 65
     },
     {
       "file": "workers/oursharedevents/tests/vote-swarm-simulation.spec.ts",
