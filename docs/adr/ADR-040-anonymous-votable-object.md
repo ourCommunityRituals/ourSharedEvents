@@ -249,7 +249,7 @@ This decision opens the same engine to any event or market. It changes no table,
 
 **Owner, 2026-11-26** (project thread on voting from outside the room, relayed by the coordinator): "If 'Online Pick' means voting from outside the room, please check it with Matt before building it. I give permission." The design is OCR-docs PR #200; the red team and blue team review is `docs/security/THREAT-MODEL-voting-red-blue-2026-11-26.md`.
 
-**How this sits with the in-room rule** (decision 6, amended the same day). The Room Pick stays in the room: no host, sponsor, brand or tier setting can open it to the link. Decision 13 adds two narrow exceptions the owner allowed by name, and nothing else: the Access Pass, which is capped, given one by one by the host, and counts the same as a person in the room; and the Online Pick, which is a separate result and never changes the Room Pick. The owner is asked to confirm this reading in the PR that builds it.
+**How this sits with the in-room rule** (decision 6, amended the same day). The Room Pick stays in the room: no host, sponsor, brand or tier setting can open it to the link. Decision 13 adds two narrow exceptions the owner allowed by name, and nothing else: the Access Pass, which is capped, given one by one by the host, and counts the same as a person in the room; and the Online Pick, which is a separate result and never changes the Room Pick. The owner approved this reading in OCR-docs PR #200 (merged), which designs both.
 
 The night's official result is now called the **Room Pick**. It is decided exactly as decisions 1 to 12 say. Two ways in from outside the room are added.
 
