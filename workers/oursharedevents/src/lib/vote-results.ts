@@ -20,8 +20,9 @@
  *     lead of 0, so it is too close to call.
  *   - A set that never opened, or is void, gets no outcome at all.
  *
- * WHY IN SQL. resultStatements() returns two UPDATEs that read the tallies, the
- * markers, T and V and write only `outcome` and the winner's id. finalizeVoteSet
+ * WHY IN SQL. resultStatements() returns three UPDATEs that read the tallies,
+ * the markers, T and V and write only `outcome`, the winner's id and the
+ * one-way integrity flag (the room size check). finalizeVoteSet
  * (lib/vote-sets.ts) runs them in the SAME D1 batch, ahead of the statement that
  * sets is_final and nulls T and V, and the deletes of the receipts and markers,
  * under the same guard. So the result, final, the nulling and the deletion are
@@ -79,7 +80,25 @@ const WINNER_UPDATE = `UPDATE vote_sets
  WHERE id = ? AND event_id = ? AND is_void = 0 AND pepper_epoch IS NOT NULL AND outcome = 'winner'`;
 
 /**
- * The two UPDATEs that write the night's result, in order. `guard` is
+ * Statement 3: the room size check (2026-11-26, owner: "as stringent as you
+ * can make it"). More distinct voters than the most people the room can hold,
+ * as the host said when voting first opened, means some votes did not come
+ * from the room: the night is flagged, once, with the same one-way flag as a
+ * flood (migration 0122). It catches padding at any pace, a script or an AI
+ * agent spreading fake voters over the night included, which the per-minute
+ * alarm (lib/vote-flood.ts) cannot see. The count and the room size are
+ * compared here and never read into the Worker. It changes no outcome and no
+ * winner: it only says the result may be padded. A set opened before the
+ * room size existed (room_size null) is not checked.
+ */
+const ROOM_CHECK_UPDATE = `UPDATE vote_sets
+   SET flood_seen = 1
+ WHERE id = ? AND event_id = ? AND is_void = 0 AND pepper_epoch IS NOT NULL
+   AND room_size IS NOT NULL AND flood_seen = 0
+   AND (SELECT COUNT(*) FROM vote_participants p WHERE p.set_id = vote_sets.id) > room_size`;
+
+/**
+ * The three UPDATEs that write the night's result and its room check, in order. `guard` is
  * finalizeVoteSet's own condition for this set (not final, may be finalized,
  * still due), with its binds after the set and event ids, so the result is
  * written exactly when the final statement in the same batch makes the set
@@ -92,7 +111,7 @@ export function resultStatements(
   guard: string,
   guardBinds: unknown[]
 ): D1PreparedStatement[] {
-  return [OUTCOME_UPDATE, WINNER_UPDATE].map((sql) =>
+  return [OUTCOME_UPDATE, WINNER_UPDATE, ROOM_CHECK_UPDATE].map((sql) =>
     db.prepare(`${sql} ${guard}`).bind(setId, eventId, ...guardBinds)
   );
 }

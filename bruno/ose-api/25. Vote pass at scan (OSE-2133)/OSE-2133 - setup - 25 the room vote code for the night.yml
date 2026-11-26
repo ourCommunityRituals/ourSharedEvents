@@ -25,9 +25,11 @@ runtime:
     - type: after-response
       code: |-
         const b = res.getBody() || {};
-        var m = /\/q\/(qrt_[0-9a-f]{32})\?type=vote$/.exec(String((b.code && b.code.url) || ''));
+        var m = /\/q\/(qrt_[0-9a-f]{32})\?type=vote&w=(\d+\.[0-9a-f]{32})$/.exec(String((b.code && b.code.url) || ''));
         var shaped = !!m;
         bru.setVar('votePassToken', m ? m[1] : 'qrt_missing');
+        // The rotating code: this minute's stamp, as the room screen shows it (60 to 120 s of life).
+        bru.setVar('votePassStamp', m ? m[2] : '0.missing');
         bru.setVar('votePassCodeId', String((b.code && b.code.id) || 'missing-code'));
         m = null;
         test('OSE-2133 setup: the room vote code is made', function () { expect(res.getStatus() === 201).to.eql(true); expect(shaped).to.eql(true); });

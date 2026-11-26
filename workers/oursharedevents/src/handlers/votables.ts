@@ -9,7 +9,7 @@
  *   POST /api/v2/admin/events/:id/votables/code                   make the room's vote code, or
  *                                                                 return the one in use (OSE-2140)
  *   POST /api/v2/admin/events/:id/votables/code/replace           retire it and make a new token
- *   POST /api/v2/admin/events/:id/votables/open                   first open (stamps the epoch, draws T and V)
+ *   POST /api/v2/admin/events/:id/votables/open                   first open { room_size } (stamps the epoch, draws T and V, fixes the room size)
  *   POST /api/v2/admin/events/:id/votables/reopen                 reopen a closed set
  *   POST /api/v2/admin/events/:id/votables/close                  close the set
  *   POST /api/v2/admin/events/:id/votables/finalize               compute the night's result and make
@@ -232,9 +232,11 @@ export async function handleVotables(
     const nowIso = new Date().toISOString();
 
     const origin = new URL(request.url).origin;
+    // The vote code's URL carries this minute's stamp (lib/vote-code-window.ts).
+    const clock = { pepper: env.ANON_ID_HASH_PEPPER, nowMs: Date.parse(nowIso) };
     if (route.op === 'list') {
       const { set, objects, event_live } = await listVotables(db, eventId);
-      const code = await readVoteCode(db, eventId, origin);
+      const code = await readVoteCode(db, eventId, origin, clock);
       const online_pick = await readOnlinePick(db, eventId);
       return reply(request, 200, { set, objects, event_live, code, online_pick });
     }
@@ -263,7 +265,7 @@ export async function handleVotables(
         return answer(request, await createVoteSet(db, eventId, playedBy), 'set', 201);
       }
       case 'create-code': {
-        const { made, code } = await makeVoteCode(db, eventId, origin);
+        const { made, code } = await makeVoteCode(db, eventId, origin, clock);
         return reply(request, made ? 201 : 200, { code });
       }
       case 'give-access': {
@@ -302,13 +304,23 @@ export async function handleVotables(
         );
       }
       case 'replace-code':
-        return reply(request, 201, { code: await replaceVoteCode(db, eventId, origin) });
-      case 'open-set':
+        return reply(request, 201, { code: await replaceVoteCode(db, eventId, origin, clock) });
+      case 'open-set': {
+        // The first open takes the room size, once (2026-11-26): it is fixed
+        // from then on, and the room size check at final reads it.
+        const b = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+        const extra = Object.keys(b).filter((k) => k !== 'room_size');
+        if (extra.length)
+          return reply(request, 400, {
+            code: 'UNKNOWN_FIELD',
+            error: `Not a field of opening a vote set: ${extra.join(', ')}`,
+          });
         return answer(
           request,
-          await openVoteSet(db, eventId, env.ANON_ID_HASH_PEPPER, nowIso),
+          await openVoteSet(db, eventId, env.ANON_ID_HASH_PEPPER, nowIso, b.room_size),
           'set'
         );
+      }
       case 'reopen-set':
         return answer(
           request,

@@ -176,7 +176,7 @@ async function makeSet(eventId: string, labels: string[], playedBy: 'object' | '
   return ids;
 }
 async function openAll(eventId: string, ids: string[]) {
-  expect((await admin('POST', vp(eventId, '/open'))).status).toBe(200);
+  expect((await admin('POST', vp(eventId, '/open'), { room_size: 200 })).status).toBe(200);
   for (const id of ids)
     expect((await admin('POST', vp(eventId, `/objects/${id}/open`), {})).status).toBe(200);
 }

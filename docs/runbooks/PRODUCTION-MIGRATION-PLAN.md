@@ -2,7 +2,7 @@
 
 Written 2026-10-07 for the first production deploy (launch 2026-10-24).
 
-Covers: main 0078–0121, forms 0015–0018.
+Covers: main 0078–0122, forms 0015–0018.
 
 This is a plan to read, not a script to run. **You do not apply these by hand.** The
 `T1 Deploy → Production` job applies them, in order, before it deploys the Worker.
@@ -11,7 +11,7 @@ This is a plan to read, not a script to run. **You do not apply these by hand.**
 
 | Database                          | Production is at | This build needs | To apply |
 | --------------------------------- | ---------------- | ---------------- | -------- |
-| Main (`ocr-db-production`)        | 77               | 121              | 44       |
+| Main (`ocr-db-production`)        | 77               | 122              | 45       |
 | Forms (`ocr-forms-db-production`) | 14 (see note)    | 18               | 4        |
 
 - The main level was read on 2026-10-01 and again in the two days before this was written.
@@ -128,56 +128,57 @@ its counts were not taken first. They were read on staging the next day (run 436
 events, 60 of them with no place at all, 3 of those on the public list. Its per-status breakdown was
 replaced by one count on 2026-11-15 so the file fits the strict rule.
 
-## Main database, 0078 to 0121
+## Main database, 0078 to 0122
 
 "Rows" answers: does it write or remove rows that already exist?
 
-| File                                                      | What it does                                                                                                                      | Rows |
-| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ---- |
-| `0078_events_add_starts_at.sql`                           | Adds `events.starts_at`, the start time in UTC. Old events keep none.                                                             | No   |
-| `0079_poster_deployments_add_address.sql`                 | Adds `poster_deployments.address`, the address the organizer typed for a poster.                                                  | No   |
-| `0080_shortlinks_add_poster_position.sql`                 | Adds `shortlinks.poster_position`, the order of the codes on a poster.                                                            | No   |
-| `0081_sponsor_tier_and_compact_logo.sql`                  | Adds `sponsor_business.tier` and fills it. Rebuilds `sponsor_asset` to allow a second logo format.                                | Yes  |
-| `0082_poster_deployments_add_placement_type.sql`          | Adds `poster_deployments.placement_type` (venue or community) and marks venue posters.                                            | Yes  |
-| `0083_sponsor_public_card.sql`                            | Adds four optional sponsor columns: display name, location, phone, email.                                                         | No   |
-| `0084_corridor_readiness_latch.sql`                       | Creates `corridor_readiness_latch`, which records when an area's map opened.                                                      | No   |
-| `0085_events_settings_json.sql`                           | Adds `events.settings_json`, the per-event switches. Default `{}` means everything on.                                            | No   |
-| `0086_remove_seed_test_event.sql`                         | Deletes the test event `test-event-001` if nothing points at it.                                                                  | Yes  |
-| `0087_scan_cell_aggregates.sql`                           | Creates `scan_cell_aggregates`, scan counts by the poster's own map cell.                                                         | No   |
-| `0088_admin_audit_log_brand_id.sql`                       | Adds `admin_audit_log.brand_id` and an index, then fills the new column for old rows.                                             | Yes  |
-| `0089_clear_visitor_country.sql`                          | Clears the visitor country from `scan_node_returns` and `scan_aggregates`. Adds an index.                                         | Yes  |
-| `0090_anon_id_returns_last_seen_index.sql`                | Adds two indexes on `anon_id_returns`.                                                                                            | No   |
-| `0091_anon_id_returns_pepper_epoch.sql`                   | Adds `anon_id_returns.pepper_epoch`. Old rows keep none, and the nightly job later deletes those rows.                            | No   |
-| `0092_anon_id_returns_pepper_epoch_index.sql`             | Adds an index on `anon_id_returns.pepper_epoch`.                                                                                  | No   |
-| `0093_events_listed_from.sql`                             | Adds `events.listed_from`, the time a published event joins the list and map.                                                     | No   |
-| `0094_shortlink_click_daily.sql`                          | Creates `shortlink_click_daily`, one click count per link per day.                                                                | No   |
-| `0095_scan_node_returns_clear_raw_anon_id.sql`            | Clears the raw cookie value from `scan_node_returns`. Rows and other columns stay.                                                | Yes  |
-| `0096_event_codes.sql`                                    | Creates `event_codes` (one short code per event) and `share_opens_daily` (share opens per day, no identity).                      | No   |
-| `0097_event_type_watch_party.sql`                         | Adds the Watch Party event type and maps it to two templates, then refreshes the templates' clearance tier.                       | Yes  |
-| `0098_drop_subscribers_from_anonymous_db.sql`             | Removes the email list table `subscribers` from the main database. Forms `0017` creates it there instead.                         | Yes  |
-| `0099_event_place_checked_at.sql`                         | Adds `events.place_checked_at`, when the event's place was last looked up on the map. Old events keep none.                       | No   |
-| `0100_scan_split_tables_hour_precision.sql`               | Truncates `created_at` on `scan_placement_events` and `scan_node_returns` to the scan's hour. Counts stay.                        | Yes  |
-| `0101_scan_node_returns_one_row_per_browser_hour.sql`     | Keeps one `scan_node_returns` row per browser, event and hour, and adds the UNIQUE index that enforces it.                        | Yes  |
-| `0102_rename_sponsor_impressions_to_sponsor_displays.sql` | Rebuilds `sponsor_impressions` as `sponsor_displays`, with its indexes; the stored value `impression` becomes `display`.          | Yes  |
-| `0103_rename_visit_count_to_return_count.sql`             | Renames `anon_id_returns.visit_count` to `return_count` and its index. No row changes.                                            | No   |
-| `0104_event_spine_keys.sql`                               | Adds `events.venue_canonical_id` and `events.event_correlation_id`, each with an index. Writes no row (a nightly job fills them). | No   |
-| `0105_sponsor_header_block.sql`                           | Adds `sponsor_business.header_image_url` and `header_text`, the sponsor's optional header block. Old sponsors keep none.          | No   |
-| `0106_event_place_kind.sql`                               | Adds `events.place_kind` (business or address), how the zoomed map marks its place. Writes no row (the nightly job fills it).     | No   |
-| `0107_events_use_sponsors_backfill.sql`                   | Switches sponsors on (`useSponsors` in `events.settings_json`) for events whose organizer already chose a sponsor. No new column. | Yes  |
-| `0108_event_attendance_mode.sql`                          | Adds `events.attendance_mode` (in person, online or both). Every existing event reads `in_person`, from the column default.       | No   |
-| `0109_event_booths.sql`                                   | Adds `event_booths` (a fair's stalls: number, trading name, category, hall plan spot) and `poster_deployments.booth_id`.          | No   |
-| `0110_event_campaign.sql`                                 | Adds `events.campaign_id` (the one campaign an event is in, or none). Writes no row. Nothing public reads it.                     | No   |
-| `0111_vote_tables.sql`                                    | Adds the six vote tables (ADR-040): sets, objects, tallies and keyed markers. Writes no row. No route reads them yet.             | No   |
-| `0112_sponsor_and_campaign_created_by.sql`                | Adds `created_by` to `sponsor_business` and `campaigns`, and an index on each (OSE-1561). Writes no row; existing rows read NULL. | No   |
-| `0113_vote_code_and_event_status.sql`                     | Adds `poster_deployments.is_vote_code` (the room's vote code) and its index; closes sets open on unpublished events.              | Yes  |
-| `0114_vote_result.sql`                                    | Adds `vote_sets.outcome`, `winner_object_id` and `winner_team_id`, the night's result written at final (OSE-2130). Writes no row. | No   |
-| `0115_event_type_storytime.sql`                           | Adds the Storytime event type (Performing arts) and maps it to one template, then refreshes the templates' clearance tier.        | Yes  |
-| `0116_sponsor_business_kind.sql`                          | Adds `sponsor_business.business_kind`, the sponsor's kind of business picked in Create Sponsor (OSE-2207). Writes no row.         | No   |
-| `0117_scan_poster_hour_cap.sql`                           | Adds `scan_poster_hour_tally`, scans per poster per hour for the 100-scan cap (OSE-1496). Counts only. Writes no row.             | No   |
-| `0118_brand_tree.sql`                                     | Adds `brand_parents`, a brand's parent brand, so a parent company reaches its ventures (OSE-1553). Writes no row.                 | No   |
-| `0119_clear_phone_ids.sql`                                | Deletes every `anon_id_returns` row and clears the phone id and browser hash in `scan_node_returns` (OSE-2214).                   | Yes  |
-| `0120_venues.sql`                                         | Adds `venues`, `venue_operators` and `events.host_venue_id`, so a venue owner sees the activity there (OSE-2221). Writes no row.  | No   |
-| `0121_brand_addons.sql`                                   | Adds `brand_addons`, the paid add-ons the platform has turned on for a brand (OSE-2232: skins). Writes no row.                    | No   |
+| File                                                      | What it does                                                                                                                                                         | Rows |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| `0078_events_add_starts_at.sql`                           | Adds `events.starts_at`, the start time in UTC. Old events keep none.                                                                                                | No   |
+| `0079_poster_deployments_add_address.sql`                 | Adds `poster_deployments.address`, the address the organizer typed for a poster.                                                                                     | No   |
+| `0080_shortlinks_add_poster_position.sql`                 | Adds `shortlinks.poster_position`, the order of the codes on a poster.                                                                                               | No   |
+| `0081_sponsor_tier_and_compact_logo.sql`                  | Adds `sponsor_business.tier` and fills it. Rebuilds `sponsor_asset` to allow a second logo format.                                                                   | Yes  |
+| `0082_poster_deployments_add_placement_type.sql`          | Adds `poster_deployments.placement_type` (venue or community) and marks venue posters.                                                                               | Yes  |
+| `0083_sponsor_public_card.sql`                            | Adds four optional sponsor columns: display name, location, phone, email.                                                                                            | No   |
+| `0084_corridor_readiness_latch.sql`                       | Creates `corridor_readiness_latch`, which records when an area's map opened.                                                                                         | No   |
+| `0085_events_settings_json.sql`                           | Adds `events.settings_json`, the per-event switches. Default `{}` means everything on.                                                                               | No   |
+| `0086_remove_seed_test_event.sql`                         | Deletes the test event `test-event-001` if nothing points at it.                                                                                                     | Yes  |
+| `0087_scan_cell_aggregates.sql`                           | Creates `scan_cell_aggregates`, scan counts by the poster's own map cell.                                                                                            | No   |
+| `0088_admin_audit_log_brand_id.sql`                       | Adds `admin_audit_log.brand_id` and an index, then fills the new column for old rows.                                                                                | Yes  |
+| `0089_clear_visitor_country.sql`                          | Clears the visitor country from `scan_node_returns` and `scan_aggregates`. Adds an index.                                                                            | Yes  |
+| `0090_anon_id_returns_last_seen_index.sql`                | Adds two indexes on `anon_id_returns`.                                                                                                                               | No   |
+| `0091_anon_id_returns_pepper_epoch.sql`                   | Adds `anon_id_returns.pepper_epoch`. Old rows keep none, and the nightly job later deletes those rows.                                                               | No   |
+| `0092_anon_id_returns_pepper_epoch_index.sql`             | Adds an index on `anon_id_returns.pepper_epoch`.                                                                                                                     | No   |
+| `0093_events_listed_from.sql`                             | Adds `events.listed_from`, the time a published event joins the list and map.                                                                                        | No   |
+| `0094_shortlink_click_daily.sql`                          | Creates `shortlink_click_daily`, one click count per link per day.                                                                                                   | No   |
+| `0095_scan_node_returns_clear_raw_anon_id.sql`            | Clears the raw cookie value from `scan_node_returns`. Rows and other columns stay.                                                                                   | Yes  |
+| `0096_event_codes.sql`                                    | Creates `event_codes` (one short code per event) and `share_opens_daily` (share opens per day, no identity).                                                         | No   |
+| `0097_event_type_watch_party.sql`                         | Adds the Watch Party event type and maps it to two templates, then refreshes the templates' clearance tier.                                                          | Yes  |
+| `0098_drop_subscribers_from_anonymous_db.sql`             | Removes the email list table `subscribers` from the main database. Forms `0017` creates it there instead.                                                            | Yes  |
+| `0099_event_place_checked_at.sql`                         | Adds `events.place_checked_at`, when the event's place was last looked up on the map. Old events keep none.                                                          | No   |
+| `0100_scan_split_tables_hour_precision.sql`               | Truncates `created_at` on `scan_placement_events` and `scan_node_returns` to the scan's hour. Counts stay.                                                           | Yes  |
+| `0101_scan_node_returns_one_row_per_browser_hour.sql`     | Keeps one `scan_node_returns` row per browser, event and hour, and adds the UNIQUE index that enforces it.                                                           | Yes  |
+| `0102_rename_sponsor_impressions_to_sponsor_displays.sql` | Rebuilds `sponsor_impressions` as `sponsor_displays`, with its indexes; the stored value `impression` becomes `display`.                                             | Yes  |
+| `0103_rename_visit_count_to_return_count.sql`             | Renames `anon_id_returns.visit_count` to `return_count` and its index. No row changes.                                                                               | No   |
+| `0104_event_spine_keys.sql`                               | Adds `events.venue_canonical_id` and `events.event_correlation_id`, each with an index. Writes no row (a nightly job fills them).                                    | No   |
+| `0105_sponsor_header_block.sql`                           | Adds `sponsor_business.header_image_url` and `header_text`, the sponsor's optional header block. Old sponsors keep none.                                             | No   |
+| `0106_event_place_kind.sql`                               | Adds `events.place_kind` (business or address), how the zoomed map marks its place. Writes no row (the nightly job fills it).                                        | No   |
+| `0107_events_use_sponsors_backfill.sql`                   | Switches sponsors on (`useSponsors` in `events.settings_json`) for events whose organizer already chose a sponsor. No new column.                                    | Yes  |
+| `0108_event_attendance_mode.sql`                          | Adds `events.attendance_mode` (in person, online or both). Every existing event reads `in_person`, from the column default.                                          | No   |
+| `0109_event_booths.sql`                                   | Adds `event_booths` (a fair's stalls: number, trading name, category, hall plan spot) and `poster_deployments.booth_id`.                                             | No   |
+| `0110_event_campaign.sql`                                 | Adds `events.campaign_id` (the one campaign an event is in, or none). Writes no row. Nothing public reads it.                                                        | No   |
+| `0111_vote_tables.sql`                                    | Adds the six vote tables (ADR-040): sets, objects, tallies and keyed markers. Writes no row. No route reads them yet.                                                | No   |
+| `0112_sponsor_and_campaign_created_by.sql`                | Adds `created_by` to `sponsor_business` and `campaigns`, and an index on each (OSE-1561). Writes no row; existing rows read NULL.                                    | No   |
+| `0113_vote_code_and_event_status.sql`                     | Adds `poster_deployments.is_vote_code` (the room's vote code) and its index; closes sets open on unpublished events.                                                 | Yes  |
+| `0114_vote_result.sql`                                    | Adds `vote_sets.outcome`, `winner_object_id` and `winner_team_id`, the night's result written at final (OSE-2130). Writes no row.                                    | No   |
+| `0115_event_type_storytime.sql`                           | Adds the Storytime event type (Performing arts) and maps it to one template, then refreshes the templates' clearance tier.                                           | Yes  |
+| `0116_sponsor_business_kind.sql`                          | Adds `sponsor_business.business_kind`, the sponsor's kind of business picked in Create Sponsor (OSE-2207). Writes no row.                                            | No   |
+| `0117_scan_poster_hour_cap.sql`                           | Adds `scan_poster_hour_tally`, scans per poster per hour for the 100-scan cap (OSE-1496). Counts only. Writes no row.                                                | No   |
+| `0118_brand_tree.sql`                                     | Adds `brand_parents`, a brand's parent brand, so a parent company reaches its ventures (OSE-1553). Writes no row.                                                    | No   |
+| `0119_clear_phone_ids.sql`                                | Deletes every `anon_id_returns` row and clears the phone id and browser hash in `scan_node_returns` (OSE-2214).                                                      | Yes  |
+| `0120_venues.sql`                                         | Adds `venues`, `venue_operators` and `events.host_venue_id`, so a venue owner sees the activity there (OSE-2221). Writes no row.                                     | No   |
+| `0121_brand_addons.sql`                                   | Adds `brand_addons`, the paid add-ons the platform has turned on for a brand (OSE-2232: skins). Writes no row.                                                       | No   |
+| `0122_vote_integrity.sql`                                 | Adds `vote_sets.flood_seen` and `vote_sets.burst_seen` (one-way flags) and `vote_sets.room_size` (fixed once set), each held by a trigger (OSE-2234). Writes no row. | No   |
 
 ## Forms database, 0015 to 0018
 
@@ -421,7 +422,7 @@ The deploy job does the first three itself and goes red if any fails.
 
    Both say `No migrations to apply`.
 
-2. **The level.** Expected: `0121_brand_addons.sql` and `121`;
+2. **The level.** Expected: `0122_vote_integrity.sql` and `122`;
    then `0018_registration_email_encrypted.sql` and `18`.
 
    ```bash

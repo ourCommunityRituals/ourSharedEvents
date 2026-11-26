@@ -24,8 +24,9 @@
  *      VOTE_TABLE_FILES with its reason. An entry that no longer matches fails.
  *   5. ONE-WAY FLAGS (decisions 4 and 6, Q10). In every SQL statement in the
  *      Worker, the migrations, scripts/ and .github/workflows/:
- *        - a write to vote_sets sets is_final and is_void only to the literal 1,
- *          by plain `column = 1`, never in a tuple or an expression;
+ *        - a write to vote_sets sets is_final, is_void, flood_seen and burst_seen (OSE-2234)
+ *          only to the literal 1, by plain `column = 1`, never in a tuple or
+ *          an expression, so a flood once seen is never cleared;
  *        - pepper_epoch and played_by are set only by a write whose WHERE says
  *          the column IS NULL (stamped once, never restamped);
  *        - secret_margin and secret_floor are set to a value only by a write
@@ -175,6 +176,7 @@ const VOTE_PAGE_HANDLER = 'src/handlers/vote-page.ts';
 const VOTE_PAGE_RENDER = 'src/lib/vote-page-render.ts';
 const ACCESS_LIB = 'src/lib/vote-access-pass.ts';
 const CROWD_LIB = 'src/lib/vote-crowd.ts';
+const VOTE_FLOOD_LIB = 'src/lib/vote-flood.ts';
 
 /**
  * Every Worker file that names a vote table, and why. A route story (S3, S4a,
@@ -191,11 +193,13 @@ const VOTE_TABLE_FILES: Record<string, string> = {
   [RESULTS_LIB]:
     "S5 (OSE-2130): the night's result. Two UPDATEs, run in finalizeVoteSet's batch, that reads the tallies, the team and participant markers, T and V inside SQL and writes only the outcome and the winner's id.",
   [PUBLIC_RESULT_LIB]:
-    "S4b (OSE-2129): the voter page's result. Reads outcome and the winner's id from a final, non-void vote_sets row, and labels from votable_objects. No write, no counter, no secret.",
+    "S4b (OSE-2129): the voter page's result. Reads outcome, the winner's id, the room check flag and the host's room size (OSE-2234) from a final, non-void vote_sets row, and labels from votable_objects. No write, no counter, no secret.",
   [ACCESS_LIB]:
     "ADR-040 decision 13: the Access Pass. Gives (one INSERT with the cap inside it, against vote_sets), lists, revokes and redeems rows of vote_access_passes, and deletes a final set's passes. It reads no counter and no secret.",
   [CROWD_LIB]:
     "ADR-040 decision 13: the Online Pick. Writes and reads only the vote_crowd_* tables, plus the room set's state and objects' windows; its result UPDATE reads crowd counters, markers, T and V inside SQL. Never a room counter or marker table.",
+  [VOTE_FLOOD_LIB]:
+    'OSE-2234: the host-only burst alarm. One UPDATE that sets burst_seen to the literal 1 on a set not final and not flagged, touching no other column. No read, no counter, no secret.',
 };
 
 /**
@@ -420,12 +424,19 @@ function flagProblems(raw: string, sqlComments = true): string[] {
       const [setPart, where = ''] = upd[1].split(/\bWHERE\b/i);
       if (/\$\{/.test(setPart)) out.push('sets vote_sets columns this gate cannot read (${...})');
       for (const part of splitTop(setPart.replace(/\bRETURNING\b.*$/i, ''))) {
-        if (/^\(/.test(part) && /\b(?:is_final|is_void|pepper_epoch|played_by)\b/i.test(part))
+        if (
+          /^\(/.test(part) &&
+          /\b(?:is_final|is_void|flood_seen|burst_seen|pepper_epoch|played_by)\b/i.test(part)
+        )
           out.push(`sets a one-way column in a tuple: ${part}`);
         if (/\bis_final\b/i.test(part) && !/^is_final\s*=\s*1$/i.test(part))
           out.push(`is_final is not set to the literal 1: ${part}`);
         if (/\bis_void\b/i.test(part) && !/^is_void\s*=\s*1$/i.test(part))
           out.push(`is_void is not set to the literal 1: ${part}`);
+        if (/\bflood_seen\b/i.test(part) && !/^flood_seen\s*=\s*1$/i.test(part))
+          out.push(`flood_seen is not set to the literal 1: ${part}`);
+        if (/\bburst_seen\b/i.test(part) && !/^burst_seen\s*=\s*1$/i.test(part))
+          out.push(`burst_seen is not set to the literal 1: ${part}`);
         // Any state but the literal 'closed' (a bound `state = ?` included) may
         // open the set, so it needs the final guard (security review L6).
         if (
@@ -749,6 +760,7 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
     expect(vote.sort()).toEqual([
       'ose:vote:access-lookup:v1',
       'ose:vote:access-voter-key:v1',
+      'ose:vote:code-window:v1', // the rotating vote code's stamp (lib/vote-code-window.ts)
       'ose:vote:crowd-participant:v1',
       'ose:vote:crowd-pass-seal:v1',
       'ose:vote:crowd-receipt:v1',
@@ -1049,6 +1061,13 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
       'UPDATE vote_sets SET secret_floor = 12 WHERE id = ?',
       "UPDATE vote_sets SET state = 'open' WHERE event_id = ? AND state = 'closed'",
       'UPDATE vote_sets SET state = ? WHERE id = ?',
+      // OSE-2234: a flood once seen is never cleared.
+      'UPDATE vote_sets SET flood_seen = 0 WHERE id = ?',
+      'UPDATE vote_sets SET flood_seen = ? WHERE id = ?',
+      "UPDATE vote_sets SET state = 'closed', flood_seen = 1 - flood_seen WHERE id = ?",
+      "UPDATE vote_sets SET (flood_seen, state) = (0, 'closed') WHERE id = ?",
+      'UPDATE vote_sets SET burst_seen = 0 WHERE id = ?',
+      "UPDATE vote_sets SET (burst_seen, state) = (0, 'closed') WHERE id = ?",
     ];
     expect(reopen.filter((sql) => flagProblems(sql).length === 0)).toEqual([]);
     // A shell line: its --command flag is not a SQL comment.
@@ -1068,6 +1087,8 @@ test.describe('Invariant: votes never who (OSE ADR-040, OSE-2125)', () => {
       "UPDATE votable_objects SET state = 'open' WHERE id = ? AND set_id IN (SELECT id FROM vote_sets WHERE is_final = 0)",
       'INSERT INTO vote_sets (id, event_id) VALUES (?, ?)',
       'SELECT is_final FROM vote_sets WHERE id = ?',
+      'UPDATE vote_sets SET flood_seen = 1 WHERE event_id = ? AND flood_seen = 0 AND is_final = 0',
+      'UPDATE vote_sets SET burst_seen = 1 WHERE event_id = ? AND burst_seen = 0 AND is_final = 0',
     ];
     expect(fine.filter((sql) => flagProblems(sql).length > 0)).toEqual([]);
 

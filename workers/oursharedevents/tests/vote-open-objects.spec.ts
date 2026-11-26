@@ -160,7 +160,7 @@ async function night(eventId: string, songs: string[]): Promise<Record<string, s
     expect(made.status).toBe(201);
     ids[label] = made.json.object.id;
   }
-  expect((await admin('POST', eventId, '/open')).status).toBe(200);
+  expect((await admin('POST', eventId, '/open', { room_size: 200 })).status).toBe(200);
   return ids;
 }
 const openSong = async (eventId: string, id: string) =>

@@ -47,6 +47,7 @@ import { buildSharedReport } from '../src/lib/shared-report-builder';
 import { readPosterReach } from '../src/lib/poster-reach';
 import { readPreEventActivity } from '../src/lib/pre-event-activity';
 import { collectGoLiveEvidence } from '../src/lib/go-live-evidence';
+import { voteCodeStamp } from '../src/lib/vote-code-window';
 
 interface TestEnv {
   DB: D1Database;
@@ -173,7 +174,9 @@ const scanEnv = (): QrScanEnv => ({
 
 /** Scan a token as /q does, with the switch on. `type` null sends no ?type=. */
 async function scan(token: string, type: string | null = 'vote'): Promise<Response> {
-  const url = `${ORIGIN}/q/${token}${type === null ? '' : `?type=${type}`}`;
+  // The rotating code: a vote scan carries this minute's stamp, as the room screen shows it.
+  const stamp = type === 'vote' ? `&w=${await voteCodeStamp(PEPPER, token, Date.now())}` : '';
+  const url = `${ORIGIN}/q/${token}${type === null ? '' : `?type=${type}${stamp}`}`;
   return handleQrScan(
     new Request(url, { headers: { Cookie: `ose_anon=${COOKIE}`, 'User-Agent': 'vote-code-test' } }),
     scanEnv(),
@@ -201,7 +204,7 @@ async function openNight(eventId = NIGHT): Promise<void> {
   expect((await call('POST', vp(eventId), { played_by: 'object' })).status).toBe(201);
   const song = await call('POST', vp(eventId, '/objects'), { kind: 'song', label: 'Song one' });
   expect(song.status).toBe(201);
-  expect((await call('POST', vp(eventId, '/open'), {})).status).toBe(200);
+  expect((await call('POST', vp(eventId, '/open'), { room_size: 200 })).status).toBe(200);
   expect((await call('POST', vp(eventId, `/objects/${song.json.object.id}/open`), {})).status).toBe(
     200
   );
@@ -271,7 +274,12 @@ describe('OSE-2140 | the room has its own vote code', () => {
   test('OSE-2140 | SECURITY | only the vote code mints a pass', async () => {
     await openNight();
     const code = await makeCode();
-    expect(code.url).toBe(`${ORIGIN}/q/${code.token}?type=vote`);
+    // The URL carries this minute's stamp (the rotating code).
+    expect(code.url).toMatch(
+      new RegExp(
+        `^${ORIGIN.replace(/\./g, '\\.')}/q/${code.token}\\?type=vote&w=\\d+\\.[0-9a-f]{32}$`
+      )
+    );
     expect(code.token).toMatch(/^qrt_[0-9a-f]{32}$/);
     const res = await scan(code.token);
     const loc = new URL(res.headers.get('Location') ?? '');
@@ -471,7 +479,7 @@ describe('OSE-2142 | a vote set follows its event status', () => {
       await run(`UPDATE events SET status = ? WHERE id = ?`, status, PREP);
       if (!(await one(`SELECT 1 FROM vote_sets WHERE event_id = ?`, PREP)))
         expect((await call('POST', vp(PREP), {})).status).toBe(201);
-      const res = await call('POST', vp(PREP, '/open'), {});
+      const res = await call('POST', vp(PREP, '/open'), { room_size: 200 });
       expect(res.status, status).toBe(409);
       expect(res.json.code, status).toBe('EVENT_NOT_PUBLISHED');
       const row = await one(`SELECT state, pepper_epoch FROM vote_sets WHERE event_id = ?`, PREP);
@@ -493,7 +501,7 @@ describe('OSE-2142 | a vote set follows its event status', () => {
     expect(edit.json.object.label).toBe('Song one (live)');
     // Published, the same set opens.
     await run(`UPDATE events SET status = 'active' WHERE id = ?`, PREP);
-    const open = await call('POST', vp(PREP, '/open'), {});
+    const open = await call('POST', vp(PREP, '/open'), { room_size: 200 });
     expect(open.status).toBe(200);
     expect(open.json.set.state).toBe('open');
   });

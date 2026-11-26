@@ -20,6 +20,10 @@
  *      "Publish the event to open voting."; once the event is Published it opens.
  *   7. OSE-2140: the room's vote code is made from the card, which shows its
  *      `/q` URL (asking for a pass) and its QR, and is replaced from it.
+ *   8. OSE-2234: the room check warning and the host-only burst warning are
+ *      hidden on a normal night and show, with no number, when the set says so.
+ *   9. The room size: voting does not open without it, and once open it is
+ *      shown as fixed and no longer asked for (2026-11-26).
  *
  * Runs in the blocking phone audit (playwright.mobile.config.ts), against the
  * local worker that config starts with a local pepper. The event is made here.
@@ -198,7 +202,7 @@ test.describe('admin: the Voting card', () => {
       'The vote code is ready. Show it on the room screen.'
     );
     await expect(page.getByTestId('votes-code-url')).toHaveText(
-      /\/q\/qrt_[0-9a-f]{32}\?type=vote$/
+      /\/q\/qrt_[0-9a-f]{32}\?type=vote&w=\d+\.[0-9a-f]{32}$/
     );
     await expect(page.getByTestId('votes-code-qr')).toBeVisible();
     await expect(page.getByTestId('votes-code-make')).toBeHidden();
@@ -210,7 +214,7 @@ test.describe('admin: the Voting card', () => {
     );
     await expect(page.getByTestId('votes-code-url')).not.toHaveText(first);
     await expect(page.getByTestId('votes-code-url')).toHaveText(
-      /\/q\/qrt_[0-9a-f]{32}\?type=vote$/
+      /\/q\/qrt_[0-9a-f]{32}\?type=vote&w=\d+\.[0-9a-f]{32}$/
     );
   });
 
@@ -218,8 +222,19 @@ test.describe('admin: the Voting card', () => {
     await openCard(page);
     // The song cannot open before voting does: its only button appears once voting is open.
     await expect(rows(page).first().getByTestId('vote-row-open')).toHaveCount(0);
+    // No room size: voting does not open, and the card says what is missing.
+    await expect(page.getByTestId('votes-room-field')).toBeVisible();
+    await page.getByTestId('votes-open').click();
+    await expect(page.getByTestId('votes-msg')).toHaveText(
+      'Say how many the room can hold, then open voting.'
+    );
+    await expect(summary(page)).toHaveText('Voting is set up, not open yet.');
+    await page.getByTestId('votes-room-size').fill('120');
     await page.getByTestId('votes-open').click();
     await expect(summary(page)).toHaveText('Voting is open.');
+    // The room size is fixed once voting opens: shown, and no longer asked for.
+    await expect(page.getByTestId('votes-room-field')).toBeHidden();
+    await expect(page.getByTestId('votes-room')).toHaveText('Room size: 120. It cannot change.');
 
     await rows(page).first().getByTestId('vote-row-open').click();
     await expect(rows(page).first().getByTestId('vote-row-state')).toHaveText(/^Open until /);
@@ -263,6 +278,7 @@ test.describe('admin: the Voting card', () => {
       await held;
       await route.continue();
     });
+    await page.getByTestId('votes-room-size').fill('80');
     await page.getByTestId('votes-open').click();
     await selectEvent(page, second);
     await expect(summary(page)).toHaveText('Voting is not set up for this event.');
@@ -292,6 +308,48 @@ test.describe('admin: the Voting card', () => {
     expect(text).not.toMatch(/\d+\s*votes?\b/i);
     expect(text).not.toMatch(/\bvotes?\s*:\s*\d/i);
     expect(text).not.toMatch(/fewer than 5|withheld|margin|floor/i);
+    // OSE-2234: a night with no flag shows neither warning.
+    await expect(page.getByTestId('votes-flood')).toBeHidden();
+    await expect(page.getByTestId('votes-burst')).toBeHidden();
+  });
+
+  test('the flood warning: shown, with no number, when the set says a flood was seen (OSE-2234)', async ({
+    page,
+  }) => {
+    // The flag cannot be raised from a browser here (it needs a burst of vote
+    // passes), so the set answer is changed on its way to the page: the card
+    // must show what the server says, and only a flag, never a number. A
+    // normal night's card hides it ("the card never shows a count", above).
+    await page.route(`**/api/v2/admin/events/${eventId}/votables`, async (route) => {
+      const res = await route.fetch();
+      const body = (await res.json()) as { set?: Record<string, unknown> };
+      if (body.set) {
+        body.set.flood_seen = true;
+        body.set.burst_seen = true;
+      }
+      await route.fulfill({ response: res, json: body });
+    });
+    await openCard(page);
+    const warn = page.getByTestId('votes-flood');
+    await expect(warn).toBeVisible();
+    await expect(warn).toContainText('the result says it may be padded');
+    expect(await warn.innerText()).not.toMatch(/\d/);
+    // The burst alarm is the host's only (owner, 2026-11-26).
+    const burst = page.getByTestId('votes-burst');
+    await expect(burst).toBeVisible();
+    await expect(burst).toContainText('Only you see this');
+    expect(await burst.innerText()).not.toMatch(/\d/);
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme });
+      const results = await new AxeBuilder({ page })
+        .include('[data-testid="votes-card"]')
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+        .analyze();
+      const found = results.violations
+        .filter((v) => v.impact === 'serious' || v.impact === 'critical')
+        .map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`);
+      expect(found, `${colorScheme}:\n${found.join('\n')}`).toEqual([]);
+    }
   });
 
   test('at 375px the card fits, its controls are 44px, its fields 16px, and axe is clean', async ({

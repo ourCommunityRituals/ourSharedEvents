@@ -1,0 +1,55 @@
+info:
+  name: "OSE-2234 | scan | the vote code with no stamp mints no pass, with the set open"
+  type: http
+  seq: 51
+
+# The rotating vote code (2026-11-26): a pass needs this minute's stamp from the
+# room screen. A photo of the code, or the code with its stamp cut off, mints
+# none: the scan stands and the visitor gets the event page. Never prints the
+# Location header: every check compares booleans.
+
+http:
+  method: GET
+  url: "{{baseUrl}}/q/{{votePassToken}}?type=vote"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: X-OCR-CI
+      value: "{{ocrCiEdgeToken}}"
+    - name: Accept
+      value: text/html
+    - name: User-Agent
+      value: ose-bruno-vote-pass
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        var status = res.getStatus();
+        var edge = status === 403 && (res.getHeader('cf-mitigated') || '').length > 0;
+        if (edge) { test('EDGE: the scan was challenged before the Worker ran (OSE-939); nothing below was checked', function () { expect(edge).to.equal(true); }); }
+        var loc = String(res.getHeader('location') || '');
+        var hashAt = loc.indexOf('#');
+        var beforeHash = hashAt < 0 ? loc : loc.slice(0, hashAt);
+        var frag = hashAt < 0 ? '' : loc.slice(hashAt + 1);
+        var queryAt = beforeHash.indexOf('?');
+        var pathOnly = (queryAt < 0 ? beforeHash : beforeHash.slice(0, queryAt)).replace(/^https?:\/\/[^/]+/, '');
+        var night = bru.getVar('votePassNightId');
+        loc = null;
+        if (!edge) {
+          test('OSE-2234 scan: 302 and no-store', function () { expect(status === 302).to.eql(true); expect(String(res.getHeader('cache-control') || '').indexOf('no-store') >= 0).to.eql(true); });
+          test('OSE-2234 scan: the vote code with no stamp mints no pass: no fragment, and the event page, not the voter page', function () {
+            expect(frag === '').to.eql(true);
+            expect(pathOnly === '/events/' + night).to.eql(true);
+          });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

@@ -101,6 +101,15 @@ name = "FORM_EDGE_LIMITER"
 namespace_id = "15092"
 simple = { limit = 60, period = 10 }
 
+# OSE-2234: vote passes minted per event per minute, to flag a flood on a vote
+# code (src/lib/vote-flood.ts). Keyed by the event id only. Detection only: past
+# the limit the vote set is flagged and nothing is refused. The limit must match
+# VOTE_FLOOD_PASSES_PER_MINUTE (tests/vote-flood.spec.ts).
+[[ratelimits]]
+name = "VOTE_FLOOD_LIMITER"
+namespace_id = "22341"
+simple = { limit = 300, period = 60 }
+
 # ── Observability: structured logs and traces ────────────────────
 # Enables Workers Logs in CF Dashboard (real-time + historical)
 # See: https://developers.cloudflare.com/workers/observability/
@@ -246,6 +255,15 @@ simple = { limit = 60, period = 10 }
 name = "FORM_EDGE_LIMITER"
 namespace_id = "15094"
 simple = { limit = 60, period = 10 }
+
+# OSE-2234: vote passes minted per event per minute, to flag a flood on a vote
+# code (src/lib/vote-flood.ts). Keyed by the event id only. Detection only: past
+# the limit the vote set is flagged and nothing is refused. The limit must match
+# VOTE_FLOOD_PASSES_PER_MINUTE (tests/vote-flood.spec.ts).
+[[env.staging.ratelimits]]
+name = "VOTE_FLOOD_LIMITER"
+namespace_id = "22342"
+simple = { limit = 300, period = 60 }
 
 # ── Scan write-buffer (staging) — engine-hardening #1, ACTIVE ─────────────────
 # Producer + consumer for the /q/ QR-scan write buffer (src/lib/scan-buffer.ts).
@@ -453,6 +471,15 @@ simple = { limit = 60, period = 10 }
 name = "FORM_EDGE_LIMITER"
 namespace_id = "15096"
 simple = { limit = 60, period = 10 }
+
+# OSE-2234: vote passes minted per event per minute, to flag a flood on a vote
+# code (src/lib/vote-flood.ts). Keyed by the event id only. Detection only: past
+# the limit the vote set is flagged and nothing is refused. The limit must match
+# VOTE_FLOOD_PASSES_PER_MINUTE (tests/vote-flood.spec.ts).
+[[env.production.ratelimits]]
+name = "VOTE_FLOOD_LIMITER"
+namespace_id = "22343"
+simple = { limit = 300, period = 60 }
 
 # ── Scan write-buffer (production) — engine-hardening #1, DARK (needs own queues) ─
 # Commented until PRODUCTION-SPECIFIC queues exist. Production must NOT share

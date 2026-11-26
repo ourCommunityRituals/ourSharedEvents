@@ -34,6 +34,9 @@
  * still the only place the cookie is read on the vote path (invariant 4). The
  * vote code alone keeps the cookie and a one-hour keyed marker (ADR-040), so a
  * repeat scan keeps its pass; its scans are never a published count.
+ * Each pass minted counts toward the event's flood alarm (OSE-2234,
+ * lib/vote-flood.ts): past a full room's minute the vote set is flagged, and
+ * nothing is blocked.
  * NO LOG LINE names the redirect's Location, the pass or the voter key
  * (tests/e2e/0-architecture/votes-never-who.invariant.spec.ts).
  *
@@ -52,6 +55,8 @@ import { issueVotePass, mintCrowdPass, votePageTarget, VOTE_CODE_TYPE } from '..
 import { onlinePickMayMint } from '../lib/vote-crowd';
 import { votingEnabled } from '../lib/voting-switch';
 import type { VotingSwitchEnv } from '../lib/voting-switch';
+import { noteVotePassMinted, type VoteFloodLimiter } from '../lib/vote-flood';
+import { voteCodeStampOk } from '../lib/vote-code-window';
 
 import { errorLabel } from '../lib/error-label';
 // One warning per isolate, not one per scan: the missing secret is a config
@@ -77,6 +82,9 @@ export interface QrScanEnv extends VotingSwitchEnv {
   // Optional scan write-buffer. Bound → the hot path enqueues and returns;
   // unbound → the direct D1 batch (dark-launch parity). See lib/scan-buffer.ts.
   SCAN_QUEUE?: Queue<ScanMessage>;
+  // OSE-2234: counts minted vote passes per event per minute, to flag a flood
+  // (lib/vote-flood.ts). Detection only; unbound → nothing is flagged.
+  VOTE_FLOOD_LIMITER?: VoteFloodLimiter;
   // OSE-2133: the voting switch comes from VotingSwitchEnv (lib/voting-switch.ts,
   // S3c). Only votingEnabled reads it; on, a vote code may mint a pass.
 }
@@ -110,7 +118,10 @@ export async function handleQrScan(
   request: Request,
   env: QrScanEnv,
   qrToken: string,
-  countable: boolean = true
+  countable: boolean = true,
+  // OSE-2234: with a context, flood detection runs after the answer is sent
+  // (waitUntil), so it can never slow a vote redirect.
+  ctx?: Pick<ExecutionContext, 'waitUntil'>
 ): Promise<Response> {
   if (!env.DB) {
     // Infrastructure not ready — redirect to homepage rather than stranding the attendee.
@@ -305,14 +316,34 @@ export async function handleQrScan(
   // OSE-2133: a vote code whose scan stands may carry a pass, in the fragment
   // only. A failure here (a D1 blip reading the set) mints none and the
   // visitor keeps today's redirect; the line names the failure, nothing else.
-  if (voterId && scanStored && url.searchParams.get('type') === VOTE_CODE_TYPE) {
+  // The rotating code (lib/vote-code-window.ts): a pass needs this minute's
+  // stamp, or the last minute's, from the room screen. A photo of the code goes
+  // stale within two minutes; a stale or missing stamp mints no pass, and the
+  // scan stands as any other code's.
+  if (
+    voterId &&
+    scanStored &&
+    url.searchParams.get('type') === VOTE_CODE_TYPE &&
+    (await voteCodeStampOk(env.ANON_ID_HASH_PEPPER, qrToken, url.searchParams.get('w'), nowMs))
+  ) {
     let pass: string | null = null;
     try {
       pass = await issueVotePass(env, voterId, eventId, deploymentId, nowMs);
     } catch (err) {
       console.warn(JSON.stringify({ type: 'VOTE_PASS_SKIPPED', error: errorLabel(err) }));
     }
-    if (pass) redirectTarget = votePageTarget(url.origin, eventId, pass);
+    if (pass) {
+      redirectTarget = votePageTarget(url.origin, eventId, pass);
+      // OSE-2234: count the pass toward the event's flood alarm. Detection
+      // only: it never throws and never changes this answer. With a context it
+      // runs after the answer, so a slow binding or D1 never delays the vote.
+      const noted = noteVotePassMinted(env, eventId).then((wrote) => {
+        // The one flood line: the event id and nothing else (OSE-2234).
+        if (wrote) console.warn(JSON.stringify({ type: 'VOTE_FLOOD_SEEN', event_id: eventId }));
+      });
+      if (ctx) ctx.waitUntil(noted);
+      else await noted;
+    }
   }
 
   const redirectResponse = new Response(null, {

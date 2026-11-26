@@ -184,7 +184,7 @@ async function openNight(eventId = A1, playedBy: 'object' | 'team' = 'object'): 
     ...(playedBy === 'team' ? { group_id: TEAM_1 } : {}),
   });
   expect(song.status).toBe(201);
-  expect((await call('POST', vp(eventId, '/open'), A, {})).status).toBe(200);
+  expect((await call('POST', vp(eventId, '/open'), A, { room_size: 200 })).status).toBe(200);
   return song.json.object.id as string;
 }
 
@@ -285,8 +285,8 @@ describe('2. an object of another event under this path gets 404', () => {
     const other = await call('POST', vp(A2, '/objects'), A, { kind: 'song', label: 'A2 song' });
     expect(other.status).toBe(201);
     const oid = other.json.object.id as string;
-    await call('POST', vp(A1, '/open'), A, {});
-    await call('POST', vp(A2, '/open'), A, {});
+    await call('POST', vp(A1, '/open'), A, { room_size: 200 });
+    await call('POST', vp(A2, '/open'), A, { room_size: 200 });
     const missing = await call('PUT', vp(A1, '/objects/vobj_nope'), A, { label: 'X' });
     for (const [method, tail, body] of [
       ['PUT', `/objects/${oid}`, { label: 'Moved' }],
@@ -406,6 +406,9 @@ describe('one vote set per event', () => {
       opened: false,
       final: false,
       result: null,
+      flood_seen: false,
+      burst_seen: false,
+      room_size: null,
     });
     const again = await call('POST', vp(A1), A, { played_by: 'team' });
     expect(again.status).toBe(409);
@@ -455,7 +458,7 @@ describe('5. the first open stamps the epoch and draws T and V, once', () => {
   test('open twice: the second is refused and draws nothing', async () => {
     await openNight();
     const first = await setRow(A1);
-    const again = await call('POST', vp(A1, '/open'), A, {});
+    const again = await call('POST', vp(A1, '/open'), A, { room_size: 200 });
     expect(again.status).toBe(409);
     expect(again.json.code).toBe('WRONG_STATE');
     expect(await setRow(A1)).toEqual(first);
@@ -463,7 +466,13 @@ describe('5. the first open stamps the epoch and draws T and V, once', () => {
 
   test('with no pepper the set does not open, and nothing is stamped', async () => {
     await call('POST', vp(A1), A, {});
-    const res = await call('POST', vp(A1, '/open'), A, {}, { ANON_ID_HASH_PEPPER: undefined });
+    const res = await call(
+      'POST',
+      vp(A1, '/open'),
+      A,
+      { room_size: 200 },
+      { ANON_ID_HASH_PEPPER: undefined }
+    );
     expect(res.status).toBe(409);
     expect(res.json.code).toBe('PEPPER_NOT_SET');
     expect(await setRow(A1)).toMatchObject({
@@ -475,7 +484,13 @@ describe('5. the first open stamps the epoch and draws T and V, once', () => {
   });
 
   test('a final set says final even with no pepper; no set says so too', async () => {
-    const none = await call('POST', vp(A2, '/open'), A, {}, { ANON_ID_HASH_PEPPER: undefined });
+    const none = await call(
+      'POST',
+      vp(A2, '/open'),
+      A,
+      { room_size: 200 },
+      { ANON_ID_HASH_PEPPER: undefined }
+    );
     expect(none.json.code).toBe('VOTE_SET_NOT_FOUND');
     await call('POST', vp(A1), A, {});
     await call('POST', vp(A1, '/finalize'), A, {});
@@ -503,7 +518,7 @@ describe('5. the first open stamps the epoch and draws T and V, once', () => {
 
   test('voting does not open on an event that is over; an open set can still close', async () => {
     await call('POST', vp(OLD), A, {});
-    const res = await call('POST', vp(OLD, '/open'), A, {});
+    const res = await call('POST', vp(OLD, '/open'), A, { room_size: 200 });
     expect(res.status).toBe(409);
     expect(res.json.code).toBe('EVENT_OVER');
     const objects = await call('POST', vp(OLD, '/objects'), A, { kind: 'song', label: 'Late' });
@@ -551,7 +566,7 @@ describe('5. the first open stamps the epoch and draws T and V, once', () => {
   test('an archived event does not open voting (security review L5)', async () => {
     await call('POST', vp(A1), A, {});
     await run(`UPDATE events SET status = 'archived' WHERE id = ?`, A1);
-    const res = await call('POST', vp(A1, '/open'), A, {});
+    const res = await call('POST', vp(A1, '/open'), A, { room_size: 200 });
     expect(res.status).toBe(409);
     expect(res.json.code).toBe('EVENT_OVER');
     expect((await setRow(A1))?.pepper_epoch).toBeNull();
@@ -559,7 +574,7 @@ describe('5. the first open stamps the epoch and draws T and V, once', () => {
 
   test('an event with no date stays on', async () => {
     await call('POST', vp(NODATE), A, {});
-    expect((await call('POST', vp(NODATE, '/open'), A, {})).status).toBe(200);
+    expect((await call('POST', vp(NODATE, '/open'), A, { room_size: 200 })).status).toBe(200);
   });
 
   test('yesterday is still on (an evening event west of UTC)', async () => {
@@ -570,7 +585,7 @@ describe('5. the first open stamps the epoch and draws T and V, once', () => {
       A1
     );
     await call('POST', vp(A1), A, {});
-    expect((await call('POST', vp(A1, '/open'), A, {})).status).toBe(200);
+    expect((await call('POST', vp(A1, '/open'), A, { room_size: 200 })).status).toBe(200);
   });
 });
 
@@ -637,7 +652,7 @@ describe('4. reopen is allowed before final, refused after final, even after a d
       start_date: '2099-09-02',
       end_date: '2099-09-02',
     });
-    const open = await call('POST', vp(A1, '/open'), A, {});
+    const open = await call('POST', vp(A1, '/open'), A, { room_size: 200 });
     expect(open.status).toBe(409);
     expect(open.json.code).toBe('VOTE_SET_FINAL');
     expect((await call('POST', vp(A1, '/finalize'), A, {})).json.code).toBe('VOTE_SET_FINAL');
@@ -698,7 +713,7 @@ describe('an object window is set by the server', () => {
     expect((await call('POST', vp(A1), A, {})).status).toBe(201);
     const entry = await call('POST', vp(A1, '/objects'), A, { kind: 'entry', label: 'Float one' });
     expect(entry.status).toBe(201);
-    expect((await call('POST', vp(A1, '/open'), A, {})).status).toBe(200);
+    expect((await call('POST', vp(A1, '/open'), A, { room_size: 200 })).status).toBe(200);
     expect(VOTE_WINDOW_DEFAULT_SECONDS.entry).toBe(VOTE_WINDOW_MAX_SECONDS);
     const t0 = Date.now();
     const res = await call('POST', vp(A1, `/objects/${entry.json.object.id}/open`), A, {});
@@ -742,16 +757,53 @@ describe('6. after the first open, a song team cannot change', () => {
     });
     const id = song.json.object.id as string;
     expect((await call('PUT', vp(A1, `/objects/${id}`), A, { group_id: TEAM_2 })).status).toBe(200);
-    await call('POST', vp(A1, '/open'), A, {});
+    await call('POST', vp(A1, '/open'), A, { room_size: 200 });
     const res = await call('PUT', vp(A1, `/objects/${id}`), A, { group_id: TEAM_1 });
     expect(res.status).toBe(409);
     expect(res.json.code).toBe('TEAM_FIXED');
     expect((await objectRow(id))?.group_id).toBe(TEAM_2);
-    // The label may still change; the team stays.
-    expect((await call('PUT', vp(A1, `/objects/${id}`), A, { label: 'New name' })).status).toBe(
+    // The order may still change; the team stays.
+    expect((await call('PUT', vp(A1, `/objects/${id}`), A, { sort: 3 })).status).toBe(200);
+    expect((await objectRow(id))?.group_id).toBe(TEAM_2);
+  });
+
+  test('a name is fixed once voting opens: a rename would move votes to another name', async () => {
+    await call('POST', vp(A1), A, {});
+    const song = await call('POST', vp(A1, '/objects'), A, { kind: 'song', label: 'First name' });
+    const id = song.json.object.id as string;
+    // Before the first open a typo can be fixed.
+    expect((await call('PUT', vp(A1, `/objects/${id}`), A, { label: 'Fixed name' })).status).toBe(
       200
     );
-    expect((await objectRow(id))?.group_id).toBe(TEAM_2);
+    await call('POST', vp(A1, '/open'), A, { room_size: 200 });
+    const res = await call('PUT', vp(A1, `/objects/${id}`), A, { label: 'Another song' });
+    expect(res.status).toBe(409);
+    expect(res.json.code).toBe('LABEL_FIXED');
+    expect((await objectRow(id))?.label).toBe('Fixed name');
+    // The same name again, or only the order, still saves.
+    expect(
+      (await call('PUT', vp(A1, `/objects/${id}`), A, { label: 'Fixed name', sort: 2 })).status
+    ).toBe(200);
+  });
+
+  test('once voting opens, a new object cannot take a name already in the set (no vote split)', async () => {
+    await call('POST', vp(A1), A, {});
+    // Before the first open a repeat is the host's own business.
+    expect(
+      (await call('POST', vp(A1, '/objects'), A, { kind: 'song', label: 'Song A' })).status
+    ).toBe(201);
+    await call('POST', vp(A1, '/open'), A, { room_size: 200 });
+    const twin = await call('POST', vp(A1, '/objects'), A, { kind: 'song', label: '  song a ' });
+    expect(twin.status).toBe(409);
+    expect(twin.json.code).toBe('LABEL_TAKEN');
+    const n = await tenv.DB.prepare(`SELECT COUNT(*) AS n FROM votable_objects WHERE event_id = ?`)
+      .bind(A1)
+      .first<{ n: number }>();
+    expect(Number(n?.n)).toBe(1);
+    // A new name still joins while the event is live.
+    expect(
+      (await call('POST', vp(A1, '/objects'), A, { kind: 'song', label: 'Song B' })).status
+    ).toBe(201);
   });
 
   test('a team night needs a team on each object; an object night refuses one', async () => {
@@ -857,7 +909,7 @@ describe('8. every change is audited, with no detail', () => {
 
   test('each write writes its row; a refusal is denied; a read writes none', async () => {
     const songId = await openNight(); // create, object create, open
-    await call('PUT', vp(A1, `/objects/${songId}`), A, { label: 'Song two' });
+    await call('PUT', vp(A1, `/objects/${songId}`), A, { sort: 2 });
     await call('POST', vp(A1, `/objects/${songId}/open`), A, {});
     await call('POST', vp(A1, `/objects/${songId}/close`), A, {});
     await call('POST', vp(A1, `/objects/${songId}/reopen`), A, {});
@@ -1178,7 +1230,18 @@ describe('9. no admin answer carries a guarded key', () => {
     // The set answer is exactly these fields, and an object exactly these.
     const list = await call('GET', vp(A1), A);
     expect(Object.keys(list.json.set).sort()).toEqual(
-      ['event_id', 'final', 'id', 'opened', 'played_by', 'result', 'state'].sort()
+      [
+        'burst_seen',
+        'event_id',
+        'final',
+        'flood_seen',
+        'id',
+        'opened',
+        'played_by',
+        'result',
+        'room_size',
+        'state',
+      ].sort()
     );
     expect(Object.keys(list.json.objects[0]).sort()).toEqual(
       [

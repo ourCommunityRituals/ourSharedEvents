@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0114; the entries below do not cover every migration after 0083, see the note at 0104)
+- `DB` — main / anonymous public surface (highest migration: 0122; the entries below do not cover every migration after 0083, see the note at 0104)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -117,7 +117,7 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 -- them: no Access Pass can be given or redeemed, no Online Pick is offered, and
 -- the Room Pick is unchanged (it never read these tables). Rows left behind
 -- hold no person: a pass is an HMAC lookup, a crowd row is a counter or an
--- HMAC marker. (0122 is OSE-2234's room-size migration, in its own PR.)
+-- HMAC marker.
 --
 -- Surgical reverse, only if the tables themselves must go (given passes stop
 -- working; an unfinished Online Pick is lost):
@@ -127,6 +127,23 @@ DROP TABLE IF EXISTS vote_crowd_tallies;
 DROP TABLE IF EXISTS vote_crowd_sets;
 DROP INDEX IF EXISTS idx_vote_access_passes_set;
 DROP TABLE IF EXISTS vote_access_passes;
+
+-- 0122: vote integrity (OSE-2234, OSE ADR-040 decision 6, amended
+-- 2026-11-26): vote_sets.flood_seen, a one-way flag set by the room check at
+-- final (public: the result may be padded), vote_sets.burst_seen, a one-way
+-- flag set by the per-minute alarm (the host's only), and vote_sets.room_size,
+-- the room size the host gave at the first open; plus three triggers,
+-- vote_sets_flood_one_way and vote_sets_burst_one_way (neither flag goes back
+-- to 0) and vote_sets_room_size_fixed (the room size never changes once set).
+-- Additive: three columns (defaults 0, null and 0) and three triggers. No row
+-- is written or rewritten.
+-- THE ROLLBACK IS: revert the Worker and LEAVE THE COLUMNS AND TRIGGERS. The
+-- older Worker never reads or writes any of these columns, so the triggers never
+-- fire for it; a flag or room size already set stays in its row and shows
+-- again when this Worker returns. Note: the older Worker opens a set with no
+-- room size (null), and such a set is not room-checked at final. SQLite
+-- cannot drop a column with a CHECK; leave them. Do not drop the triggers:
+-- they are what stop a host from clearing a flag or raising a room size.
 
 -- 0121: brand_addons (OSE-2232, the paid add-ons the platform has turned on
 -- for a brand; today only 'skins'). Additive: one new table, no index, no
