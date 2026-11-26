@@ -1,15 +1,15 @@
 {
   "_comment": "CI integrity ratchet baseline (OSE-1606). Each count may only move in its good direction (most may only fall; the token-split keys say theirs in `direction`, OSE-1695); every entry carries a reason.",
   "continueOnError": {
-    "total": 19,
+    "total": 18,
     "byFile": {
       ".github/workflows/advanced-security-scan.yml": {
         "count": 2,
         "reason": "Advisory scanner steps (upload / optional scans); findings are reported elsewhere, not a merge gate."
       },
       ".github/workflows/claude-review.yml": {
-        "count": 4,
-        "reason": "AI review is advisory by design (claude-review-switch); a review outage must not block merges."
+        "count": 3,
+        "reason": "AI review is advisory by design (claude-review-switch): it is not a required check, but since 2026-11-26 a review that did not run turns the job red instead of green."
       },
       ".github/workflows/dependency-review.yml": {
         "count": 1,

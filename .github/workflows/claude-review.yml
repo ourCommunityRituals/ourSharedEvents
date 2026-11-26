@@ -61,7 +61,10 @@ jobs:
     # every comment). The @claude `respond` job is the only comment consumer.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
-    continue-on-error: true  # Advisory — cancellation via concurrency group must not block PRs
+    # No job-level continue-on-error (AI Problems Index assessment, 2026-11-26):
+    # it turned a review that never ran into a green check. The review is not a
+    # required check, so red here never blocks a merge; a concurrency cancel
+    # shows as cancelled, not failed. The last step goes red when no review ran.
     defaults:
       run:
         shell: bash
@@ -233,8 +236,9 @@ jobs:
       # SHA-pinned (supply-chain): a mutable @v1 tag can be force-pushed to run
       # attacker code with this job's Claude credentials + write scopes. Bump via Dependabot.
       - uses: anthropics/claude-code-action@fa2b2666b747000bf42767d1f332065b375e3c8f # v1
+        id: claude-review
         if: steps.check-key.outputs.skip != 'true' && steps.charter.outputs.skip != 'true'
-        continue-on-error: true # Advisory — API failures must not block PRs
+        continue-on-error: true # the next step decides; a failed review goes red, not green
         with:
           # Subscription first; the API key is passed only when no token is set,
           # so a configured subscription is never silently bypassed for billing.
@@ -256,6 +260,13 @@ jobs:
             --model ${{ steps.risk.outputs.model || 'claude-sonnet-5-5' }}
             --max-turns 30
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Read,Grep,Glob"
+
+      # A review that did not run must not look like a pass (see the job comment).
+      - name: Fail when the review did not run
+        if: steps.claude-review.outcome == 'failure'
+        run: |
+          echo "::error title=Claude review did not run::No review was produced for this PR (auth, credit, model or API error). See the step above."
+          exit 1
 
   respond:
     name: 'Claude @mention'
