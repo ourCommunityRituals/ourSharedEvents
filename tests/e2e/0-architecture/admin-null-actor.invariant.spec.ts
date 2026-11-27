@@ -153,6 +153,8 @@ const SITES: Record<string, { kind: Kind; count: number; why: string }> = {
     count: 1,
     why: 'Venue owner scope (OSE-2221).',
   },
+  'handlers/family-report.ts: const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);':
+    { kind: 'scope-denies-null', count: 1, why: 'Parent company report brand scope (OSE-2241).' },
   'handlers/portfolio-rollup.ts: extractAdminActor(request, env),': {
     kind: 'scope-denies-null',
     count: 1,

@@ -39,6 +39,7 @@ import {
   type FamilyReportAuthEnv,
 } from '../lib/family-report-auth';
 import { HARDENING_HEADERS } from '../lib/security-headers';
+import { extractBearerToken } from '../lib/shared-report-auth';
 import { fewerThan } from '../lib/withheld-words';
 import { bocceBrandName } from './demo-bocce';
 import { DEMO_BRANDS, type DemoBrand } from './demo';
@@ -172,15 +173,11 @@ export async function handleAdminMintFamilyLink(
 
 // ─── GET /api/v2/family-report (Authorization: Bearer <token>) ───────────────
 
-function bearer(request: Request): string | null {
-  const h = request.headers.get('Authorization') ?? '';
-  const m = h.match(/^Bearer\s+(\S+)$/i);
-  return m ? m[1] : null;
-}
-
 /** The rate-limit bucket of a link read: the token, so one link holder cannot poll past it. */
 export function familyReportBucketKey(request: Request): string | null {
-  const t = bearer(request) ?? new URL(request.url).searchParams.get('token');
+  const t =
+    extractBearerToken(request.headers.get('Authorization')) ??
+    new URL(request.url).searchParams.get('token');
   return t ? `family-token:${t.slice(-32)}` : null;
 }
 
@@ -189,7 +186,10 @@ export async function handlePublicFamilyReport(
   env: FamilyReportEnv
 ): Promise<Response> {
   const reqId = rid();
-  const claim = await verifyFamilyToken(env, bearer(request));
+  const claim = await verifyFamilyToken(
+    env,
+    extractBearerToken(request.headers.get('Authorization'))
+  );
   if (!claim || !familyBrandAllowed(claim.brand)) {
     return fail(request, reqId, 401, 'UNAUTHORIZED', 'A valid report link is required');
   }
@@ -224,46 +224,97 @@ function plus(a: FlooredCount, b: FlooredCount): string {
  * hexagon is an area, never an address. A cell with more scans is drawn
  * stronger; the shade is a bucket of the floored count, never the count.
  */
+/**
+ * The map's frame: the region the company works in, from Milwaukee and Rockford
+ * down to Kankakee and across to South Bend and St. Joseph (Matt, 2026-11-27).
+ * The map always shows all of it, and widens when an area falls outside. The
+ * cities are public places drawn for orientation; nothing about them is counted.
+ */
+export const FOOTPRINT_CITIES: ReadonlyArray<readonly [string, number, number]> = [
+  ['Milwaukee', 43.0389, -87.9065],
+  ['Rockford', 42.2711, -89.094],
+  ['Kankakee', 41.12, -87.8612],
+  ['Valparaiso', 41.4731, -87.0611],
+  ['South Bend', 41.6764, -86.252],
+  ['St. Joseph', 42.0939, -86.4895],
+];
+
+/** A coarse outline of southern Lake Michigan, for orientation only. */
+const LAKE: ReadonlyArray<readonly [number, number]> = [
+  [43.6, -87.7],
+  [43.04, -87.88],
+  [42.73, -87.78],
+  [42.58, -87.81],
+  [42.25, -87.8],
+  [42.05, -87.67],
+  [41.88, -87.61],
+  [41.7, -87.52],
+  [41.61, -87.33],
+  [41.66, -87.05],
+  [41.72, -86.9],
+  [41.8, -86.75],
+  [41.94, -86.57],
+  [42.11, -86.49],
+  [42.4, -86.28],
+  [42.8, -86.21],
+  [43.6, -86.4],
+];
+
 export function footprintSvg(cells: FamilyReport['footprint']): string {
   const shapes = cells
     .filter((c) => isValidCell(c.cell))
     .map((c) => ({ c, ring: cellToBoundary(c.cell) as Array<[number, number]> }));
-  if (shapes.length === 0) return '';
   let minLat = Infinity;
   let maxLat = -Infinity;
   let minLng = Infinity;
   let maxLng = -Infinity;
-  for (const { ring } of shapes)
-    for (const [lat, lng] of ring) {
-      minLat = Math.min(minLat, lat);
-      maxLat = Math.max(maxLat, lat);
-      minLng = Math.min(minLng, lng);
-      maxLng = Math.max(maxLng, lng);
-    }
+  const take = (lat: number, lng: number) => {
+    minLat = Math.min(minLat, lat);
+    maxLat = Math.max(maxLat, lat);
+    minLng = Math.min(minLng, lng);
+    maxLng = Math.max(maxLng, lng);
+  };
+  for (const [, lat, lng] of FOOTPRINT_CITIES) take(lat, lng);
+  for (const { ring } of shapes) for (const [lat, lng] of ring) take(lat, lng);
+  // Room around the edge cities for their dots and names.
+  minLat -= 0.15;
+  maxLat += 0.15;
+  minLng -= 0.25;
+  maxLng += 0.25;
   const k = Math.cos((((minLat + maxLat) / 2) * Math.PI) / 180);
-  const w = Math.max((maxLng - minLng) * k, 1e-6);
-  const h = Math.max(maxLat - minLat, 1e-6);
   const W = 320;
-  const pad = 12;
-  const scale = (W - pad * 2) / Math.max(w, h * 1.6);
-  const H = Math.round(h * scale + pad * 2);
+  const scale = W / ((maxLng - minLng) * k);
+  const H = Math.round((maxLat - minLat) * scale);
+  const x = (lng: number) => ((lng - minLng) * k * scale).toFixed(1);
+  const y = (lat: number) => ((maxLat - lat) * scale).toFixed(1);
+  const lake = `<polygon class="fp-lake" points="${LAKE.map(([la, ln]) => `${x(ln)},${y(la)}`).join(' ')}"/>`;
   const max = Math.max(1, ...shapes.map(({ c }) => c.poster_scans.count ?? 0));
   const polys = shapes
     .map(({ c, ring }) => {
-      const pts = ring
-        .map(
-          ([lat, lng]) =>
-            `${(pad + (lng - minLng) * k * scale).toFixed(1)},${(pad + (maxLat - lat) * scale).toFixed(1)}`
-        )
-        .join(' ');
+      const pts = ring.map(([lat, lng]) => `${x(lng)},${y(lat)}`).join(' ');
       const n = c.poster_scans.count ?? 0;
       const shade = n === 0 ? 0.25 : n >= max * 0.66 ? 0.95 : n >= max * 0.33 ? 0.7 : 0.45;
       const label = `${c.events} event${c.events === 1 ? '' : 's'}, ${countText(c.poster_scans)} scans`;
-      return `<polygon class="fp-cell" points="${pts}" fill-opacity="${shade}"><title>${esc(label)}</title></polygon>`;
+      // At this scale a hexagon is a few pixels wide, so a dot marks its middle.
+      const [cy, cx] = ring
+        .reduce(([a, b], [la, ln]) => [a + la, b + ln], [0, 0])
+        .map((v) => v / ring.length);
+      return (
+        `<g fill-opacity="${shade}"><title>${esc(label)}</title>` +
+        `<polygon class="fp-cell" points="${pts}"/>` +
+        `<circle class="fp-cell" cx="${x(cx)}" cy="${y(cy)}" r="4"/></g>`
+      );
     })
     .join('');
-  const plotW = Math.round(w * scale + pad * 2);
-  return `<svg class="fp-map" viewBox="0 0 ${Math.max(plotW, 120)} ${Math.max(H, 80)}" role="img" aria-labelledby="fp-h fp-d">${polys}</svg>`;
+  const cities = FOOTPRINT_CITIES.map(([name, lat, lng]) => {
+    const east = lng > (minLng + maxLng) / 2;
+    return (
+      `<circle class="fp-city" cx="${x(lng)}" cy="${y(lat)}" r="2"/>` +
+      `<text class="fp-city" x="${x(lng)}" y="${y(lat)}" dx="${east ? -4 : 4}" dy="3"` +
+      `${east ? ' text-anchor="end"' : ''}>${esc(name)}</text>`
+    );
+  }).join('');
+  return `<svg class="fp-map" viewBox="0 0 ${W} ${H}" role="img" aria-labelledby="fp-h fp-d">${lake}${polys}${cities}</svg>`;
 }
 
 function rows(
@@ -287,6 +338,7 @@ const PAGE_STYLE = `<style>
 .fr-note{color:var(--text-muted);font-size:.85rem}
 .fp-map{width:100%;max-height:340px;background:var(--surface);border-radius:var(--radius-sm)}
 .fp-cell{fill:var(--accent);stroke:var(--bg)}
+.fp-lake{fill:var(--border)}.fp-city{fill:var(--text-muted);font-size:9px}
 .preview-table th,.preview-table td{white-space:normal;max-width:none}
 </style>`;
 
@@ -355,7 +407,7 @@ export function renderFamilyReportPage(r: FamilyReport, expiresAt: string): stri
   </section>
   <section class="section" aria-labelledby="fp-h">
     <h2 id="fp-h">Footprint</h2>
-    <p class="fr-note" id="fp-d">${t.map_cells} area${t.map_cells === 1 ? '' : 's'} and ${t.venues} venue${t.venues === 1 ? '' : 's'}. Each hexagon is a neighbourhood-sized area (about 5 km²), never an address; a darker one carries more scans.</p>
+    <p class="fr-note" id="fp-d">${t.map_cells} area${t.map_cells === 1 ? '' : 's'} and ${t.venues} venue${t.venues === 1 ? '' : 's'}. Each hexagon is a neighbourhood-sized area (about 5 km²), never an address; a darker one carries more scans. The map spans Milwaukee to Kankakee and Rockford to St. Joseph.</p>
     ${map}
   </section>
   <section class="section" aria-labelledby="v-h">

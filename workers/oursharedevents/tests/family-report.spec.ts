@@ -27,6 +27,7 @@ import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:
 import { describe, test, expect, beforeAll } from 'vitest';
 import { route, type RouterEnv } from '../src/router';
 import { mintSignedLinkToken } from '../src/lib/shared-report-auth';
+import { footprintSvg, FOOTPRINT_CITIES } from '../src/handlers/family-report';
 import { seedPosterHour } from './helpers/seed-poster-hours';
 
 interface TestEnv {
@@ -326,6 +327,40 @@ describe('the signed link', () => {
     expect(html).not.toContain('<script');
     expect(html).toContain('<svg class="fp-map"');
     expect(html).not.toMatch(/fr-e-|Secret title/);
+  });
+
+  test('the map always spans the whole region, Milwaukee to Kankakee, Rockford to St. Joseph', () => {
+    // With no area yet, the frame and every city still draw.
+    for (const svg of [
+      footprintSvg([]),
+      footprintSvg([
+        {
+          cell: '872664c1affffff',
+          events: 1,
+          poster_scans: { count: 5, suppressed: false, floor: 5 },
+        } as never,
+      ]),
+    ]) {
+      for (const [name] of FOOTPRINT_CITIES) expect(svg).toContain(`>${name}</text>`);
+    }
+    expect(FOOTPRINT_CITIES.map(([n]) => n)).toEqual([
+      'Milwaukee',
+      'Rockford',
+      'Kankakee',
+      'Valparaiso',
+      'South Bend',
+      'St. Joseph',
+    ]);
+    // An area far outside the region widens the frame instead of being cut off.
+    const near = footprintSvg([]).match(/viewBox="0 0 (\d+) (\d+)"/)!;
+    const far = footprintSvg([
+      {
+        cell: '872830828ffffff',
+        events: 1,
+        poster_scans: { count: 5, suppressed: false, floor: 5 },
+      } as never,
+    ]).match(/viewBox="0 0 (\d+) (\d+)"/)!;
+    expect(Number(far[1]) / Number(far[2])).not.toBeCloseTo(Number(near[1]) / Number(near[2]), 2);
   });
 
   test('the page with a bad link says so, and shows nothing', async () => {
