@@ -26,7 +26,7 @@ runtime:
             expect((body.match(/<h1[\s>]/gi) || []).length).to.eql(1);
             expect(body).to.include('CI league (synthetic)');
             expect(body).to.include('data-testid="competition-standings"');
-            expect(body).to.include('<strong>12</strong> to <strong>5</strong>');
+            expect(body).to.include('data-score="12-5"');
           });
           test('leagues page: no cookie, not indexed', function () { expect(!res.getHeader('set-cookie')).to.equal(true); expect(res.getHeader('x-robots-tag')).to.eql('noindex'); });
         }

@@ -607,7 +607,7 @@ describe('the public schedule and standings page', () => {
     expect(html.match(/<h1[\s>]/g)).toHaveLength(1);
     expect(html).toContain('Fall Bar League');
     expect(html).toContain('data-testid="competition-standings"');
-    expect(html).toContain('<strong>12</strong> to <strong>8</strong>');
+    expect(html).toContain('data-score="12-8"');
     expect(html).toContain('sits out');
     expect(html).not.toContain('secret-key');
     expect(html).not.toContain(OWNER_A);

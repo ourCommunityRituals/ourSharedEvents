@@ -25,6 +25,7 @@ import { html, renderErrorPage } from './pages';
 import { escapeHtml as esc } from '../lib/html-escape';
 import { readCompetition, readEntries, readFixtures } from './competitions';
 import { rulesetOf } from '../lib/competitions';
+import { shortTime } from '../lib/competition-page-render';
 
 export interface ScoreScreenEnv {
   DB?: D1Database;
@@ -34,10 +35,11 @@ const NO_STORE = { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofoll
 
 /** Layout only, no colour. Under the 400-character inline budget. */
 export const SCORE_SCREEN_CSS =
-  'main{max-width:520px;margin:0 auto;padding:1rem 16px 4rem}' +
+  'main{max-width:520px;margin:0 auto;padding:1rem 16px 3rem}' +
   '.ss-m{margin-top:1rem}.ss-row{display:flex;gap:.5rem;align-items:center}' +
   '.ss-row input{width:5rem;min-height:48px;font-size:1.5rem;text-align:center}' +
-  '.ss-row span{flex:1}.ss-b{display:flex;gap:.5rem;margin-top:.5rem}.ss-b .btn{flex:1;min-height:48px}';
+  '.ss-row span{flex:1}.ss-b,.ss-n{display:flex;gap:.5rem;margin-top:.5rem}.ss-b .btn{flex:1;min-height:48px}' +
+  '.ss-n{align-items:center;flex-wrap:wrap}.ss-n .btn{min-width:44px;padding:0}';
 
 /** The page's script: save, postpone, and a queue for when the phone is offline. */
 const SCORE_SCREEN_JS = `(function(){
@@ -76,10 +78,10 @@ export function renderScoreScreen(input: {
   const nav = input.rounds
     .map((r) =>
       r === input.round
-        ? `<strong aria-current="page">Round ${r}</strong>`
-        : `<a class="btn btn-link" href="${esc(`${api}/score-screen?round=${r}`)}">Round ${r}</a>`
+        ? `<strong class="btn btn-primary" aria-current="page" aria-label="Round ${r}">${r}</strong>`
+        : `<a class="btn btn-secondary" aria-label="Round ${r}" href="${esc(`${api}/score-screen?round=${r}`)}">${r}</a>`
     )
-    .join(' ');
+    .join('');
   const cards = input.matches
     .map(
       (m) => `<section class="card ss-m" data-match data-testid="score-match">
@@ -108,8 +110,7 @@ export function renderScoreScreen(input: {
   <body data-api="${esc(api)}">
     <main id="main-content" data-testid="score-screen">
       <h1>${esc(input.name)}</h1>
-      <p class="detail-card-sub">${input.round ? `Round ${input.round}` : 'No match left to score'}${input.allowsDraw ? '' : ' · no draws: one team must win'}</p>
-      <nav aria-label="Rounds">${nav}</nav>
+      <nav class="ss-n" aria-label="Rounds"><span>Round</span>${nav}</nav>${input.round ? '' : '<p class="detail-card-sub">No match left to score</p>'}${input.allowsDraw ? '' : '<p class="detail-card-sub">No draws</p>'}
       ${cards || '<p class="detail-card-sub ss-m">Every match of this round has a score, or none is set yet.</p>'}
     </main>
     <script>${SCORE_SCREEN_JS}</script>
@@ -161,7 +162,7 @@ export async function handleScoreScreen(
       id: f.id,
       a: labels.get(f.entry_a) ?? 'Team',
       b: labels.get(f.entry_b) ?? 'Team',
-      where: [f.slot_time, f.slot_label].filter(Boolean).join(' · '),
+      where: [f.slot_label, shortTime(f.slot_time)].filter(Boolean).join(' · '),
       score_a: f.score_a,
       score_b: f.score_b,
       final: f.state === 'final' || c.status === 'finished',

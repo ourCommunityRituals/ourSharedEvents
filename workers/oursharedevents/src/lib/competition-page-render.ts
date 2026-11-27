@@ -24,7 +24,6 @@
 import { escapeHtml as esc } from './html-escape';
 import { injectLegalFooter } from './legal-footer';
 import { eventPagePath } from './canonical';
-import { formatHumanDate } from './event-datetime';
 import {
   FORMAT_LABELS,
   type CompetitionFormat,
@@ -70,20 +69,37 @@ export interface CompetitionPageInput {
 /** Layout only, no colour. Under the 400-character inline budget. */
 export const COMPETITION_PAGE_CSS =
   'main{max-width:640px;margin:0 auto;padding:1rem 16px 3rem;overflow-wrap:anywhere}' +
-  '.cp-gap{margin-top:1.25rem}.cp-list{list-style:none;padding:0}.cp-list li{padding:.5rem 0}' +
-  'table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}' +
-  'th,td{padding:.45rem .3rem;text-align:right}th:nth-child(2),td:nth-child(2){text-align:left}';
+  '.cp-gap{margin-top:1rem}.cp-list{list-style:none;padding:0;margin:0}.cp-list li{padding:.45rem 0}' +
+  '.cp-s{display:flex;justify-content:space-between}summary{padding:.7rem 0;font-weight:700}' +
+  'table{width:100%;font-variant-numeric:tabular-nums}' +
+  'th,td{padding:.45rem .3rem;text-align:right}th:nth-child(2){text-align:left}';
 
-function shortDay(day: string): string {
-  if (!day) return '';
-  // "Wednesday, September 3, 2026" → keep it whole: the page is read, not scanned.
-  return formatHumanDate(day);
+/**
+ * Phones skim (owner, 2026-11-27): short dates and times, cards and rows,
+ * and every paragraph of explanation behind a tap.
+ */
+export function shortDay(day: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return '';
+  return new Date(`${day}T12:00:00Z`).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
+/** "19:00" → "7 PM", "19:30" → "7:30 PM". Anything else is shown as it is. */
+export function shortTime(t: string | null): string {
+  const m = t ? /^(\d{2}):(\d{2})$/.exec(t) : null;
+  if (!m) return t ?? '';
+  const h = Number(m[1]);
+  return `${h % 12 || 12}${m[2] === '00' ? '' : `:${m[2]}`} ${h < 12 ? 'AM' : 'PM'}`;
 }
 
 export function dateRange(starts: string | null, ends: string | null): string {
-  const s = starts ? formatHumanDate(starts) : '';
-  const e = ends ? formatHumanDate(ends) : '';
-  if (s && e) return `${s} to ${e}`;
+  const s = starts ? shortDay(starts) : '';
+  const e = ends ? shortDay(ends) : '';
+  if (s && e) return `${s} – ${e}`;
   return s ? `From ${s}` : e ? `Until ${e}` : '';
 }
 
@@ -97,29 +113,29 @@ export function nextRound(fixtures: PageFixture[], today: string): number | null
 }
 
 function where(f: PageFixture): string {
-  return [f.slot_time, f.slot_label]
+  return [f.slot_label, shortTime(f.slot_time)]
     .filter(Boolean)
     .map((v) => esc(v as string))
     .join(' · ');
 }
 
+/** One match: a played one reads like a scoreboard, the winner in bold. */
 function renderMatch(f: PageFixture): string {
   const a = esc(f.a);
   const b = esc(f.b);
-  const place = where(f);
   if (f.status === 'played' && f.score_a !== null && f.score_b !== null) {
-    return `<li data-testid="competition-match" data-status="played"><span class="detail-card-main">${a} <strong>${f.score_a}</strong> to <strong>${f.score_b}</strong> ${b}</span></li>`;
+    const line = (t: string, s: number, won: boolean) =>
+      `<span class="cp-s">${won ? `<strong>${t}</strong><strong>${s}</strong>` : `<span>${t}</span><span>${s}</span>`}</span>`;
+    return `<li data-testid="competition-match" data-status="played" data-score="${f.score_a}-${f.score_b}">${line(a, f.score_a, f.score_a > f.score_b)}${line(b, f.score_b, f.score_b > f.score_a)}</li>`;
   }
-  const note = f.status === 'postponed' ? 'Postponed' : place;
-  return `<li data-testid="competition-match" data-status="${f.status}"><span class="detail-card-main">${a} vs ${b}</span>${
-    note ? `<span class="detail-card-sub"> ${note}</span>` : ''
-  }</li>`;
+  const note = f.status === 'postponed' ? 'Postponed' : where(f);
+  return `<li data-testid="competition-match" data-status="${f.status}">${
+    note ? `<span class="detail-card-sub">${note}</span><br>` : ''
+  }<strong>${a}</strong> vs <strong>${b}</strong></li>`;
 }
 
-function nightLine(night: PageNight | null): string {
-  if (!night || !night.day) return 'Night to be set';
-  const day = esc(shortDay(night.day));
-  return night.href ? `<a href="${esc(night.href)}">${day}</a>` : day;
+function nightDay(night: PageNight | null): string {
+  return night && night.day ? esc(shortDay(night.day)) : 'Night to be set';
 }
 
 function renderNext(input: CompetitionPageInput): string {
@@ -128,12 +144,12 @@ function renderNext(input: CompetitionPageInput): string {
   const matches = input.fixtures.filter((f) => f.round === round && f.status === 'scheduled');
   const night = matches.find((f) => f.night)?.night ?? null;
   const bye = input.byes.get(round);
+  const day = night?.href ? `<a href="${esc(night.href)}">${nightDay(night)}</a>` : nightDay(night);
   return `<section class="card cp-gap" aria-labelledby="cp-next" data-testid="competition-next">
-        <h2 class="section-title" id="cp-next">Next up</h2>
-        <p class="detail-card-sub" data-testid="competition-next-night">Round ${round} · ${nightLine(night)}</p>
+        <h2 class="section-title" id="cp-next">Next up · <span data-testid="competition-next-night">${day}</span></h2>
         <ul class="cp-list">${matches.map(renderMatch).join('')}</ul>${
           bye
-            ? `<p class="detail-card-sub" data-testid="competition-next-bye">${esc(bye)} sits out this round.</p>`
+            ? `<p class="detail-card-sub" data-testid="competition-next-bye">${esc(bye)} sits out.</p>`
             : ''
         }
       </section>`;
@@ -142,40 +158,43 @@ function renderNext(input: CompetitionPageInput): string {
 function renderStandings(input: CompetitionPageInput): string {
   if (!input.standings.length) return '';
   const draws = input.ruleset.draw !== null;
-  const head = `<tr><th scope="col">#</th><th scope="col">Team</th><th scope="col"><abbr title="Played">P</abbr></th><th scope="col"><abbr title="Won">W</abbr></th>${
+  const head = `<tr><th scope="col">#</th><th scope="col">Team</th><th scope="col"><abbr title="Won">W</abbr></th>${
     draws ? '<th scope="col"><abbr title="Drawn">D</abbr></th>' : ''
   }<th scope="col"><abbr title="Lost">L</abbr></th><th scope="col"><abbr title="Score difference">+/-</abbr></th><th scope="col"><abbr title="Points">Pts</abbr></th></tr>`;
   const rows = input.standings
     .map(
       (r) =>
-        `<tr data-testid="competition-standing"><td>${r.rank}</td><th scope="row">${esc(r.label)}</th><td>${r.played}</td><td>${r.won}</td>${
+        `<tr data-testid="competition-standing"><td>${r.rank}</td><th scope="row">${esc(r.label)}</th><td>${r.won}</td>${
           draws ? `<td>${r.drawn}</td>` : ''
         }<td>${r.lost}</td><td>${r.diff > 0 ? `+${r.diff}` : r.diff}</td><td><strong>${r.points}</strong></td></tr>`
     )
     .join('');
-  return `<section class="cp-gap" aria-labelledby="cp-table" data-testid="competition-standings">
+  return `<section class="card cp-gap" aria-labelledby="cp-table" data-testid="competition-standings">
         <h2 class="section-title" id="cp-table">Standings</h2>
         <table><thead>${head}</thead><tbody>${rows}</tbody></table>
-        <p class="detail-card-sub" data-testid="competition-rule">${esc(input.ruleset.says)}</p>
+        <details><summary>How the table works</summary><p class="detail-card-sub" data-testid="competition-rule">${esc(input.ruleset.says)}</p></details>
       </section>`;
 }
 
+/** Every round, folded: tap a round to see its matches. The next round opens. */
 function renderRounds(input: CompetitionPageInput): string {
   const rounds = [...new Set(input.fixtures.map((f) => f.round))].sort((a, b) => a - b);
   if (!rounds.length) return '';
+  const next = nextRound(input.fixtures, input.today);
   return `<section class="cp-gap" aria-labelledby="cp-rounds" data-testid="competition-rounds">
-        <h2 class="section-title" id="cp-rounds">Schedule and results</h2>
+        <h2 class="section-title" id="cp-rounds">Rounds</h2>
         ${rounds
           .map((round) => {
             const matches = input.fixtures.filter((f) => f.round === round);
             const night = matches.find((f) => f.night)?.night ?? null;
             const bye = input.byes.get(round);
-            return `<div class="cp-gap" data-testid="competition-round" data-round="${round}">
-          <h3 class="detail-card-label">Round ${round} · ${nightLine(night)}</h3>
+            const done = matches.every((f) => f.status === 'played');
+            return `<details class="card cp-gap" data-testid="competition-round" data-round="${round}"${round === next ? ' open' : ''}>
+          <summary>Round ${round} · ${nightDay(night)}${done ? ' · Final' : ''}</summary>
           <ul class="cp-list">${matches.map(renderMatch).join('')}</ul>${
             bye ? `<p class="detail-card-sub">${esc(bye)} sits out.</p>` : ''
-          }
-        </div>`;
+          }${night?.href ? `<a class="btn btn-link" href="${esc(night.href)}">Night page ›</a>` : ''}
+        </details>`;
           })
           .join('')}
       </section>`;
