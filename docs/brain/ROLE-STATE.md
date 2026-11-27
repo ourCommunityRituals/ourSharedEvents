@@ -46,13 +46,13 @@ Every story is implemented from all six POVs simultaneously. CC reads all six an
 - Coordinates 5 MVP surfaces + forms QR routing
 - Integration testing between front and back
 
-**Latest** (newest 5 of 16 by the date in each title; full text in [role-state/frontend-integration.md](role-state/frontend-integration.md)):
+**Latest** (newest 5 of 17 by the date in each title; full text in [role-state/frontend-integration.md](role-state/frontend-integration.md)):
 
+- 2026-11-26: The public event page is a card display, Supported by is a row of equal banners, and Register is on the first phone screen (owner requests 2026-11-26, no Linear story; PR #1567, merged 2026-11-26 as `6c4a854`)
 - 2026-11-26: The map's own tooltip, clear of the pointer, and press and hold on a phone (owner request 2026-11-25, no Linear story; PR #1556, merged 2026-11-26 02:40 UTC as `caed3311`; the staging chain for that SHA, run 45743974057…
 - 2026-11-23: Icon category slider on the landing, `/map` and Create Sponsor (OSE-2207; PR #1518, merged 2026-11-23 16:48 UTC as `b0b8938`; staging chain T1–T4 green on `4bd8ba1`, a later `main` SHA that contains it, run 45220685354)
 - 2026-11-20: The zoomed map measures to each place, and the position is read only on a tap (OSE-2198; PR #1491, merged 2026-11-20 03:55 UTC as `86b1a6d1`; staging chain T1–T4 green on the later `main` SHA `ac0d7a4` (#1505), which…
 - 2026-11-18: The admin Voting card (OSE-2127; PR #1432, merged by the owner 2026-11-18 13:47 UTC as `697f498`; staging chain T1–T4 green on that SHA, run 44317363830)
-- 2026-11-18: The Voting card: publish hint and the room's vote code (part of OSE-2140 and OSE-2142; PR #1460, merged 2026-11-18 21:35 UTC as `68e1980b`; the staging chain for that SHA, run 44403047974, had not run when this line w…
 
 ### Sr Design FE
 
