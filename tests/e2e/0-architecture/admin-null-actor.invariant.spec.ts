@@ -146,6 +146,17 @@ const SITES: Record<string, { kind: Kind; count: number; why: string }> = {
     count: 1,
     why: 'created_by on the new campaign (OSE-1561), after the brand scope has refused a deny scope.',
   },
+  'handlers/competitions.ts: const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);':
+    {
+      kind: 'scope-denies-null',
+      count: 1,
+      why: 'Competition list (leagues phase 1): a deny scope answers an empty list.',
+    },
+  'handlers/competitions.ts: const actor = extractAdminActor(request, env);': {
+    kind: 'dev-open-retest',
+    count: 1,
+    why: 'Competition create (leagues phase 1): no null branch; the actor goes straight to the scope resolver, a deny scope returns 403, and only then is it written as created_by.',
+  },
   'handlers/dashboards.ts: const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);':
     { kind: 'scope-denies-null', count: 1, why: 'Dashboard brand scope.' },
   'handlers/venues.ts: return resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);': {

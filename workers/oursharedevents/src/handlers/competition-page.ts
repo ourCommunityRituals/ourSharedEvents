@@ -58,17 +58,23 @@ interface NightRow {
   timezone: string | null;
 }
 
-async function readNights(db: D1Database, ids: string[]): Promise<Map<string, PageNight>> {
+async function readNights(
+  db: D1Database,
+  brandId: string,
+  ids: string[]
+): Promise<Map<string, PageNight>> {
   const out = new Map<string, PageNight>();
-  // D1 allows 100 bound values in one statement: read in slices.
+  // D1 allows 100 bound values in one statement: read in slices. Only nights of
+  // the competition's own brand: a match is placed only on one, and a night of
+  // another brand is never read here.
   for (let i = 0; i < ids.length; i += 90) {
     const slice = ids.slice(i, i + 90);
     const rs = await db
       .prepare(
         `SELECT id, slug, status, start_date, starts_at, timezone FROM events
-          WHERE id IN (${slice.map(() => '?').join(', ')})`
+          WHERE brand_id = ? AND id IN (${slice.map(() => '?').join(', ')})`
       )
-      .bind(...slice)
+      .bind(brandId, ...slice)
       .all<NightRow>();
     for (const r of rs.results ?? []) {
       const day = r.starts_at ? zonedDatePart(r.starts_at, r.timezone) : (r.start_date ?? '');
@@ -98,7 +104,7 @@ export async function handleCompetitionPage(
     const fixtures = await readFixtures(db, c.id);
     const ruleset = rulesetOf(c.ruleset);
     const labels = new Map(entries.map((e) => [e.id, e.label]));
-    const nights = await readNights(db, [
+    const nights = await readNights(db, c.brand_id, [
       ...new Set(fixtures.map((f) => f.event_id).filter((v): v is string => !!v)),
     ]);
     const pageFixtures: PageFixture[] = fixtures.map((f) => ({
