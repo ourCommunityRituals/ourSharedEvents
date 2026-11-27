@@ -1,0 +1,67 @@
+info:
+  name: "OSE-2241 | admin | one report over the parent and every venture, floored per venture"
+  type: http
+  seq: 10
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/brands/lakeside-co/family-report?data_class=all"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        const floored = function (v) {
+          expect(v).to.be.an('object');
+          expect(v.floor).to.eql(5);
+          if (v.suppressed) expect(v.count).to.eql(null);
+          else expect(v.count % 5).to.eql(0);
+        };
+        test('OSE-2241 admin: 200 for the parent, with its four ventures', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(b.family.parent).to.eql('lakeside-co');
+          ['lakeside-club', 'lakeside-semipro', 'lakeside-league', 'lakeside-network'].forEach(function (v) {
+            expect(b.family.ventures).to.include(v);
+          });
+        });
+        test('OSE-2241 admin: every figure withheld or a multiple of 5, per venture and in total', function () {
+          ['poster_scans', 'link_taps', 'sponsor_displays', 'sponsor_taps'].forEach(function (k) {
+            floored(b.totals[k]);
+            (b.by_venture || []).forEach(function (l) { floored(l[k]); });
+          });
+        });
+        test('OSE-2241 admin: the venture lines add up to the total', function () {
+          const sum = (b.by_venture || []).reduce(function (s, l) { return s + (l.poster_scans.count || 0); }, 0);
+          expect(sum).to.eql(b.totals.poster_scans.count || 0);
+          expect(sum).to.be.at.least(5);
+        });
+        test('OSE-2241 admin: the small streamed night is withheld on its own', function () {
+          const net = (b.by_venture || []).filter(function (l) { return l.brand === 'lakeside-network'; })[0];
+          expect(net.poster_scans.suppressed).to.eql(true);
+        });
+        test('OSE-2241 admin: sponsors only where both sides said yes', function () {
+          expect(b.sponsors).to.include('Practice Sponsor A');
+          expect(b.sponsors).to.not.include('Practice Sponsor Pending');
+        });
+        test('OSE-2241 admin: a footprint of map cells, never an address', function () {
+          expect(b.footprint.length).to.be.at.least(1);
+          b.footprint.forEach(function (c) { expect(c.cell).to.match(/^[0-9a-f]{15}$/); });
+        });
+        test('OSE-2241 admin: no event id, title or person in the answer', function () {
+          const text = JSON.stringify(b);
+          expect(text).to.not.match(/lkfr-|practice\)|"(event_id|title|email|anon[a-z_]*)"/);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false
