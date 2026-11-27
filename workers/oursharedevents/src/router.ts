@@ -1387,32 +1387,28 @@ export async function route(
   // /api/v2/admin/brands/:brand/family-report — OSE-2241. The parent company's
   // one report over every venture below it. The handler reads a brand only
   // when it is in the caller's scope (a miss is 404). Minting a link is audited.
-  const familyReportMatch = pathname.match(
-    /^\/api\/v2\/admin\/brands\/([^/]+)\/family-report(\/mint-link)?$/
-  );
-  if (familyReportMatch && (method === 'GET' || method === 'POST')) {
+  const familyReportMatch = pathname.match(/^\/api\/v2\/admin\/brands\/([^/]+)\/family-report$/);
+  if (familyReportMatch && method === 'GET') {
     const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
-    const brand = familyReportMatch[1];
-    const mint = familyReportMatch[2] === '/mint-link';
-    if (mint !== (method === 'POST')) {
-      return new Response('Method Not Allowed', {
-        status: 405,
-        headers: { Allow: mint ? 'POST' : 'GET' },
-      });
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) return deny;
+    return handleAdminFamilyReport(request, env, familyReportMatch[1]);
+  }
+  const familyLinkMatch = pathname.match(
+    /^\/api\/v2\/admin\/brands\/([^/]+)\/family-report\/mint-link$/
+  );
+  if (familyLinkMatch && method === 'POST') {
+    const brand = familyLinkMatch[1];
+    if (env.RATE_LIMIT_KV) {
+      const key = `family-mint:${clientIp(request)}:${brand}`;
+      if (await checkRateLimit(env, key, RATE_LIMIT_MINT_MAX)) return rateLimitResponse();
     }
-    if (mint && env.RATE_LIMIT_KV) {
-      if (
-        await checkRateLimit(env, `family-mint:${clientIp(request)}:${brand}`, RATE_LIMIT_MINT_MAX)
-      ) {
-        return rateLimitResponse();
-      }
-    }
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
     const deny = await requireAdmin(request, env, reqId);
     if (deny) {
-      if (mint) _audit(reqId, 'MINT_FAMILY_REPORT_LINK', 'denied', 'brand', brand);
+      _audit(reqId, 'MINT_FAMILY_REPORT_LINK', 'denied', 'brand', brand);
       return deny;
     }
-    if (!mint) return handleAdminFamilyReport(request, env, brand);
     const res = await handleAdminMintFamilyLink(request, env, brand);
     _audit(
       reqId,
