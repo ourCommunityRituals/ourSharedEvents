@@ -1842,6 +1842,24 @@ jobs:
         run: |
           node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/routable-seed.sql
 
+      # Juniper Grove High boosters (stand-in names, staging only): a test account
+      # for a boosters club's adult volunteers, with home games in four sports, a
+      # 3-on-3 fundraiser tournament and one unpublished event per volunteer shift
+      # (Register = sign up, check-in = showed up). Synthetic, unpublished, no
+      # student and no person. Sits after every other seed so the Juniper Grove
+      # village seed (its parent, juniper-schools) has run; the parent link is
+      # guarded and made on a later run if the village seed is not there yet.
+      # Idempotent upserts. NOT continue-on-error.
+      - name: 'Seed Juniper Grove High boosters'
+        if: matrix.section == 'api'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/juniper-boosters-seed.sql
+
       # OSE-1191: migrated Postman/Newman → Bruno (offline/git-native `.bru`,
       # collections live in-repo under bruno/). Bruno CLI `bru run` must execute
       # from the collection root, so each step sets working-directory. Secrets are
