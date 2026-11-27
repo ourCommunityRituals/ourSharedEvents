@@ -1,0 +1,14 @@
+// Review check fixture. Plain text: never imported, built or deployed.
+interface Env { DB: D1Database }
+
+export async function eventTitle(request: Request, env: Env): Promise<Response> {
+  const id = new URL(request.url).searchParams.get('id') ?? '';
+  if (!/^[a-z0-9-]{1,40}$/.test(id)) {
+    return new Response('bad id', { status: 400 });
+  }
+  const row = await env.DB.prepare('SELECT title, starts_at FROM events WHERE id = ?1 AND published = 1')
+    .bind(id)
+    .first<{ title: string; starts_at: string }>();
+  if (!row) return new Response('not found', { status: 404 });
+  return Response.json({ title: row.title, startsAt: row.starts_at });
+}
