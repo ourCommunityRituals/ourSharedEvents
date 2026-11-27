@@ -64,15 +64,50 @@ export interface CompetitionPageInput {
   byes: Map<number, string>;
   /** Today, YYYY-MM-DD, so "Next up" skips a night already past. */
   today: string;
+  /** The tab asked for in `?tab=`; anything else falls back to the default. */
+  tab?: string | null;
+  /** The round asked for in `?round=` on the Rounds tab. */
+  round?: string | null;
+}
+
+/**
+ * Tabs, not one long page (owner, 2026-11-27: reduce scrolling). Each tab is a
+ * plain link to `?tab=`, and the server renders only that panel, so the page
+ * needs no script and works the same on any phone.
+ */
+export const COMPETITION_TABS = [
+  ['next', 'Next up'],
+  ['table', 'Table'],
+  ['rounds', 'Rounds'],
+] as const;
+export type CompetitionTab = (typeof COMPETITION_TABS)[number][0];
+
+/** The tab to show: the one asked for, else Next up while a match is left, else the table. */
+export function pickTab(input: CompetitionPageInput): CompetitionTab {
+  const asked = COMPETITION_TABS.find(([k]) => k === input.tab)?.[0];
+  if (asked && (asked !== 'next' || nextRound(input.fixtures, input.today) !== null)) return asked;
+  return nextRound(input.fixtures, input.today) !== null ? 'next' : 'table';
+}
+
+function renderTabs(current: CompetitionTab, hasNext: boolean): string {
+  return `<nav class="cp-tabs" aria-label="Sections" data-testid="competition-tabs">${COMPETITION_TABS.filter(
+    ([k]) => k !== 'next' || hasNext
+  )
+    .map(([k, label]) =>
+      k === current
+        ? `<a class="btn btn-primary" aria-current="page" href="?tab=${k}" data-tab="${k}">${label}</a>`
+        : `<a class="btn btn-secondary" href="?tab=${k}" data-tab="${k}">${label}</a>`
+    )
+    .join('')}</nav>`;
 }
 
 /** Layout only, no colour. Under the 400-character inline budget. */
 export const COMPETITION_PAGE_CSS =
-  'main{max-width:640px;margin:0 auto;padding:1rem 16px 3rem;overflow-wrap:anywhere}' +
-  '.cp-gap{margin-top:1rem}.cp-list{list-style:none;padding:0;margin:0}.cp-list li{padding:.45rem 0}' +
-  '.cp-s{display:flex;justify-content:space-between}summary{padding:.7rem 0;font-weight:700}' +
-  'table{width:100%;font-variant-numeric:tabular-nums}' +
-  'th,td{padding:.45rem .3rem;text-align:right}th:nth-child(2){text-align:left}';
+  'main{max-width:640px;margin:0 auto;padding:.5rem 16px;overflow-wrap:anywhere}' +
+  '.cp-gap{margin-top:1rem}.cp-tabs{display:flex;gap:.4rem}.cp-tabs .btn{flex:1;margin:0}' +
+  '.cp-list{list-style:none;padding:0}.cp-list li{padding:.45rem 0}' +
+  '.cp-s{display:flex;justify-content:space-between}summary{padding:.7rem 0}' +
+  'table{width:100%}th,td{padding:.4rem;text-align:right}th:nth-child(2){text-align:left}';
 
 /**
  * Phones skim (owner, 2026-11-27): short dates and times, cards and rows,
@@ -159,8 +194,8 @@ function renderStandings(input: CompetitionPageInput): string {
   if (!input.standings.length) return '';
   const draws = input.ruleset.draw !== null;
   const head = `<tr><th scope="col">#</th><th scope="col">Team</th><th scope="col"><abbr title="Won">W</abbr></th>${
-    draws ? '<th scope="col"><abbr title="Drawn">D</abbr></th>' : ''
-  }<th scope="col"><abbr title="Lost">L</abbr></th><th scope="col"><abbr title="Score difference">+/-</abbr></th><th scope="col"><abbr title="Points">Pts</abbr></th></tr>`;
+    draws ? '<th scope="col"><abbr title="Ties">T</abbr></th>' : ''
+  }<th scope="col"><abbr title="Lost">L</abbr></th><th scope="col"><abbr title="Score gap">+/-</abbr></th><th scope="col"><abbr title="Points">Pts</abbr></th></tr>`;
   const rows = input.standings
     .map(
       (r) =>
@@ -172,31 +207,36 @@ function renderStandings(input: CompetitionPageInput): string {
   return `<section class="card cp-gap" aria-labelledby="cp-table" data-testid="competition-standings">
         <h2 class="section-title" id="cp-table">Standings</h2>
         <table><thead>${head}</thead><tbody>${rows}</tbody></table>
-        <details><summary>How the table works</summary><p class="detail-card-sub" data-testid="competition-rule">${esc(input.ruleset.says)}</p></details>
+        <details><summary class="btn btn-outline" data-testid="competition-rule-more">How the table works ›</summary><p class="detail-card-sub" data-testid="competition-rule">${esc(input.ruleset.says)}</p></details>
       </section>`;
 }
 
-/** Every round, folded: tap a round to see its matches. The next round opens. */
+/**
+ * One round at a time, with arrows to the round before and after, so the tab
+ * fits on one phone screen however long the season is (owner, 2026-11-27: no
+ * scrolling). It opens on the next round, else the last one.
+ */
 function renderRounds(input: CompetitionPageInput): string {
   const rounds = [...new Set(input.fixtures.map((f) => f.round))].sort((a, b) => a - b);
   if (!rounds.length) return '';
-  const next = nextRound(input.fixtures, input.today);
-  return `<section class="cp-gap" aria-labelledby="cp-rounds" data-testid="competition-rounds">
-        <h2 class="section-title" id="cp-rounds">Rounds</h2>
-        ${rounds
-          .map((round) => {
-            const matches = input.fixtures.filter((f) => f.round === round);
-            const night = matches.find((f) => f.night)?.night ?? null;
-            const bye = input.byes.get(round);
-            const done = matches.every((f) => f.status === 'played');
-            return `<details class="card cp-gap" data-testid="competition-round" data-round="${round}"${round === next ? ' open' : ''}>
-          <summary>Round ${round} · ${nightDay(night)}${done ? ' · Final' : ''}</summary>
+  const fallback = nextRound(input.fixtures, input.today) ?? rounds[rounds.length - 1];
+  const round = rounds.includes(Number(input.round)) ? Number(input.round) : fallback;
+  const i = rounds.indexOf(round);
+  const matches = input.fixtures.filter((f) => f.round === round);
+  const night = matches.find((f) => f.night)?.night ?? null;
+  const bye = input.byes.get(round);
+  const arrow = (to: number | undefined, sign: string, label: string) =>
+    to === undefined
+      ? `<span class="btn btn-secondary" aria-hidden="true">&nbsp;</span>`
+      : `<a class="btn btn-secondary" href="?tab=rounds&amp;round=${to}" aria-label="${label} ${to}">${sign}</a>`;
+  return `<section class="card cp-gap" aria-labelledby="cp-rounds" data-testid="competition-rounds">
+        <nav class="cp-tabs" aria-label="Rounds">${arrow(rounds[i - 1], `‹ Round ${rounds[i - 1]}`, 'Round')}${arrow(rounds[i + 1], `Round ${rounds[i + 1]} ›`, 'Round')}</nav>
+        <div data-testid="competition-round" data-round="${round}">
+          <h2 class="section-title cp-gap" id="cp-rounds">Round ${round} · ${night?.href ? `<a href="${esc(night.href)}">${nightDay(night)}</a>` : nightDay(night)}</h2>
           <ul class="cp-list">${matches.map(renderMatch).join('')}</ul>${
             bye ? `<p class="detail-card-sub">${esc(bye)} sits out.</p>` : ''
-          }${night?.href ? `<a class="btn btn-link" href="${esc(night.href)}">Night page ›</a>` : ''}
-        </details>`;
-          })
-          .join('')}
+          }
+        </div>
       </section>`;
 }
 
@@ -208,6 +248,7 @@ export function renderCompetitionPage(input: CompetitionPageInput): string {
     .filter(Boolean)
     .map((s) => esc(s))
     .join(' · ');
+  const tab = pickTab(input);
   const empty =
     !input.fixtures.length && !input.standings.length
       ? `<p class="detail-card-sub cp-gap" data-testid="competition-empty">The schedule is not out yet. Check back soon.</p>`
@@ -230,10 +271,8 @@ export function renderCompetitionPage(input: CompetitionPageInput): string {
     <main id="main-content" data-testid="competition-page">
       <h1 data-testid="competition-name">${name}</h1>
       <p class="detail-card-sub" data-testid="competition-when">${sub}</p>
-      ${renderNext(input)}
-      ${renderStandings(input)}
-      ${renderRounds(input)}
-      ${empty}
+      ${empty || renderTabs(tab, nextRound(input.fixtures, input.today) !== null)}
+      ${empty || (tab === 'next' ? renderNext(input) : tab === 'table' ? renderStandings(input) : renderRounds(input))}
     </main>
     <!--OCR_LEGAL_FOOTER-->
   </body>

@@ -606,19 +606,27 @@ describe('the public schedule and standings page', () => {
     const html = r.text;
     expect(html.match(/<h1[\s>]/g)).toHaveLength(1);
     expect(html).toContain('Fall Bar League');
-    expect(html).toContain('data-testid="competition-standings"');
-    expect(html).toContain('data-score="12-8"');
-    expect(html).toContain('sits out');
     expect(html).not.toContain('secret-key');
     expect(html).not.toContain(OWNER_A);
-    // The key thing comes first: next matches, then the table, then the rounds.
-    const order = [
-      'competition-name',
-      'competition-next',
-      'competition-standings',
-      'competition-rounds',
-    ].map((t) => html.indexOf(`data-testid="${t}"`));
-    expect(order.every((v, i) => v > 0 && (i === 0 || v > order[i - 1]))).toBe(true);
+    // Tabs, not one long page: the first screen is the next matches, and the
+    // table and the rounds are each one tap away.
+    expect(html).toContain('data-testid="competition-tabs"');
+    expect(html).toContain('data-testid="competition-next"');
+    expect(html).not.toContain('data-testid="competition-standings"');
+    expect(html).toContain('sits out');
+    const table = (await call('GET', `/competitions/${id}?tab=table`, {})).text;
+    expect(table).toContain('data-testid="competition-standings"');
+    expect(table).not.toContain('data-testid="competition-next"');
+    const rounds = (await call('GET', `/competitions/${id}?tab=rounds&round=1`, {})).text;
+    expect(rounds).toContain('data-testid="competition-rounds"');
+    expect(rounds).toContain('data-score="12-8"');
+    // One round per screen: only round 1 is on it.
+    expect(rounds.match(/data-testid="competition-round"/g)).toHaveLength(1);
+    expect(rounds).not.toContain('secret-key');
+    // An unknown tab is never echoed and falls back to the first screen.
+    const odd = (await call('GET', `/competitions/${id}?tab=%3Cscript%3E`, {})).text;
+    expect(odd).not.toContain('<script>');
+    expect(odd).toContain('data-testid="competition-next"');
   });
 
   test('a label in markup shape is escaped', async () => {

@@ -5,7 +5,7 @@ info:
 
 http:
   method: GET
-  url: "{{baseUrl}}/competitions/{{leagueId}}"
+  url: "{{baseUrl}}/competitions/{{leagueId}}?tab=rounds&round=1"
   headers:
     - name: Accept
       value: text/html
@@ -22,10 +22,10 @@ runtime:
         var body = typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody());
         if (!edge) {
           test('leagues page: 200 HTML', function () { expect(res.getStatus()).to.eql(200); expect(res.getHeader('content-type') || '').to.include('text/html'); });
-          test('leagues page: one <h1>, the name, the table and the score', function () {
+          test('leagues page: one <h1>, the name, the rounds tab and the score', function () {
             expect((body.match(/<h1[\s>]/gi) || []).length).to.eql(1);
             expect(body).to.include('CI league (synthetic)');
-            expect(body).to.include('data-testid="competition-standings"');
+            expect(body).to.include('data-testid="competition-rounds"');
             expect(body).to.include('data-score="12-5"');
           });
           test('leagues page: no cookie, not indexed', function () { expect(!res.getHeader('set-cookie')).to.equal(true); expect(res.getHeader('x-robots-tag')).to.eql('noindex'); });

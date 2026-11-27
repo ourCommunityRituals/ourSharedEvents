@@ -49,19 +49,19 @@ export const RULESETS = {
     win: 1,
     draw: null,
     loss: 0,
-    says: 'A win is 1 point. Ties on points go to more wins, then the larger score difference, then more points scored.',
+    says: 'A win is 1 point. If teams tie on points: most wins, then the biggest score gap, then most points scored.',
   },
   two_one_zero: {
     win: 2,
     draw: 1,
     loss: 0,
-    says: 'A win is 2 points and a draw 1. Ties on points go to more wins, then the larger score difference, then more points scored.',
+    says: 'A win is 2 points. A tie game is 1. If teams tie on points: most wins, then the biggest score gap, then most points scored.',
   },
   three_one_zero: {
     win: 3,
     draw: 1,
     loss: 0,
-    says: 'A win is 3 points and a draw 1. Ties on points go to more wins, then the larger score difference, then more points scored.',
+    says: 'A win is 3 points. A tie game is 1. If teams tie on points: most wins, then the biggest score gap, then most points scored.',
   },
 } as const satisfies Record<string, Ruleset>;
 export type RulesetKey = keyof typeof RULESETS;

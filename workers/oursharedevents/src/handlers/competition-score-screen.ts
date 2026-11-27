@@ -39,7 +39,7 @@ export const SCORE_SCREEN_CSS =
   '.ss-m{margin-top:1rem}.ss-row{display:flex;gap:.5rem;align-items:center}' +
   '.ss-row input{width:5rem;min-height:48px;font-size:1.5rem;text-align:center}' +
   '.ss-row span{flex:1}.ss-b,.ss-n{display:flex;gap:.5rem;margin-top:.5rem}.ss-b .btn{flex:1;min-height:48px}' +
-  '.ss-n{align-items:center;flex-wrap:wrap}.ss-n .btn{min-width:44px;padding:0}';
+  '.ss-n{align-items:center;flex-wrap:wrap}.ss-n .btn{min-width:44px;padding:0 .8rem}';
 
 /** The page's script: save, postpone, and a queue for when the phone is offline. */
 const SCORE_SCREEN_JS = `(function(){
@@ -53,6 +53,9 @@ function flush(){var l=q();if(!l.length)return;setQ([]);l.reduce(function(p,i){r
 document.addEventListener('click',function(e){var b=e.target.closest('[data-act]');if(!b)return;var id=b.getAttribute('data-fixture');var card=b.closest('[data-match]');
 if(b.getAttribute('data-act')==='save'){var a=card.querySelector('[name=a]').value,c=card.querySelector('[name=b]').value;if(a===''||c===''){say(id,'Enter both scores.');return}run({id:id,path:'/result',body:{score_a:Number(a),score_b:Number(c)},done:'Saved'});}
 else{run({id:id,path:'',body:{status:'postponed'},done:'Postponed. Place it on a new night from the admin.'});}});
+var cards=[].slice.call(document.querySelectorAll('[data-match]')),tabs=[].slice.call(document.querySelectorAll('[data-show]'));
+function show(i){cards.forEach(function(c,j){c.hidden=j!==i});tabs.forEach(function(t,j){t.className='btn '+(j===i?'btn-primary':'btn-secondary');t.setAttribute('aria-pressed',String(j===i))})}
+tabs.forEach(function(t,j){t.addEventListener('click',function(){show(j)})});if(tabs.length)show(0);
 window.addEventListener('online',flush);flush();
 })();`;
 
@@ -97,6 +100,17 @@ export function renderScoreScreen(input: {
       </section>`
     )
     .join('');
+  // One game per screen (owner, 2026-11-27: no scrolling): a button per court
+  // shows that game's card. Without the script every card shows, as before.
+  const courts =
+    input.matches.length > 1
+      ? `<nav class="ss-n" aria-label="Games">${input.matches
+          .map(
+            (m, i) =>
+              `<button type="button" class="btn btn-secondary" data-show="${i}">${esc(m.where.split(' · ')[0] || `Game ${i + 1}`)}</button>`
+          )
+          .join('')}</nav>`
+      : '';
   return `<!DOCTYPE html>
 <html lang="en" data-surface="ose-score-screen">
   <head>
@@ -110,7 +124,7 @@ export function renderScoreScreen(input: {
   <body data-api="${esc(api)}">
     <main id="main-content" data-testid="score-screen">
       <h1>${esc(input.name)}</h1>
-      <nav class="ss-n" aria-label="Rounds"><span>Round</span>${nav}</nav>${input.round ? '' : '<p class="detail-card-sub">No match left to score</p>'}${input.allowsDraw ? '' : '<p class="detail-card-sub">No draws</p>'}
+      <nav class="ss-n" aria-label="Rounds"><span>Round</span>${nav}</nav>${input.round ? '' : '<p class="detail-card-sub">No match left to score</p>'}${input.allowsDraw ? '' : '<details><summary class="btn btn-outline">Scoring rules ›</summary><p class="detail-card-sub">No ties. One team must win.</p></details>'}${courts}
       ${cards || '<p class="detail-card-sub ss-m">Every match of this round has a score, or none is set yet.</p>'}
     </main>
     <script>${SCORE_SCREEN_JS}</script>

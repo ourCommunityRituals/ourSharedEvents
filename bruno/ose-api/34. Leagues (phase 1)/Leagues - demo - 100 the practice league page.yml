@@ -5,7 +5,7 @@ info:
 
 http:
   method: GET
-  url: "{{baseUrl}}/competitions/cmp_1a6e51de0c1b00000000000000000001"
+  url: "{{baseUrl}}/competitions/cmp_1a6e51de0c1b00000000000000000001?tab=table"
   headers:
     - name: Accept
       value: text/html
@@ -25,7 +25,6 @@ runtime:
             expect(res.getStatus()).to.eql(200);
             expect(body).to.include('Fall Bar League (practice)');
             expect((body.match(/data-testid="competition-standing"/g) || []).length).to.eql(6);
-            expect((body.match(/data-testid="competition-round"/g) || []).length).to.eql(5);
           });
         }
 

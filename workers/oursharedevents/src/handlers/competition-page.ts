@@ -90,7 +90,7 @@ async function readNights(
 }
 
 export async function handleCompetitionPage(
-  _request: Request,
+  request: Request,
   env: CompetitionPageEnv,
   rawId: string
 ): Promise<Response> {
@@ -140,6 +140,9 @@ export async function handleCompetitionPage(
         fixtures: pageFixtures,
         byes,
         today: new Date().toISOString().slice(0, 10),
+        // Only a known tab name is used (pickTab); the value is never echoed.
+        tab: new URL(request.url).searchParams.get('tab'),
+        round: new URL(request.url).searchParams.get('round'),
       })
     );
     // Short and private: a score can be entered at any minute of a league night.
