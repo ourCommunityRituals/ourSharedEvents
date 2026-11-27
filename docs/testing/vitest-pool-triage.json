@@ -2109,6 +2109,13 @@
       "testCount": 12
     },
     {
+      "file": "workers/oursharedevents/tests/map-page-csp.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 6
+    },
+    {
       "file": "workers/oursharedevents/tests/map-page.spec.ts",
       "bucket": "workerd",
       "needsReview": false,

@@ -240,7 +240,8 @@ function securityHeaders(nonce: string): Record<string, string> {
     // and the UEC resolver both hand the page data: PNGs, and without an explicit
     // img-src they fall to default-src 'self' and the browser refuses them (the
     // poster printed alt text on staging). Same directive form-pages.ts and
-    // demo.ts already carry. Guarded by tests/poster-page-csp.spec.ts.
+    // demo.ts already carry. Guarded by tests/poster-page-csp.spec.ts; the
+    // whole policy, as the /map page sends it, is pinned by tests/map-page-csp.spec.ts.
     'Content-Security-Policy': `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'`,
   };
 }
