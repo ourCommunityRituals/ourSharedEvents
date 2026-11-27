@@ -23,6 +23,7 @@
 
 import { html, renderErrorPage } from './pages';
 import { escapeHtml as esc } from '../lib/html-escape';
+import { deeperDive } from '../lib/deeper-dive';
 import { readCompetition, readEntries, readFixtures } from './competitions';
 import { rulesetOf } from '../lib/competitions';
 import { shortTime } from '../lib/competition-page-render';
@@ -124,7 +125,7 @@ export function renderScoreScreen(input: {
   <body data-api="${esc(api)}">
     <main id="main-content" data-testid="score-screen">
       <h1>${esc(input.name)}</h1>
-      <nav class="ss-n" aria-label="Rounds"><span>Round</span>${nav}</nav>${input.round ? '' : '<p class="detail-card-sub">No match left to score</p>'}${input.allowsDraw ? '' : '<details><summary class="btn btn-outline">Scoring rules ›</summary><p class="detail-card-sub">No ties. One team must win.</p></details>'}${courts}
+      <nav class="ss-n" aria-label="Rounds"><span>Round</span>${nav}</nav>${input.round ? '' : '<p class="detail-card-sub">No match left to score</p>'}${input.allowsDraw ? '' : deeperDive('Scoring rules', 'No ties. One team must win.')}${courts}
       ${cards || '<p class="detail-card-sub ss-m">Every match of this round has a score, or none is set yet.</p>'}
     </main>
     <script>${SCORE_SCREEN_JS}</script>

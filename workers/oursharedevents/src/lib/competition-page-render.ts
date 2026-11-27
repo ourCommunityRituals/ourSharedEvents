@@ -22,6 +22,7 @@
  */
 
 import { escapeHtml as esc } from './html-escape';
+import { deeperDive } from './deeper-dive';
 import { injectLegalFooter } from './legal-footer';
 import { eventPagePath } from './canonical';
 import {
@@ -207,7 +208,7 @@ function renderStandings(input: CompetitionPageInput): string {
   return `<section class="card cp-gap" aria-labelledby="cp-table" data-testid="competition-standings">
         <h2 class="section-title" id="cp-table">Standings</h2>
         <table><thead>${head}</thead><tbody>${rows}</tbody></table>
-        <details><summary class="btn btn-outline" data-testid="competition-rule-more">How the table works ›</summary><p class="detail-card-sub" data-testid="competition-rule">${esc(input.ruleset.says)}</p></details>
+        ${deeperDive('How the table is ordered', input.ruleset.says, 'competition-rule')}
       </section>`;
 }
 

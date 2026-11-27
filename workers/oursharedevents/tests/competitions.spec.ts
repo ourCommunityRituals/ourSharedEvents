@@ -617,6 +617,10 @@ describe('the public schedule and standings page', () => {
     const table = (await call('GET', `/competitions/${id}?tab=table`, {})).text;
     expect(table).toContain('data-testid="competition-standings"');
     expect(table).not.toContain('data-testid="competition-next"');
+    // The rule sits behind the one Deeper Dive button, not on the screen.
+    expect(table).toMatch(
+      /<details class="deeper-dive"><summary[^>]*>Deeper Dive ›<\/summary><p[^>]*data-testid="competition-rule"/
+    );
     const rounds = (await call('GET', `/competitions/${id}?tab=rounds&round=1`, {})).text;
     expect(rounds).toContain('data-testid="competition-rounds"');
     expect(rounds).toContain('data-score="12-8"');
