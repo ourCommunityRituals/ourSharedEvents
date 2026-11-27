@@ -272,30 +272,22 @@ function rows(
   id: string
 ): string {
   if (body.length === 0) return '<p class="fr-note">Nothing yet.</p>';
-  return `<table class="ladder" id="${id}">
+  return `<div class="preview-table-wrap"><table class="preview-table" id="${id}">
     <thead><tr>${head.map((x) => `<th scope="col">${esc(x)}</th>`).join('')}</tr></thead>
     <tbody>${body
       .map(
         ([a, b, c]) => `<tr><th scope="row">${esc(a)}</th><td>${esc(b)}</td><td>${esc(c)}</td></tr>`
       )
-      .join('')}</tbody></table>`;
+      .join('')}</tbody></table></div>`;
 }
 
+/** The page's own CSS, under the design check's inline budget; the rest is /ui.css. */
 const PAGE_STYLE = `<style>
-.fr-wrap{max-width:960px;margin:0 auto;padding:1rem;overflow-wrap:anywhere}
-.fr-hero h1{margin:.5rem 0 .25rem}
+.fr-wrap{max-width:960px;margin:0 auto;padding:16px}
 .fr-note{color:var(--text-muted);font-size:.85rem}
-.fr-tiles{display:grid;gap:.75rem;grid-template-columns:repeat(2,minmax(0,1fr))}
-@media(min-width:720px){.fr-tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
-.fr-tile{border:1px solid var(--border);border-radius:.75rem;padding:.85rem;background:var(--surface)}
-.fr-num{font-size:1.6rem;font-weight:800}
-.fr-sec{margin:1.75rem 0}
-.fr-sec>h2{border-bottom:1px solid var(--border);padding-bottom:.4rem}
-.fp-map{width:100%;max-width:520px;max-height:340px;height:auto;display:block;background:var(--surface);border-radius:.75rem}
-.fp-cell{fill:var(--accent);stroke:var(--bg);stroke-width:1}
-.ladder{width:100%;border-collapse:collapse}
-.ladder th,.ladder td{text-align:left;padding:.6rem .5rem;border-bottom:1px solid var(--border);font-size:.9rem}
-.ladder thead th{color:var(--text-muted);font-size:.75rem;text-transform:uppercase;white-space:nowrap}
+.fp-map{width:100%;max-height:340px;background:var(--surface);border-radius:var(--radius-sm)}
+.fp-cell{fill:var(--accent);stroke:var(--bg)}
+.preview-table th,.preview-table td{white-space:normal;max-width:none}
 </style>`;
 
 function page(body: string, status: number, brand?: string): Response {
@@ -350,34 +342,34 @@ export function renderFamilyReportPage(r: FamilyReport, expiresAt: string): stri
     ]) as Array<[string, string, string]>;
   const map = footprintSvg(r.footprint);
   return `
-  <section class="fr-hero" aria-labelledby="fr-h">
+  <section class="section" aria-labelledby="fr-h">
     <h1 id="fr-h">${esc(parent)}</h1>
     <p class="fr-note">One report over ${t.ventures} brand${t.ventures === 1 ? '' : 's'}: the company and every venture below it.
     Traffic on every code, never people.</p>
-    <div class="fr-tiles">
-      <div class="fr-tile"><div class="fr-num">${esc(plus(t.poster_scans, t.link_taps))}</div><div class="fr-note">Scans and taps, every venture</div></div>
-      <div class="fr-tile"><div class="fr-num">${t.events}</div><div class="fr-note">Events</div></div>
-      <div class="fr-tile"><div class="fr-num">${esc(plus(t.sponsor_displays, t.sponsor_taps))}</div><div class="fr-note">Sponsor displays and taps</div></div>
-      <div class="fr-tile"><div class="fr-num">${t.map_cells}</div><div class="fr-note">Areas on the map</div></div>
+    <div class="big-stats">
+      <div class="stat-card big-stat"><div class="stat-value">${esc(plus(t.poster_scans, t.link_taps))}</div><div class="stat-label">Scans and taps, every venture</div></div>
+      <div class="stat-card big-stat"><div class="stat-value">${t.events}</div><div class="stat-label">Events</div></div>
+      <div class="stat-card big-stat"><div class="stat-value">${esc(plus(t.sponsor_displays, t.sponsor_taps))}</div><div class="stat-label">Sponsor displays and taps</div></div>
+      <div class="stat-card big-stat"><div class="stat-value">${t.map_cells}</div><div class="stat-label">Areas on the map</div></div>
     </div>
   </section>
-  <section class="fr-sec" aria-labelledby="fp-h">
+  <section class="section" aria-labelledby="fp-h">
     <h2 id="fp-h">Footprint</h2>
     <p class="fr-note" id="fp-d">${t.map_cells} area${t.map_cells === 1 ? '' : 's'} and ${t.venues} venue${t.venues === 1 ? '' : 's'}. Each hexagon is a neighbourhood-sized area (about 5 km²), never an address; a darker one carries more scans.</p>
     ${map}
   </section>
-  <section class="fr-sec" aria-labelledby="v-h">
+  <section class="section" aria-labelledby="v-h">
     <h2 id="v-h">By venture</h2>
-    ${rows(['Venture', 'Events', 'Scans and taps'], ventures, 'by-venture')}
+    ${rows(['Venture', 'Events', 'Scans + taps'], ventures, 'by-venture')}
     <p class="fr-note">Each venture is counted on its own before it is added: a count under 5 is withheld and reads "${esc(fewerThan())}", and from 5 up each figure is rounded down to a multiple of 5.</p>
   </section>
-  <section class="fr-sec" aria-labelledby="s-h">
+  <section class="section" aria-labelledby="s-h">
     <h2 id="s-h">Sponsor reach</h2>
     <p class="fr-note">${t.businesses_on_show} sponsor${t.businesses_on_show === 1 ? '' : 's'} on show across the family. A sponsor appears only where the sponsor and the organizer both said yes.</p>
     ${r.sponsors.length ? `<p>${r.sponsors.map((s) => esc(s)).join(' · ')}</p>` : ''}
-    ${rows(['Venture', 'Logo displays', 'Sponsor taps'], sponsorRows, 'by-sponsor-venture')}
+    ${rows(['Venture', 'Logo displays', 'Taps'], sponsorRows, 'by-sponsor-venture')}
   </section>
-  <section class="fr-sec" aria-labelledby="ve-h">
+  <section class="section" aria-labelledby="ve-h">
     <h2 id="ve-h">By venue</h2>
     ${rows(
       ['Venue', 'Events', 'Scans'],
@@ -385,7 +377,7 @@ export function renderFamilyReportPage(r: FamilyReport, expiresAt: string): stri
       'by-venue'
     )}
   </section>
-  <section class="fr-sec" aria-labelledby="n-h">
+  <section class="section" aria-labelledby="n-h">
     <h2 id="n-h">By night</h2>
     ${rows(
       ['Night', 'Events', 'Scans'],
@@ -404,7 +396,7 @@ export async function handleFamilyReportPage(
   const claim = await verifyFamilyToken(env, new URL(request.url).searchParams.get('token'));
   if (!claim || !familyBrandAllowed(claim.brand)) {
     return page(
-      `<section class="fr-hero"><h1>This report link is not valid</h1>
+      `<section class="section"><h1>This report link is not valid</h1>
       <p class="fr-note">It may have expired. Ask the company that shared it for a new link.</p></section>`,
       401
     );
@@ -412,7 +404,7 @@ export async function handleFamilyReportPage(
   const report = await read(env, reqId, claim.brand, claim.dc);
   if (!report) {
     return page(
-      `<section class="fr-hero"><h1>The report could not be read</h1><p class="fr-note">Please try again in a minute.</p></section>`,
+      `<section class="section"><h1>The report could not be read</h1><p class="fr-note">Please try again in a minute.</p></section>`,
       503
     );
   }
