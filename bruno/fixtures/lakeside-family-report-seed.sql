@@ -48,6 +48,11 @@ ON CONFLICT(id) DO UPDATE SET brand_id = excluded.brand_id, status = 'active', i
   data_class = 'demo', h3_res7 = excluded.h3_res7, host_venue_id = excluded.host_venue_id,
   venue_canonical_id = NULL, event_correlation_id = NULL;
 
+-- OSE-2036: a live row is a verified row (active <=> qr_verified = 1), as every
+-- door in the Worker writes it. Run on every pass. Gate: seed-live-rows-verified.spec.ts
+UPDATE events SET qr_verified = CASE WHEN status = 'active' THEN 1 ELSE 0 END
+ WHERE id IN ('lkfr-co-1', 'lkfr-club-1', 'lkfr-club-2', 'lkfr-semipro-1', 'lkfr-league-1', 'lkfr-league-2', 'lkfr-league-3', 'lkfr-network-1');
+
 -- ── one poster per event ──
 INSERT INTO poster_deployments (id, event_id, qr_token, placement_label, placement_type, h3_res7, is_active)
 SELECT 'lkfr-pd-' || id, id, 'qrt_lkfr_' || id, 'Front door (practice)', 'venue', h3_res7, 1
