@@ -69,7 +69,12 @@ export interface CompetitionPageInput {
   tab?: string | null;
   /** The round asked for in `?round=` on the Rounds tab. */
   round?: string | null;
+  /** The page of the table asked for in `?page=` on the Table tab. */
+  page?: string | null;
 }
+
+/** Teams on one screen of the table; "More" shows the next ones (owner, 2026-11-27). */
+export const TABLE_PAGE = 6;
 
 /**
  * Tabs, not one long page (owner, 2026-11-27: reduce scrolling). Each tab is a
@@ -197,7 +202,23 @@ function renderStandings(input: CompetitionPageInput): string {
   const head = `<tr><th scope="col">#</th><th scope="col">Team</th><th scope="col"><abbr title="Won">W</abbr></th>${
     draws ? '<th scope="col"><abbr title="Ties">T</abbr></th>' : ''
   }<th scope="col"><abbr title="Lost">L</abbr></th><th scope="col"><abbr title="Score gap">+/-</abbr></th><th scope="col"><abbr title="Points">Pts</abbr></th></tr>`;
+  const pages = Math.max(1, Math.ceil(input.standings.length / TABLE_PAGE));
+  const asked = Number(input.page);
+  const page = Number.isInteger(asked) && asked >= 1 && asked <= pages ? asked : 1;
+  const more =
+    pages > 1
+      ? `<nav class="cp-tabs cp-gap" aria-label="Table pages">${
+          page > 1
+            ? `<a class="btn btn-secondary" href="?tab=table&amp;page=${page - 1}">‹ Back</a>`
+            : ''
+        }${
+          page < pages
+            ? `<a class="btn btn-outline" href="?tab=table&amp;page=${page + 1}" data-testid="competition-more">More ›</a>`
+            : ''
+        }</nav>`
+      : '';
   const rows = input.standings
+    .slice((page - 1) * TABLE_PAGE, page * TABLE_PAGE)
     .map(
       (r) =>
         `<tr data-testid="competition-standing"><td>${r.rank}</td><th scope="row">${esc(r.label)}</th><td>${r.won}</td>${
@@ -207,7 +228,7 @@ function renderStandings(input: CompetitionPageInput): string {
     .join('');
   return `<section class="card cp-gap" aria-labelledby="cp-table" data-testid="competition-standings">
         <h2 class="section-title" id="cp-table">Standings</h2>
-        <table><thead>${head}</thead><tbody>${rows}</tbody></table>
+        <table><thead>${head}</thead><tbody>${rows}</tbody></table>${more}
         ${deeperDive('How the table is ordered', input.ruleset.says, 'competition-rule')}
       </section>`;
 }

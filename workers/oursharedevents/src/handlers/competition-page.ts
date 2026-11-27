@@ -143,6 +143,7 @@ export async function handleCompetitionPage(
         // Only a known tab name is used (pickTab); the value is never echoed.
         tab: new URL(request.url).searchParams.get('tab'),
         round: new URL(request.url).searchParams.get('round'),
+        page: new URL(request.url).searchParams.get('page'),
       })
     );
     // Short and private: a score can be entered at any minute of a league night.

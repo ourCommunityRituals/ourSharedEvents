@@ -5,7 +5,12 @@
  * it instead. The outline uses the accent, so a user who needs the words to act
  * can see there is more to read.
  *
- * Native <details>, so it needs no script. Colours come from /ui.css only.
+ * Only for what helps, never for what a user must know to act: a must-know
+ * stays on the screen (owner, 2026-11-27).
+ *
+ * Native <details>, so it needs no script, opens and closes on a tap, Enter or
+ * Space, and tells a screen reader it is expanded or collapsed. The button keeps
+ * the 48 px tap height of every .btn. Colours come from /ui.css only.
  * `topic` names what it explains for a screen reader; `text` is escaped here.
  */
 import { escapeHtml as esc } from './html-escape';

@@ -47,6 +47,8 @@ import {
   slotFor,
 } from '../src/lib/competitions';
 import { matchAdminObjectTarget } from '../src/lib/admin-object-scope';
+import { renderCompetitionPage, TABLE_PAGE } from '../src/lib/competition-page-render';
+import { rulesetOf } from '../src/lib/competitions';
 
 interface TestEnv {
   DB: D1Database;
@@ -642,6 +644,48 @@ describe('the public schedule and standings page', () => {
     const r = await call('GET', `/competitions/${id}`, {});
     expect(r.text).not.toContain('<b>Rollers</b>');
     expect(r.text).toContain('&lt;b&gt;Rollers&lt;/b&gt;');
+  });
+});
+
+describe('a big league table', () => {
+  test('shows one screen of teams, and More shows the next ones', () => {
+    const standings = Array.from({ length: TABLE_PAGE + 4 }, (_, i) => ({
+      entry_id: `e${i}`,
+      label: `Team ${i + 1}`,
+      rank: i + 1,
+      played: 0,
+      won: 0,
+      drawn: 0,
+      lost: 0,
+      scored: 0,
+      conceded: 0,
+      diff: 0,
+      points: 0,
+    }));
+    const base = {
+      name: 'Big league',
+      format: 'league' as const,
+      status: 'active' as const,
+      starts_on: null,
+      ends_on: null,
+      ruleset: rulesetOf('win_loss'),
+      standings,
+      fixtures: [],
+      byes: new Map<number, string>(),
+      today: '2026-11-27',
+      tab: 'table',
+    };
+    const first = renderCompetitionPage(base);
+    expect(first.match(/data-testid="competition-standing"/g)).toHaveLength(TABLE_PAGE);
+    expect(first).toContain('href="?tab=table&amp;page=2"');
+    expect(first).toContain('Team 1<');
+    expect(first).not.toContain(`Team ${TABLE_PAGE + 1}<`);
+    const second = renderCompetitionPage({ ...base, page: '2' });
+    expect(second.match(/data-testid="competition-standing"/g)).toHaveLength(4);
+    expect(second).toContain(`Team ${TABLE_PAGE + 1}<`);
+    expect(second).not.toContain('data-testid="competition-more"');
+    // A page out of range falls back to the first screen.
+    expect(renderCompetitionPage({ ...base, page: '99' })).toContain('Team 1<');
   });
 });
 
