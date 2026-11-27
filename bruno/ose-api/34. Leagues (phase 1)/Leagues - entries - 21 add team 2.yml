@@ -1,0 +1,37 @@
+info:
+  name: "Leagues | entries | add team 2"
+  type: http
+  seq: 21
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/competitions/{{leagueId}}/entries"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"label\": \"CI Pallinos\", \"seed\": 2}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('leagues entry 2: 201, a team id of the grp_ shape', function () {
+          expect(res.getStatus()).to.eql(201);
+          expect(b.id).to.match(/^grp_[0-9a-f]{32}$/);
+          expect(b.entry.label).to.eql('CI Pallinos');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

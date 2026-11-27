@@ -75,7 +75,8 @@ export type AdminObjectScopeEnv = AdminEnv &
 export type AdminObjectTarget =
   | { kind: 'event'; id: string }
   | { kind: 'poster-deployment'; id: string }
-  | { kind: 'campaign'; id: string };
+  | { kind: 'campaign'; id: string }
+  | { kind: 'competition'; id: string };
 
 /**
  * Segments that sit where an id would but address a COLLECTION, not an object.
@@ -95,6 +96,10 @@ const ADMIN_POSTER_DEPLOYMENT_OBJECT_PATH = /^\/api\/v2\/admin\/poster-deploymen
 // A campaign and everything beneath it (S14: /placements/:placementId). The
 // collection itself (/api/v2/admin/campaigns) has no id and scopes its own SQL.
 const ADMIN_CAMPAIGN_OBJECT_PATH = /^\/api\/v2\/admin\/campaigns\/([^/]+)(?:\/.*)?$/;
+// A competition and everything beneath it (entries, schedule, fixtures,
+// results, the score screen; leagues phase 1). It carries its own brand_id and
+// created_by (migration 0125), as a campaign does.
+const ADMIN_COMPETITION_OBJECT_PATH = /^\/api\/v2\/admin\/competitions\/([^/]+)(?:\/.*)?$/;
 
 /**
  * Which object (if any) an admin request path addresses. Pure and total — no
@@ -123,6 +128,9 @@ export function matchAdminObjectTarget(pathname: string): AdminObjectTarget | nu
 
   const campaignMatch = pathname.match(ADMIN_CAMPAIGN_OBJECT_PATH);
   if (campaignMatch) return { kind: 'campaign', id: campaignMatch[1] };
+
+  const competitionMatch = pathname.match(ADMIN_COMPETITION_OBJECT_PATH);
+  if (competitionMatch) return { kind: 'competition', id: competitionMatch[1] };
 
   return null;
 }
@@ -226,7 +234,7 @@ export async function isAdminObjectInScope(
   const own =
     target.kind === 'event'
       ? ownerAndSql(rule, 'brand_id', 'created_by', { formsData: opts.formsData })
-      : target.kind === 'campaign' || target.kind === 'sponsor'
+      : target.kind === 'campaign' || target.kind === 'sponsor' || target.kind === 'competition'
         ? ownerAndSql(rule, 'brand_id', 'created_by')
         : ownerAndSql(rule, 'e.brand_id', 'e.created_by');
   const sql =
@@ -234,13 +242,15 @@ export async function isAdminObjectInScope(
       ? `SELECT 1 AS reachable FROM events WHERE id = ? AND brand_id IN (${placeholders})${own.sql} LIMIT 1`
       : target.kind === 'campaign'
         ? `SELECT 1 AS reachable FROM campaigns WHERE id = ? AND brand_id IN (${placeholders})${own.sql} LIMIT 1`
-        : target.kind === 'sponsor'
-          ? `SELECT 1 AS reachable FROM sponsor_business WHERE id = ? AND brand_id IN (${placeholders})${own.sql} LIMIT 1`
-          : target.kind === 'placement'
-            ? `SELECT 1 AS reachable FROM sponsor_placement sp
+        : target.kind === 'competition'
+          ? `SELECT 1 AS reachable FROM competitions WHERE id = ? AND brand_id IN (${placeholders})${own.sql} LIMIT 1`
+          : target.kind === 'sponsor'
+            ? `SELECT 1 AS reachable FROM sponsor_business WHERE id = ? AND brand_id IN (${placeholders})${own.sql} LIMIT 1`
+            : target.kind === 'placement'
+              ? `SELECT 1 AS reachable FROM sponsor_placement sp
            JOIN events e ON e.id = sp.event_id
           WHERE sp.id = ? AND e.brand_id IN (${placeholders})${own.sql} LIMIT 1`
-            : `SELECT 1 AS reachable FROM poster_deployments pd
+              : `SELECT 1 AS reachable FROM poster_deployments pd
            JOIN events e ON e.id = pd.event_id
           WHERE pd.id = ? AND e.brand_id IN (${placeholders})${own.sql} LIMIT 1`;
 
@@ -262,11 +272,13 @@ function notFound(request: Request, target: ScopedTarget): Response {
       ? 'Event'
       : target.kind === 'campaign'
         ? 'Campaign'
-        : target.kind === 'sponsor'
-          ? 'Sponsor'
-          : target.kind === 'placement'
-            ? target.label
-            : 'Poster deployment';
+        : target.kind === 'competition'
+          ? 'Competition'
+          : target.kind === 'sponsor'
+            ? 'Sponsor'
+            : target.kind === 'placement'
+              ? target.label
+              : 'Poster deployment';
   const rid = crypto.randomUUID ? crypto.randomUUID() : `req-${Date.now()}`;
   return Response.json(
     {

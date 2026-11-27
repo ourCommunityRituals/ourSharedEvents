@@ -111,6 +111,11 @@ const OUTSIDE_THE_FOLDER: Readonly<Record<string, { why: Why; reason: string }>>
   '/lineup': { why: 'old-address', reason: 'Forwards 301 to /events.' },
 
   // ── The site: not about one event ────────────────────────────────────────
+  '/competitions/:param': {
+    why: 'site',
+    reason:
+      "A league's schedule and standings (leagues phase 1). A league runs over many event nights, so it is not one event's screen; each night keeps its own event page and links stay there.",
+  },
   '/': { why: 'site', reason: 'Landing.' },
   '/home': { why: 'site', reason: 'Landing alias.' },
   '/welcome': { why: 'site', reason: 'Landing alias.' },

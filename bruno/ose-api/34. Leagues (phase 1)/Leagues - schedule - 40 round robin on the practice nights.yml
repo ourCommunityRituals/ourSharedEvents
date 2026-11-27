@@ -1,0 +1,44 @@
+info:
+  name: "Leagues | schedule | round robin on the practice nights"
+  type: http
+  seq: 40
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/competitions/{{leagueId}}/schedule"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"event_ids\": [\"lakeside-league-night-3\", \"lakeside-league-night-4\", \"lakeside-league-night-5\"], \"slots\": [\"Court 1\", \"Court 2\"], \"start_time\": \"19:00\", \"slot_minutes\": 30}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        const f = b.fixtures || [];
+        test('leagues schedule: 200, six matches in three rounds', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(f.length).to.eql(6);
+          expect(f.map(function (x) { return x.round; })).to.eql([1, 1, 2, 2, 3, 3]);
+        });
+        test('leagues schedule: round 1 on night 3, two courts at 19:00', function () {
+          const r1 = f.filter(function (x) { return x.round === 1; });
+          expect(r1.every(function (x) { return x.event_id === 'lakeside-league-night-3' && x.slot_time === '19:00'; })).to.equal(true);
+          expect(r1.map(function (x) { return x.slot_label; })).to.eql(['Court 1', 'Court 2']);
+        });
+        bru.setVar('leagueFixtureId', (f[0] || {}).id || 'fix_missing');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

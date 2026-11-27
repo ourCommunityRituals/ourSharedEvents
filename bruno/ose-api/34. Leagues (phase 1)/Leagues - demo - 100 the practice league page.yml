@@ -1,0 +1,37 @@
+info:
+  name: "Leagues | demo | the practice league page"
+  type: http
+  seq: 100
+
+http:
+  method: GET
+  url: "{{baseUrl}}/competitions/cmp_1a6e51de0c1b00000000000000000001"
+  headers:
+    - name: Accept
+      value: text/html
+    - name: X-OCR-CI
+      value: "{{ocrCiEdgeToken}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        var edge = res.getStatus() === 403 && (res.getHeader('cf-mitigated') || '').length > 0;
+        if (edge) { test('EDGE: the page read was challenged before the Worker ran (OSE-939); nothing below was checked', function () { expect(edge).to.equal(true); }); }
+        var body = typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody());
+        if (!edge) {
+          test('leagues demo: 200, the practice league with its six teams', function () {
+            expect(res.getStatus()).to.eql(200);
+            expect(body).to.include('Fall Bar League (practice)');
+            expect((body.match(/data-testid="competition-standing"/g) || []).length).to.eql(6);
+            expect((body.match(/data-testid="competition-round"/g) || []).length).to.eql(5);
+          });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false
