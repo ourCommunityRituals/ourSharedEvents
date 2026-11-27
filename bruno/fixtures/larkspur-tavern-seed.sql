@@ -112,24 +112,79 @@ INSERT INTO poster_deployments (id, event_id, qr_token, placement_label) VALUES
 ON CONFLICT(id) DO UPDATE SET event_id = excluded.event_id, qr_token = excluded.qr_token,
   placement_label = excluded.placement_label;
 
--- Scan rows by (poster, hour, how many). A recursive counter writes n rows per
--- line with fixed ids, so a rerun replaces the same rows.
+-- Scan rows, one per scan, with fixed ids so a rerun replaces the same rows
+-- (written out: D1 seeds hold no compound SELECT, OSE-2214).
 --   trivia  door  19:00 x14, 20:00 x6   table 19:00 x9, 20:00 x11, 21:00 x3 (withheld)
 --   pantry  door  18:00 x8,  19:00 x12  board 18:00 x5
-INSERT OR REPLACE INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket)
-WITH RECURSIVE
-  plan(pd, ev, bucket, n) AS (VALUES
-    ('pd_lks_trivia_door',  'lks-trivia-nov-2026',   '2026-11-04T19:00', 14),
-    ('pd_lks_trivia_door',  'lks-trivia-nov-2026',   '2026-11-04T20:00', 6),
-    ('pd_lks_trivia_table', 'lks-trivia-nov-2026',   '2026-11-04T19:00', 9),
-    ('pd_lks_trivia_table', 'lks-trivia-nov-2026',   '2026-11-04T20:00', 11),
-    ('pd_lks_trivia_table', 'lks-trivia-nov-2026',   '2026-11-04T21:00', 3),
-    ('pd_lks_pantry_door',  'lks-pantry-drive-2026', '2026-10-16T18:00', 8),
-    ('pd_lks_pantry_door',  'lks-pantry-drive-2026', '2026-10-16T19:00', 12),
-    ('pd_lks_pantry_board', 'lks-pantry-drive-2026', '2026-10-16T18:00', 5)),
-  k(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM k WHERE i < 20)
-SELECT 'spe_' || substr(pd, 4) || '_' || substr(bucket, 12, 2) || '_' || i, ev, pd, bucket
-  FROM plan JOIN k ON k.i <= plan.n;
+INSERT OR REPLACE INTO scan_placement_events (id, event_id, poster_deployment_id, scan_bucket) VALUES
+  ('spe_lks_trivia_door_19_1', 'lks-trivia-nov-2026', 'pd_lks_trivia_door', '2026-11-04T19:00'),
+  ('spe_lks_trivia_door_19_2', 'lks-trivia-nov-2026', 'pd_lks_trivia_door', '2026-11-04T19:00'),
+  ('spe_lks_trivia_door_19_3', 'lks-trivia-nov-2026', 'pd_lks_trivia_door', '2026-11-04T19:00'),
+  ('spe_lks_trivia_door_19_4', 'lks-trivia-nov-2026', 'pd_lks_trivia_door', '2026-11-04T19:00'),
+  ('spe_lks_trivia_door_19_5', 'lks-trivia-nov-2026', 'pd_lks_trivia_door', '2026-11-04T19:00'),
+  ('spe_lks_trivia_door_19_6', 'lks-trivia-nov-2026', 'pd_lks_trivia_door', '2026-11-04T19:00'),
+  ('spe_lks_trivia_door_19_7', 'lks-trivia-nov-2026', 'pd_lks_trivia_door', '2026-11-04T19:00'),
+  ('spe_lks_trivia_door_19_8', 'lks-trivia-nov-2026', 'pd_lks_trivia_door', '2026-11-04T19:00'),
+  ('spe_lks_trivia_door_19_9', 'lks-trivia-nov-2026', 'pd_lks_trivia_door', '2026-11-04T19:00'),
+  ('spe_lks_trivia_door_19_10', 'lks-trivia-nov-2026', 'pd_lks_trivia_door', '2026-11-04T19:00'),
+  ('spe_lks_trivia_door_19_11', 'lks-trivia-nov-2026', 'pd_lks_trivia_door', '2026-11-04T19:00'),
+  ('spe_lks_trivia_door_19_12', 'lks-trivia-nov-2026', 'pd_lks_trivia_door', '2026-11-04T19:00'),
+  ('spe_lks_trivia_door_19_13', 'lks-trivia-nov-2026', 'pd_lks_trivia_door', '2026-11-04T19:00'),
+  ('spe_lks_trivia_door_19_14', 'lks-trivia-nov-2026', 'pd_lks_trivia_door', '2026-11-04T19:00'),
+  ('spe_lks_trivia_door_20_1', 'lks-trivia-nov-2026', 'pd_lks_trivia_door', '2026-11-04T20:00'),
+  ('spe_lks_trivia_door_20_2', 'lks-trivia-nov-2026', 'pd_lks_trivia_door', '2026-11-04T20:00'),
+  ('spe_lks_trivia_door_20_3', 'lks-trivia-nov-2026', 'pd_lks_trivia_door', '2026-11-04T20:00'),
+  ('spe_lks_trivia_door_20_4', 'lks-trivia-nov-2026', 'pd_lks_trivia_door', '2026-11-04T20:00'),
+  ('spe_lks_trivia_door_20_5', 'lks-trivia-nov-2026', 'pd_lks_trivia_door', '2026-11-04T20:00'),
+  ('spe_lks_trivia_door_20_6', 'lks-trivia-nov-2026', 'pd_lks_trivia_door', '2026-11-04T20:00'),
+  ('spe_lks_trivia_table_19_1', 'lks-trivia-nov-2026', 'pd_lks_trivia_table', '2026-11-04T19:00'),
+  ('spe_lks_trivia_table_19_2', 'lks-trivia-nov-2026', 'pd_lks_trivia_table', '2026-11-04T19:00'),
+  ('spe_lks_trivia_table_19_3', 'lks-trivia-nov-2026', 'pd_lks_trivia_table', '2026-11-04T19:00'),
+  ('spe_lks_trivia_table_19_4', 'lks-trivia-nov-2026', 'pd_lks_trivia_table', '2026-11-04T19:00'),
+  ('spe_lks_trivia_table_19_5', 'lks-trivia-nov-2026', 'pd_lks_trivia_table', '2026-11-04T19:00'),
+  ('spe_lks_trivia_table_19_6', 'lks-trivia-nov-2026', 'pd_lks_trivia_table', '2026-11-04T19:00'),
+  ('spe_lks_trivia_table_19_7', 'lks-trivia-nov-2026', 'pd_lks_trivia_table', '2026-11-04T19:00'),
+  ('spe_lks_trivia_table_19_8', 'lks-trivia-nov-2026', 'pd_lks_trivia_table', '2026-11-04T19:00'),
+  ('spe_lks_trivia_table_19_9', 'lks-trivia-nov-2026', 'pd_lks_trivia_table', '2026-11-04T19:00'),
+  ('spe_lks_trivia_table_20_1', 'lks-trivia-nov-2026', 'pd_lks_trivia_table', '2026-11-04T20:00'),
+  ('spe_lks_trivia_table_20_2', 'lks-trivia-nov-2026', 'pd_lks_trivia_table', '2026-11-04T20:00'),
+  ('spe_lks_trivia_table_20_3', 'lks-trivia-nov-2026', 'pd_lks_trivia_table', '2026-11-04T20:00'),
+  ('spe_lks_trivia_table_20_4', 'lks-trivia-nov-2026', 'pd_lks_trivia_table', '2026-11-04T20:00'),
+  ('spe_lks_trivia_table_20_5', 'lks-trivia-nov-2026', 'pd_lks_trivia_table', '2026-11-04T20:00'),
+  ('spe_lks_trivia_table_20_6', 'lks-trivia-nov-2026', 'pd_lks_trivia_table', '2026-11-04T20:00'),
+  ('spe_lks_trivia_table_20_7', 'lks-trivia-nov-2026', 'pd_lks_trivia_table', '2026-11-04T20:00'),
+  ('spe_lks_trivia_table_20_8', 'lks-trivia-nov-2026', 'pd_lks_trivia_table', '2026-11-04T20:00'),
+  ('spe_lks_trivia_table_20_9', 'lks-trivia-nov-2026', 'pd_lks_trivia_table', '2026-11-04T20:00'),
+  ('spe_lks_trivia_table_20_10', 'lks-trivia-nov-2026', 'pd_lks_trivia_table', '2026-11-04T20:00'),
+  ('spe_lks_trivia_table_20_11', 'lks-trivia-nov-2026', 'pd_lks_trivia_table', '2026-11-04T20:00'),
+  ('spe_lks_trivia_table_21_1', 'lks-trivia-nov-2026', 'pd_lks_trivia_table', '2026-11-04T21:00'),
+  ('spe_lks_trivia_table_21_2', 'lks-trivia-nov-2026', 'pd_lks_trivia_table', '2026-11-04T21:00'),
+  ('spe_lks_trivia_table_21_3', 'lks-trivia-nov-2026', 'pd_lks_trivia_table', '2026-11-04T21:00'),
+  ('spe_lks_pantry_door_18_1', 'lks-pantry-drive-2026', 'pd_lks_pantry_door', '2026-10-16T18:00'),
+  ('spe_lks_pantry_door_18_2', 'lks-pantry-drive-2026', 'pd_lks_pantry_door', '2026-10-16T18:00'),
+  ('spe_lks_pantry_door_18_3', 'lks-pantry-drive-2026', 'pd_lks_pantry_door', '2026-10-16T18:00'),
+  ('spe_lks_pantry_door_18_4', 'lks-pantry-drive-2026', 'pd_lks_pantry_door', '2026-10-16T18:00'),
+  ('spe_lks_pantry_door_18_5', 'lks-pantry-drive-2026', 'pd_lks_pantry_door', '2026-10-16T18:00'),
+  ('spe_lks_pantry_door_18_6', 'lks-pantry-drive-2026', 'pd_lks_pantry_door', '2026-10-16T18:00'),
+  ('spe_lks_pantry_door_18_7', 'lks-pantry-drive-2026', 'pd_lks_pantry_door', '2026-10-16T18:00'),
+  ('spe_lks_pantry_door_18_8', 'lks-pantry-drive-2026', 'pd_lks_pantry_door', '2026-10-16T18:00'),
+  ('spe_lks_pantry_door_19_1', 'lks-pantry-drive-2026', 'pd_lks_pantry_door', '2026-10-16T19:00'),
+  ('spe_lks_pantry_door_19_2', 'lks-pantry-drive-2026', 'pd_lks_pantry_door', '2026-10-16T19:00'),
+  ('spe_lks_pantry_door_19_3', 'lks-pantry-drive-2026', 'pd_lks_pantry_door', '2026-10-16T19:00'),
+  ('spe_lks_pantry_door_19_4', 'lks-pantry-drive-2026', 'pd_lks_pantry_door', '2026-10-16T19:00'),
+  ('spe_lks_pantry_door_19_5', 'lks-pantry-drive-2026', 'pd_lks_pantry_door', '2026-10-16T19:00'),
+  ('spe_lks_pantry_door_19_6', 'lks-pantry-drive-2026', 'pd_lks_pantry_door', '2026-10-16T19:00'),
+  ('spe_lks_pantry_door_19_7', 'lks-pantry-drive-2026', 'pd_lks_pantry_door', '2026-10-16T19:00'),
+  ('spe_lks_pantry_door_19_8', 'lks-pantry-drive-2026', 'pd_lks_pantry_door', '2026-10-16T19:00'),
+  ('spe_lks_pantry_door_19_9', 'lks-pantry-drive-2026', 'pd_lks_pantry_door', '2026-10-16T19:00'),
+  ('spe_lks_pantry_door_19_10', 'lks-pantry-drive-2026', 'pd_lks_pantry_door', '2026-10-16T19:00'),
+  ('spe_lks_pantry_door_19_11', 'lks-pantry-drive-2026', 'pd_lks_pantry_door', '2026-10-16T19:00'),
+  ('spe_lks_pantry_door_19_12', 'lks-pantry-drive-2026', 'pd_lks_pantry_door', '2026-10-16T19:00'),
+  ('spe_lks_pantry_board_18_1', 'lks-pantry-drive-2026', 'pd_lks_pantry_board', '2026-10-16T18:00'),
+  ('spe_lks_pantry_board_18_2', 'lks-pantry-drive-2026', 'pd_lks_pantry_board', '2026-10-16T18:00'),
+  ('spe_lks_pantry_board_18_3', 'lks-pantry-drive-2026', 'pd_lks_pantry_board', '2026-10-16T18:00'),
+  ('spe_lks_pantry_board_18_4', 'lks-pantry-drive-2026', 'pd_lks_pantry_board', '2026-10-16T18:00'),
+  ('spe_lks_pantry_board_18_5', 'lks-pantry-drive-2026', 'pd_lks_pantry_board', '2026-10-16T18:00');
 
 -- When the report was materialized (the builder reads only MAX(computed_at)).
 INSERT INTO scan_aggregates (id, event_id, bucket_date, bucket_hour, total_scans, distinct_agent_hashes, computed_at)
