@@ -80,3 +80,10 @@ VALUES ('mdl-showcase-spring-2027', 'meadowlark-circus', 'Spring student showcas
 ON CONFLICT(id) DO UPDATE SET brand_id = 'meadowlark-circus', status = 'active', is_published = 0,
   data_class = 'synthetic', h3_res7 = '872664c1affffff', host_venue_id = 'ven_3ead0a12c1c000000000000000000001',
   venue_canonical_id = NULL, event_correlation_id = NULL;
+
+-- OSE-2036: a live row is a verified row (active <=> qr_verified = 1), as every
+-- door in the Worker writes it. Run on every pass, so a row seeded before the
+-- rule is corrected too. Gate: workers/oursharedevents/tests/seed-live-rows-verified.spec.ts
+UPDATE events SET qr_verified = CASE WHEN status = 'active' THEN 1 ELSE 0 END
+ WHERE id IN ('mdl-classes-winter-2027', 'mdl-classes-spring-2027', 'mdl-schools-residency-2027',
+              'mdl-parties-birthday-2027', 'mdl-showcase-spring-2027');
