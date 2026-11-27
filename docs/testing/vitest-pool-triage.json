@@ -4192,7 +4192,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch, createExecutionContext, waitOnExecutionContext",
-      "testCount": 27
+      "testCount": 28
     },
     {
       "file": "workers/oursharedevents/tests/vote-flood.spec.ts",

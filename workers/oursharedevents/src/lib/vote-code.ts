@@ -108,7 +108,10 @@ async function view(
   const url = voteCodeUrl(origin, row.qr_token, stamp);
   let qr = '';
   try {
-    qr = generateQrCode(url, { errorCorrection: 'M', scale: 4 });
+    // Level L: the stamped URL runs past the 122 bytes a level-M QR holds on
+    // a host as long as staging's; L holds 154. The code is shown on a screen,
+    // not printed, so the lower error correction costs nothing in practice.
+    qr = generateQrCode(url, { errorCorrection: 'L', scale: 4 });
   } catch {
     qr = '';
   }

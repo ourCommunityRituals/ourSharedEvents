@@ -48,7 +48,18 @@ runtime:
             expect(frag === '').to.eql(true);
             expect(pathOnly === '/events/' + night + '/vote').to.eql(true);
           });
-          test('OSE-2234 scan: a stale scan sets no cookie', function () { expect(!res.getHeader('set-cookie')).to.eql(true); });
+          // Cookies the edge may set (names starting __cf, _cf or cf_) are
+          // Cloudflare's own, not the Worker's (as in folder 26, scan 76).
+          // Only the names are read, never a value.
+          var workerCookies = [];
+          [].concat(res.getHeader('set-cookie') || []).forEach(function (h) {
+            String(h).split(/,(?=\s*[A-Za-z0-9_.-]+=)/).forEach(function (c) {
+              var name = c.split('=')[0].trim();
+              if (name && !/^(__cf|_cf|cf_)/i.test(name)) workerCookies.push(name);
+            });
+          });
+          console.log('OSE-2234 stale scan worker cookie names: ' + (workerCookies.join(',') || '(none)'));
+          test('OSE-2234 scan: a stale scan sets no cookie of the Worker', function () { expect(workerCookies).to.eql([]); });
         }
 
 settings:
