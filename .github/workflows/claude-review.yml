@@ -235,7 +235,7 @@ jobs:
 
       # SHA-pinned (supply-chain): a mutable @v1 tag can be force-pushed to run
       # attacker code with this job's Claude credentials + write scopes. Bump via Dependabot.
-      - uses: anthropics/claude-code-action@fa2b2666b747000bf42767d1f332065b375e3c8f # v1
+      - uses: anthropics/claude-code-action@f431adaf77e0fecf918431e75a2b5b45b85af002 # v1
         id: claude-review
         if: steps.check-key.outputs.skip != 'true' && steps.charter.outputs.skip != 'true'
         continue-on-error: true # the next step decides; a failed review goes red, not green
@@ -315,7 +315,7 @@ jobs:
         if: steps.check-key.outputs.skip != 'true'
 
       # No `prompt`: tag mode answers the @claude comment itself.
-      - uses: anthropics/claude-code-action@fa2b2666b747000bf42767d1f332065b375e3c8f # v1
+      - uses: anthropics/claude-code-action@f431adaf77e0fecf918431e75a2b5b45b85af002 # v1
         if: steps.check-key.outputs.skip != 'true'
         continue-on-error: true
         with:
