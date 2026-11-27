@@ -351,6 +351,7 @@
       "tests/live-off-map-by-link.spec.ts": 3600,
       "tests/map-areas-route.spec.ts": 2300,
       "tests/map-default.spec.ts": 3700,
+      "tests/map-page-csp.spec.ts": 3500,
       "tests/migration-smoke.spec.ts": 2700,
       "tests/monetization-gate.spec.ts": 2200,
       "tests/never-who-disclosure.spec.ts": 2300,
