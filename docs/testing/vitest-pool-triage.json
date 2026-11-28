@@ -1350,7 +1350,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
-      "testCount": 9
+      "testCount": 12
     },
     {
       "file": "workers/oursharedevents/tests/event-partners.spec.ts",

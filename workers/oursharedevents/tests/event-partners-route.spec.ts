@@ -15,13 +15,18 @@
  *      public body reads "Co-hosted with ... (public body)";
  *   5. the partner reads the event's floored total only while both accept, and
  *      it is the organizer's own figure; never a per-stop row;
- *   6. each write is in the audit log.
+ *   6. each write is in the audit log;
+ *   7. a re-invite after a withdrawal, or with a new name, kind or public-body
+ *      mark, is off until the partner answers again; the same offer again
+ *      keeps the answer.
  *
  * @born-red owner 2026-11-28 | method: one fault at a time, each restored:
  *   1. partnerScope answering every brand ('1 = 1'): 2 red;
  *   2. the counts read without the "both accept" check: 1 red;
  *   3. the page query without partnerOnSql: 2 red;
- *   4. respond without `organizer_accepted = 1` in offeredLink: 1 red.
+ *   4. respond without `organizer_accepted = 1` in offeredLink: 1 red;
+ *   5. the re-invite keeping partner_accepted as it stands (the pre-fix
+ *      upsert): 4 red in "a new invite asks again" (2026-11-28 follow-up).
  * date: 2026-11-28
  */
 
@@ -280,6 +285,50 @@ describe('the partner side', () => {
     expect(
       (await call('POST', `/api/v2/admin/events/${WALK}/partners/${id}/withdraw`, C, {})).status
     ).toBe(404);
+  });
+});
+
+describe('a new invite asks again', () => {
+  const accept = (id: string) =>
+    call('POST', `/api/v2/admin/partner-links/${id}/respond`, B, { accept: true });
+
+  test('the same offer again keeps the answer', async () => {
+    const id = (await invite(A, { partner_brand_id: BRAND_B, partner_name: 'Hollyhock Eats' })).json
+      .partner.id as string;
+    await accept(id);
+    const again = await invite(A, { partner_brand_id: BRAND_B, partner_name: 'Hollyhock Eats' });
+    expect(again.json.partner).toMatchObject({ partner_accepted: true, on: true });
+    expect(await page()).toContain('With Hollyhock Eats');
+  });
+
+  test('a re-invite after a withdrawal is off until the partner answers again', async () => {
+    const id = (await invite(A, { partner_brand_id: BRAND_B, partner_name: 'Hollyhock Eats' })).json
+      .partner.id as string;
+    await accept(id);
+    await call('POST', `/api/v2/admin/events/${WALK}/partners/${id}/withdraw`, A, {});
+    const again = await invite(A, { partner_brand_id: BRAND_B, partner_name: 'Hollyhock Eats' });
+    expect(again.json.partner).toMatchObject({ partner_accepted: null, on: false });
+    expect(await page()).not.toContain('Hollyhock Eats');
+    expect((await call('GET', `/api/v2/admin/partner-links/${id}/counts`, B)).status).toBe(404);
+    await accept(id);
+    expect(await page()).toContain('With Hollyhock Eats');
+  });
+
+  test.each([
+    ['a new name', { partner_name: 'Hollyhock Eats and Drinks' }],
+    ['a new kind', { kind: 'co_host' }],
+    ['the public-body mark', { is_public_body: true }],
+  ])('%s while the link is on is off until the partner answers again', async (_n, change) => {
+    const id = (await invite(A, { partner_brand_id: BRAND_B, partner_name: 'Hollyhock Eats' })).json
+      .partner.id as string;
+    await accept(id);
+    const again = await invite(A, {
+      partner_brand_id: BRAND_B,
+      partner_name: 'Hollyhock Eats',
+      ...change,
+    });
+    expect(again.json.partner).toMatchObject({ partner_accepted: null, on: false });
+    expect(await page()).not.toContain('data-testid="event-partners"');
   });
 });
 
