@@ -269,6 +269,26 @@ describe('A11Y-7 / OSE-1761: event page in Spanish with the language switch', ()
     expect(link?.textContent).toBe('Inglés');
   });
 
+  // Owner 2026-11-28: the foot-of-page languages are one chip that opens a card.
+  // Open it, so axe sees every choice, its flag and its name.
+  for (const lang of ['es', 'ar'] as const) {
+    test(`pre-event page with the language chip open, ${lang}`, async () => {
+      const html = renderPreEventHtml(row, SHARE, undefined, { lang, pageQuery: '' }).replace(
+        '<details data-testid="language-switch-choice">',
+        '<details open data-testid="language-switch-choice">'
+      );
+      expect(html, 'the chip opened').toContain(
+        '<details open data-testid="language-switch-choice">'
+      );
+      await scanPage(`${lang} pre-event page, language chip open`, html);
+      const chip = document.querySelector('[data-testid="language-switch-chip"]');
+      expect(chip?.getAttribute('aria-label')).toBeTruthy();
+      const links = document.querySelectorAll('[data-testid="language-switch-card"] a');
+      expect(links.length).toBeGreaterThan(0);
+      for (const a of links) expect(a.textContent?.trim()).not.toBe('');
+    });
+  }
+
   // OSE-1937 (epic OSE-1927): the header Language menu with every part open, the
   // wide-screen list, the phone menu and its Language list, so axe sees all of it.
   // Then the rules a menu can break that are not in wcag2a/aa: a second

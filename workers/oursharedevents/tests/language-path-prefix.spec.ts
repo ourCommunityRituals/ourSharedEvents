@@ -106,8 +106,31 @@ describe('OSE-1761 | the prefix renders the page in that language', () => {
     // The switch: a plain link to English, named in Spanish ("Inglés"), in a group named in Spanish.
     expect(html).toContain('aria-label="Idioma"');
     expect(html).toMatch(
-      new RegExp(`<a lang="es" hreflang="en"[^>]*href="${readablePath(e)}">Inglés</a>`)
+      new RegExp(`<a lang="es" hreflang="en"[^>]*href="${readablePath(e)}"><img [^>]*>Inglés</a>`)
     );
+  });
+
+  test('the served page folds its languages into one closed chip, and every flag it shows answers here', async () => {
+    const e = await publicEvent('Feria de flores');
+    const html = await (await get(`/es/events/${e.id}/${e.slug}`)).text();
+    // Owner 2026-11-28: one chip at the foot of the page, closed, naming Spanish.
+    expect(html.match(/data-testid="language-switch-choice"/g)?.length).toBe(1);
+    expect(html).toContain('<details data-testid="language-switch-choice">');
+    expect(html).toMatch(
+      /data-testid="language-switch-chip"><img class="ose-lang-flag" src="\/flags\/es\.svg"[^>]*><span lang="es">Español<\/span>/
+    );
+    expect(html).toContain('.ose-lang-chip {');
+    // Each flag in the card is served by this worker, as an image, from this site.
+    const flags = [...html.matchAll(/class="ose-lang-flag" src="(\/flags\/[a-z-]+\.svg)"/g)].map(
+      (m) => m[1]
+    );
+    expect(flags.length).toBeGreaterThan(1);
+    for (const src of new Set(flags)) {
+      const res = await get(src);
+      expect(res.status, src).toBe(200);
+      expect(res.headers.get('content-type'), src).toContain('image/svg+xml');
+      expect(res.headers.get('set-cookie'), src).toBeNull();
+    }
   });
 
   test('/es/events/<id> without the name is the same Spanish page', async () => {
@@ -143,7 +166,9 @@ describe('OSE-1761 | the prefix renders the page in that language', () => {
     expect(html).toContain('Share this event');
     expect(html).toContain('aria-label="Language"');
     expect(html).toMatch(
-      new RegExp(`<a lang="es" hreflang="es"[^>]*href="/es${readablePath(e)}">Español</a>`)
+      new RegExp(
+        `<a lang="es" hreflang="es"[^>]*href="/es${readablePath(e)}"><img [^>]*>Español</a>`
+      )
     );
     // English canonical is the bare address; the Spanish sibling is named.
     expect(html).toContain(`<link rel="canonical" href="${ORIGIN}${readablePath(e)}"`);
@@ -158,7 +183,7 @@ describe('OSE-1761 | the prefix renders the page in that language', () => {
     expect(html).toContain(`<link rel="canonical" href="${ORIGIN}/es${readablePath(e)}"`);
     // The way back to English is a link to the unprefixed address.
     expect(html).toMatch(
-      new RegExp(`<a lang="es" hreflang="en"[^>]*href="${readablePath(e)}">Inglés</a>`)
+      new RegExp(`<a lang="es" hreflang="en"[^>]*href="${readablePath(e)}"><img [^>]*>Inglés</a>`)
     );
   });
 

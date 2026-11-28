@@ -316,12 +316,12 @@ describe('Spanish /events and landing | no English of ours', () => {
   it('the language switch names English in Spanish and keeps the filters', async () => {
     const list = await events('?when=weekend&q=zzquery', ROWS);
     expect(list).toContain(
-      '<a lang="es" hreflang="en" data-testid="language-switch-en" href="/events?when=weekend&amp;q=zzquery">Inglés</a>'
+      '<a lang="es" hreflang="en" data-testid="language-switch-en" href="/events?when=weekend&amp;q=zzquery"><img class="ose-lang-flag" src="/flags/en.svg" alt="" width="21" height="14" loading="lazy">Inglés</a>'
     );
     expect(list).toContain('aria-label="Idioma"');
     const home = await landing('?zip=60406', ROWS);
     expect(home).toContain(
-      '<a lang="es" hreflang="en" data-testid="language-switch-en" href="/?zip=60406">Inglés</a>'
+      '<a lang="es" hreflang="en" data-testid="language-switch-en" href="/?zip=60406"><img class="ose-lang-flag" src="/flags/en.svg" alt="" width="21" height="14" loading="lazy">Inglés</a>'
     );
     // A zip we could not find is not carried over.
     expect(await landing('?zip=00000', ROWS)).toContain(
@@ -356,10 +356,10 @@ describe('Spanish /events and landing | no English of ours', () => {
   it('the English pages offer Spanish by its own name', async () => {
     const list = await events('?when=past', ROWS, 'en');
     expect(list).toContain(
-      '<a lang="es" hreflang="es" data-testid="language-switch-es" href="/es/events?when=past">Español</a>'
+      '<a lang="es" hreflang="es" data-testid="language-switch-es" href="/es/events?when=past"><img class="ose-lang-flag" src="/flags/es.svg" alt="" width="21" height="14" loading="lazy">Español</a>'
     );
     expect(await landing('', ROWS, 'en')).toContain(
-      '<a lang="es" hreflang="es" data-testid="language-switch-es" href="/es/">Español</a>'
+      '<a lang="es" hreflang="es" data-testid="language-switch-es" href="/es/"><img class="ose-lang-flag" src="/flags/es.svg" alt="" width="21" height="14" loading="lazy">Español</a>'
     );
   });
 

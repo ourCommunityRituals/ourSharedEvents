@@ -257,7 +257,15 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
       new RegExp(`/es${readable}$`)
     );
 
-    // The switch: a link, no button or script behind it, with a 44 px target.
+    // The switch (owner 2026-11-28): one closed chip naming Spanish. A tap opens
+    // a card of plain links, no script behind them, each a 44 px target.
+    const chip = page.locator('[data-testid="language-switch-chip"]');
+    await expect(chip).toContainText('Español');
+    const chipBox = await chip.boundingBox();
+    expect(chipBox?.height ?? 0, 'chip height').toBeGreaterThanOrEqual(44);
+    await expect(page.locator('[data-testid="language-switch-card"]')).toBeHidden();
+    await chip.click();
+    await expect(page.locator('[data-testid="language-switch-card"]')).toBeVisible();
     const toEnglish = page.locator('[data-testid="language-switch-en"]');
     await expect(toEnglish).toHaveText('Inglés');
     expect(await toEnglish.evaluate((el) => el.tagName)).toBe('A');
@@ -268,6 +276,7 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
     await expect(page).toHaveURL(`${BASE_URL}${readable}`);
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 
+    await page.locator('[data-testid="language-switch-chip"]').click();
     await page.locator('[data-testid="language-switch-es"]').click();
     await expect(page).toHaveURL(`${BASE_URL}/es${readable}`);
     await expect(page.locator('html')).toHaveAttribute('lang', 'es');
@@ -380,12 +389,14 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
       /[^s]\/events$/
     );
 
+    await page.locator('[data-testid="language-switch-chip"]').click();
     const toEnglish = page.locator('[data-testid="language-switch-en"]');
     await expect(toEnglish).toHaveText('Inglés');
     await toEnglish.click();
     await expect(page).toHaveURL(`${BASE_URL}/events${search}`);
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
     await expect(page.locator('[data-testid="disc-go"]')).toHaveText('Search');
+    await page.locator('[data-testid="language-switch-chip"]').click();
     await page.locator('[data-testid="language-switch-es"]').click();
     await expect(page).toHaveURL(`${BASE_URL}/es/events${search}`);
     await expect(page.locator('html')).toHaveAttribute('lang', 'es');
@@ -620,7 +631,7 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
         const small = await page.evaluate(() => {
           const out: string[] = [];
           for (const el of document.querySelectorAll<HTMLElement>(
-            'input:not([type="hidden"]):not([type="radio"]):not(.toggle-radio), button, .disc-chip, .ose-lang a, .btn'
+            'input:not([type="hidden"]):not([type="radio"]):not(.toggle-radio), button, .disc-chip, .ose-lang-chip, .ose-lang a, .btn'
           )) {
             const box = el.getBoundingClientRect();
             if (box.width === 0 && box.height === 0) continue; // not shown
@@ -632,6 +643,30 @@ test.describe('Language path prefix — /es/ on staging (OSE-1761)', () => {
           return out;
         });
         expect(small, `${path} controls under the floor`).toEqual([]);
+
+        // The language chip opens a card that fits one phone screen, with no
+        // sideways scroll, and every choice in it keeps the 44 px floor.
+        const chip = page.locator('[data-testid="language-switch-chip"]');
+        if ((await chip.count()) > 0) {
+          await chip.click();
+          const card = await page.locator('[data-testid="language-switch-card"]').boundingBox();
+          const viewport = page.viewportSize();
+          expect(card?.height ?? 0, `${path} language card height`).toBeLessThanOrEqual(
+            viewport?.height ?? 0
+          );
+          const wide = await page.evaluate(
+            () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+          );
+          expect(wide, `${path} scrolls sideways with the language card open`).toBeLessThanOrEqual(
+            0
+          );
+          const shortLinks = await page.evaluate(() =>
+            [...document.querySelectorAll<HTMLElement>('[data-testid="language-switch-card"] a')]
+              .filter((a) => a.getBoundingClientRect().height < 44)
+              .map((a) => a.getAttribute('data-testid'))
+          );
+          expect(shortLinks, `${path} language choices under 44 px`).toEqual([]);
+        }
       } finally {
         await context.close();
       }

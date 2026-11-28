@@ -98,9 +98,18 @@
       .skip-link { position: absolute; inset-inline-start: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden; }
       .skip-link:focus { position: fixed; top: 0; inset-inline-start: 0; width: auto; height: auto; padding: 0.5rem 1rem; background: var(--surface); color: var(--text); font-size: 1rem; z-index: 9999; text-decoration: none; border-bottom: 2px solid var(--accent); }
       
-    .ose-lang { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; margin: 1.5rem 0 0; }
-    .ose-lang a { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; min-height: 44px; min-width: 44px; padding: 0.5rem 1rem; color: var(--accent); font-size: 1rem; font-weight: 600; line-height: 1.5; text-decoration: underline; }
-    .ose-lang a:focus { outline: 3px solid var(--accent); outline-offset: 2px; }
+    .ose-lang { display: flex; flex-direction: column; align-items: center; margin: 1.5rem 0 0; }
+    .ose-lang details { width: 100%; display: flex; flex-direction: column; align-items: center; }
+    .ose-lang-chip { list-style: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; box-sizing: border-box; min-height: 48px; min-width: 44px; padding: 0.5rem 1rem; border: 1.5px solid var(--border-strong); border-radius: 999px; background: var(--surface); color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; }
+    .ose-lang-chip::-webkit-details-marker { display: none; }
+    .ose-lang-chip:hover { outline: 2px solid var(--border-strong); outline-offset: -2px; }
+    .ose-lang-chip:focus-visible, .ose-lang a:focus-visible { outline: 3px solid var(--focus-ring, var(--accent)); outline-offset: 2px; }
+    .ose-lang-caret { font-size: 0.875rem; }
+    .ose-lang details[open] > .ose-lang-chip .ose-lang-caret { transform: rotate(180deg); }
+    .ose-lang-flag { flex: 0 0 auto; border-radius: 2px; }
+    .ose-lang-card { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.25rem; box-sizing: border-box; width: min(100%, 26rem); margin: 0.5rem 0 0; padding: 0.375rem; list-style: none; background: var(--surface); border: 1.5px solid var(--border-strong); border-radius: 8px; }
+    .ose-lang a { display: flex; align-items: center; gap: 0.5rem; box-sizing: border-box; min-height: 44px; min-width: 44px; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; text-decoration: none; }
+    .ose-lang a:hover { outline: 2px solid var(--border-strong); outline-offset: -2px; }
     .ose-langmenu { position: relative; display: inline-flex; align-items: center; flex: 0 0 auto; }
     .ose-langmenu details { position: relative; }
     .ose-langmenu summary { list-style: none; cursor: pointer; }
@@ -234,27 +243,32 @@
         </div>
       </section>
       <nav class="ose-lang" data-testid="language-switch" aria-label="Language">
-      <a lang="es" hreflang="es" data-testid="language-switch-es" href="/es/events?q=vinyl">Español</a>
-      <a lang="zh-hans" hreflang="zh-hans" data-testid="language-switch-zh-hans" href="/zh-hans/events?q=vinyl">简体中文</a>
-      <a lang="zh-hant" hreflang="zh-hant" data-testid="language-switch-zh-hant" href="/zh-hant/events?q=vinyl">繁體中文</a>
-      <a lang="hi" hreflang="hi" data-testid="language-switch-hi" href="/hi/events?q=vinyl">हिन्दी</a>
-      <a lang="ar" hreflang="ar" data-testid="language-switch-ar" href="/ar/events?q=vinyl">العربية</a>
-      <a lang="pt" hreflang="pt" data-testid="language-switch-pt" href="/pt/events?q=vinyl">Português</a>
-      <a lang="bn" hreflang="bn" data-testid="language-switch-bn" href="/bn/events?q=vinyl">বাংলা</a>
-      <a lang="ru" hreflang="ru" data-testid="language-switch-ru" href="/ru/events?q=vinyl">Русский</a>
-      <a lang="ja" hreflang="ja" data-testid="language-switch-ja" href="/ja/events?q=vinyl">日本語</a>
-      <a lang="fr" hreflang="fr" data-testid="language-switch-fr" href="/fr/events?q=vinyl">Français</a>
-      <a lang="de" hreflang="de" data-testid="language-switch-de" href="/de/events?q=vinyl">Deutsch</a>
-      <a lang="ur" hreflang="ur" data-testid="language-switch-ur" href="/ur/events?q=vinyl">اردو</a>
-      <a lang="id" hreflang="id" data-testid="language-switch-id" href="/id/events?q=vinyl">Bahasa Indonesia</a>
-      <a lang="ko" hreflang="ko" data-testid="language-switch-ko" href="/ko/events?q=vinyl">한국어</a>
-      <a lang="vi" hreflang="vi" data-testid="language-switch-vi" href="/vi/events?q=vinyl">Tiếng Việt</a>
-      <a lang="tr" hreflang="tr" data-testid="language-switch-tr" href="/tr/events?q=vinyl">Türkçe</a>
-      <a lang="it" hreflang="it" data-testid="language-switch-it" href="/it/events?q=vinyl">Italiano</a>
-      <a lang="tl" hreflang="tl" data-testid="language-switch-tl" href="/tl/events?q=vinyl">Tagalog</a>
-      <a lang="pl" hreflang="pl" data-testid="language-switch-pl" href="/pl/events?q=vinyl">Polski</a>
-      <a lang="uk" hreflang="uk" data-testid="language-switch-uk" href="/uk/events?q=vinyl">Українська</a>
-      <a lang="fa" hreflang="fa" data-testid="language-switch-fa" href="/fa/events?q=vinyl">فارسی</a>
+      <details data-testid="language-switch-choice">
+        <summary class="ose-lang-chip" aria-label="Language: English" data-testid="language-switch-chip"><img class="ose-lang-flag" src="/flags/en.svg" alt="" width="21" height="14"><span lang="en">English</span><span class="ose-lang-caret" aria-hidden="true">▾</span></summary>
+        <ul class="ose-lang-card" data-testid="language-switch-card">
+        <li><a lang="es" hreflang="es" data-testid="language-switch-es" href="/es/events?q=vinyl"><img class="ose-lang-flag" src="/flags/es.svg" alt="" width="21" height="14" loading="lazy">Español</a></li>
+        <li><a lang="zh-hans" hreflang="zh-hans" data-testid="language-switch-zh-hans" href="/zh-hans/events?q=vinyl"><img class="ose-lang-flag" src="/flags/zh-hans.svg" alt="" width="21" height="14" loading="lazy">简体中文</a></li>
+        <li><a lang="zh-hant" hreflang="zh-hant" data-testid="language-switch-zh-hant" href="/zh-hant/events?q=vinyl"><img class="ose-lang-flag" src="/flags/zh-hant.svg" alt="" width="21" height="14" loading="lazy">繁體中文</a></li>
+        <li><a lang="hi" hreflang="hi" data-testid="language-switch-hi" href="/hi/events?q=vinyl"><img class="ose-lang-flag" src="/flags/hi.svg" alt="" width="21" height="14" loading="lazy">हिन्दी</a></li>
+        <li><a lang="ar" hreflang="ar" data-testid="language-switch-ar" href="/ar/events?q=vinyl"><img class="ose-lang-flag" src="/flags/ar.svg" alt="" width="21" height="14" loading="lazy">العربية</a></li>
+        <li><a lang="pt" hreflang="pt" data-testid="language-switch-pt" href="/pt/events?q=vinyl"><img class="ose-lang-flag" src="/flags/pt.svg" alt="" width="21" height="14" loading="lazy">Português</a></li>
+        <li><a lang="bn" hreflang="bn" data-testid="language-switch-bn" href="/bn/events?q=vinyl"><img class="ose-lang-flag" src="/flags/bn.svg" alt="" width="21" height="14" loading="lazy">বাংলা</a></li>
+        <li><a lang="ru" hreflang="ru" data-testid="language-switch-ru" href="/ru/events?q=vinyl"><img class="ose-lang-flag" src="/flags/ru.svg" alt="" width="21" height="14" loading="lazy">Русский</a></li>
+        <li><a lang="ja" hreflang="ja" data-testid="language-switch-ja" href="/ja/events?q=vinyl"><img class="ose-lang-flag" src="/flags/ja.svg" alt="" width="21" height="14" loading="lazy">日本語</a></li>
+        <li><a lang="fr" hreflang="fr" data-testid="language-switch-fr" href="/fr/events?q=vinyl"><img class="ose-lang-flag" src="/flags/fr.svg" alt="" width="21" height="14" loading="lazy">Français</a></li>
+        <li><a lang="de" hreflang="de" data-testid="language-switch-de" href="/de/events?q=vinyl"><img class="ose-lang-flag" src="/flags/de.svg" alt="" width="21" height="14" loading="lazy">Deutsch</a></li>
+        <li><a lang="ur" hreflang="ur" data-testid="language-switch-ur" href="/ur/events?q=vinyl"><img class="ose-lang-flag" src="/flags/ur.svg" alt="" width="21" height="14" loading="lazy">اردو</a></li>
+        <li><a lang="id" hreflang="id" data-testid="language-switch-id" href="/id/events?q=vinyl"><img class="ose-lang-flag" src="/flags/id.svg" alt="" width="21" height="14" loading="lazy">Bahasa Indonesia</a></li>
+        <li><a lang="ko" hreflang="ko" data-testid="language-switch-ko" href="/ko/events?q=vinyl"><img class="ose-lang-flag" src="/flags/ko.svg" alt="" width="21" height="14" loading="lazy">한국어</a></li>
+        <li><a lang="vi" hreflang="vi" data-testid="language-switch-vi" href="/vi/events?q=vinyl"><img class="ose-lang-flag" src="/flags/vi.svg" alt="" width="21" height="14" loading="lazy">Tiếng Việt</a></li>
+        <li><a lang="tr" hreflang="tr" data-testid="language-switch-tr" href="/tr/events?q=vinyl"><img class="ose-lang-flag" src="/flags/tr.svg" alt="" width="21" height="14" loading="lazy">Türkçe</a></li>
+        <li><a lang="it" hreflang="it" data-testid="language-switch-it" href="/it/events?q=vinyl"><img class="ose-lang-flag" src="/flags/it.svg" alt="" width="21" height="14" loading="lazy">Italiano</a></li>
+        <li><a lang="tl" hreflang="tl" data-testid="language-switch-tl" href="/tl/events?q=vinyl"><img class="ose-lang-flag" src="/flags/tl.svg" alt="" width="21" height="14" loading="lazy">Tagalog</a></li>
+        <li><a lang="pl" hreflang="pl" data-testid="language-switch-pl" href="/pl/events?q=vinyl"><img class="ose-lang-flag" src="/flags/pl.svg" alt="" width="21" height="14" loading="lazy">Polski</a></li>
+        <li><a lang="uk" hreflang="uk" data-testid="language-switch-uk" href="/uk/events?q=vinyl"><img class="ose-lang-flag" src="/flags/uk.svg" alt="" width="21" height="14" loading="lazy">Українська</a></li>
+        <li><a lang="fa" hreflang="fa" data-testid="language-switch-fa" href="/fa/events?q=vinyl"><img class="ose-lang-flag" src="/flags/fa.svg" alt="" width="21" height="14" loading="lazy">فارسی</a></li>
+        </ul>
+      </details>
     </nav>
       <details class="ose-never-who" data-testid="anonymity-affordance" data-never-who="events">
     <summary class="ose-never-who-summary" data-testid="never-who-summary"><span class="ose-never-who-line">Never who, only how many.</span> <span class="ose-never-who-trigger">How this works</span></summary>

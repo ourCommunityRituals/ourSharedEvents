@@ -37,6 +37,7 @@ export const LANGUAGE_MUTATION_SPECS = [
   'tests/i18n-path-prefix.spec.ts',
   'tests/i18n-resolve-language.spec.ts',
   'tests/language-switch-single.spec.ts',
+  'tests/language-switch-chip.spec.ts',
   'tests/template-js-escape.spec.ts',
   'tests/language-menu.spec.ts',
   'tests/language-menu-third-language.spec.ts',

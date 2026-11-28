@@ -503,6 +503,9 @@ test.describe('distance from where the person is', () => {
       `${origin}/`,
       `${origin}/ui.css`,
       `${origin}/event-default-thumb.svg`,
+      // The language chip's flag at the foot of the page (owner 2026-11-28): the
+      // site's own picture for the page's language, the same for every visitor.
+      `${origin}/flags/en.svg`,
     ]);
     for (const url of asked) expect(allowed.has(url), url).toBe(true);
     for (const url of asked) expect(url).not.toMatch(/41\.6|87\.6|latitude|lat=|lon=/);

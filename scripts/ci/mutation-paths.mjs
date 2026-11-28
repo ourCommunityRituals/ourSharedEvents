@@ -148,6 +148,7 @@ export const MUTATION_PATHS = Object.freeze([
   'workers/oursharedevents/tests/i18n-resolve-language.spec.ts',
   'workers/oursharedevents/tests/i18n-layer-mutants.spec.ts',
   'workers/oursharedevents/tests/language-switch-single.spec.ts',
+  'workers/oursharedevents/tests/language-switch-chip.spec.ts',
   'workers/oursharedevents/tests/template-js-escape.spec.ts',
   'workers/oursharedevents/tests/event-page-spanish.spec.ts',
   LANGUAGE_STRYKER_CONFIG,
