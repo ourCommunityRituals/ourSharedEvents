@@ -168,6 +168,7 @@
         <button type="submit" data-testid="survey-submit">Wyślij opinię</button>
         <div class="privacy-notice" data-testid="privacy-notice">
     <p class="privacy-summary" data-testid="privacy-summary">Z komentarzy usuwamy dane osobowe w ciągu 24 godzin.</p>
+    <p class="privacy-lang-note" data-testid="privacy-english-note">To jest tłumaczenie. Oficjalny jest tekst po angielsku.</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Szczegóły prywatności</summary>
       <p>
@@ -177,7 +178,6 @@
         
         <a href="/privacy" data-testid="privacy-policy-link">Pełna polityka prywatności (po angielsku)</a>
       </p>
-      <p class="privacy-lang-note" data-testid="privacy-english-note">To jest tłumaczenie. Oficjalny jest tekst po angielsku.</p>
       <details class="privacy-official" data-testid="privacy-official-english">
         <summary>Oficjalny tekst po angielsku</summary>
         <p lang="en" dir="ltr">

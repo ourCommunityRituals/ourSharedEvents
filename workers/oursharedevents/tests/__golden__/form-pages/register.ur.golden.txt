@@ -163,6 +163,7 @@
         <button type="submit" data-testid="register-submit">رجسٹر کریں</button>
         <div class="privacy-notice" data-testid="privacy-notice">
     <p class="privacy-summary" data-testid="privacy-summary">آپ کا نام اور ای میل تقریب کے اگلے دن مٹا دیے جاتے ہیں۔</p>
+    <p class="privacy-lang-note" data-testid="privacy-english-note">یہ ترجمہ ہے۔ انگریزی متن سرکاری ہے۔</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>رازداری کی تفصیل</summary>
       <p>
@@ -172,7 +173,6 @@
         
         <a href="/privacy" data-testid="privacy-policy-link">مکمل رازداری پالیسی (انگریزی میں)</a>
       </p>
-      <p class="privacy-lang-note" data-testid="privacy-english-note">یہ ترجمہ ہے۔ انگریزی متن سرکاری ہے۔</p>
       <details class="privacy-official" data-testid="privacy-official-english">
         <summary>سرکاری انگریزی متن</summary>
         <p lang="en" dir="ltr">

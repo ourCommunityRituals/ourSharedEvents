@@ -168,6 +168,7 @@
         <button type="submit" data-testid="survey-submit">感想を送る</button>
         <div class="privacy-notice" data-testid="privacy-notice">
     <p class="privacy-summary" data-testid="privacy-summary">コメントから個人情報を24時間以内に取り除きます。</p>
+    <p class="privacy-lang-note" data-testid="privacy-english-note">これは翻訳です。正式な文章は英語版です。</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>プライバシーの詳細</summary>
       <p>
@@ -177,7 +178,6 @@
         
         <a href="/privacy" data-testid="privacy-policy-link">プライバシーポリシー全文（英語）</a>
       </p>
-      <p class="privacy-lang-note" data-testid="privacy-english-note">これは翻訳です。正式な文章は英語版です。</p>
       <details class="privacy-official" data-testid="privacy-official-english">
         <summary>英語の正式な文章</summary>
         <p lang="en" dir="ltr">

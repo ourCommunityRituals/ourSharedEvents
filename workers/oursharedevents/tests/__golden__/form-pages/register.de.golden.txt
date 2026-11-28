@@ -163,6 +163,7 @@
         <button type="submit" data-testid="register-submit">Anmelden</button>
         <div class="privacy-notice" data-testid="privacy-notice">
     <p class="privacy-summary" data-testid="privacy-summary">Ihr Name und Ihre E-Mail werden am Tag nach der Veranstaltung gelöscht.</p>
+    <p class="privacy-lang-note" data-testid="privacy-english-note">Dies ist eine Übersetzung. Maßgeblich ist der englische Text.</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Details zum Datenschutz</summary>
       <p>
@@ -172,7 +173,6 @@
         
         <a href="/privacy" data-testid="privacy-policy-link">Vollständige Datenschutzerklärung (auf Englisch)</a>
       </p>
-      <p class="privacy-lang-note" data-testid="privacy-english-note">Dies ist eine Übersetzung. Maßgeblich ist der englische Text.</p>
       <details class="privacy-official" data-testid="privacy-official-english">
         <summary>Offizieller englischer Text</summary>
         <p lang="en" dir="ltr">

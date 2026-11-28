@@ -163,6 +163,7 @@
         <button type="submit" data-testid="register-submit">报名</button>
         <div class="privacy-notice" data-testid="privacy-notice">
     <p class="privacy-summary" data-testid="privacy-summary">你的姓名和邮箱会在活动结束后第二天删除。</p>
+    <p class="privacy-lang-note" data-testid="privacy-english-note">这是译文。以英文原文为准。</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>隐私详情</summary>
       <p>
@@ -172,7 +173,6 @@
         
         <a href="/privacy" data-testid="privacy-policy-link">完整隐私政策（英文）</a>
       </p>
-      <p class="privacy-lang-note" data-testid="privacy-english-note">这是译文。以英文原文为准。</p>
       <details class="privacy-official" data-testid="privacy-official-english">
         <summary>英文正式文本</summary>
         <p lang="en" dir="ltr">

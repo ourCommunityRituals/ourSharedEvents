@@ -168,6 +168,7 @@
         <button type="submit" data-testid="survey-submit">فرستادن نظر</button>
         <div class="privacy-notice" data-testid="privacy-notice">
     <p class="privacy-summary" data-testid="privacy-summary">اطلاعات شخصی ظرف 24 ساعت از نظرها حذف می‌شود.</p>
+    <p class="privacy-lang-note" data-testid="privacy-english-note">این یک ترجمه است. متن انگلیسی متن رسمی است.</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>جزئیات حریم خصوصی</summary>
       <p>
@@ -177,7 +178,6 @@
         
         <a href="/privacy" data-testid="privacy-policy-link">سیاست کامل حریم خصوصی (به انگلیسی)</a>
       </p>
-      <p class="privacy-lang-note" data-testid="privacy-english-note">این یک ترجمه است. متن انگلیسی متن رسمی است.</p>
       <details class="privacy-official" data-testid="privacy-official-english">
         <summary>متن رسمی انگلیسی</summary>
         <p lang="en" dir="ltr">

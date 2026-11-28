@@ -161,6 +161,7 @@
         <button type="submit" data-testid="email-submit">Подписаться</button>
         <div class="privacy-notice" data-testid="privacy-notice">
     <p class="privacy-summary" data-testid="privacy-summary">Ваша почта удаляется через 30 дней.</p>
+    <p class="privacy-lang-note" data-testid="privacy-english-note">Это перевод. Официальный текст — английский.</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Подробнее о конфиденциальности</summary>
       <p>
@@ -170,7 +171,6 @@
         
         <a href="/privacy" data-testid="privacy-policy-link">Полная политика конфиденциальности (на английском)</a>
       </p>
-      <p class="privacy-lang-note" data-testid="privacy-english-note">Это перевод. Официальный текст — английский.</p>
       <details class="privacy-official" data-testid="privacy-official-english">
         <summary>Официальный текст на английском</summary>
         <p lang="en" dir="ltr">

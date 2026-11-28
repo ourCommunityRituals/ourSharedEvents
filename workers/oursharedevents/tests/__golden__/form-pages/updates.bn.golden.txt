@@ -161,6 +161,7 @@
         <button type="submit" data-testid="email-submit">আমাকে যুক্ত করুন</button>
         <div class="privacy-notice" data-testid="privacy-notice">
     <p class="privacy-summary" data-testid="privacy-summary">আপনার ইমেইল ৩০ দিন পরে মুছে ফেলা হয়।</p>
+    <p class="privacy-lang-note" data-testid="privacy-english-note">এটা অনুবাদ। ইংরেজি লেখাটিই আনুষ্ঠানিক।</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>গোপনীয়তার বিস্তারিত</summary>
       <p>
@@ -170,7 +171,6 @@
         
         <a href="/privacy" data-testid="privacy-policy-link">পুরো গোপনীয়তা নীতি (ইংরেজিতে)</a>
       </p>
-      <p class="privacy-lang-note" data-testid="privacy-english-note">এটা অনুবাদ। ইংরেজি লেখাটিই আনুষ্ঠানিক।</p>
       <details class="privacy-official" data-testid="privacy-official-english">
         <summary>আনুষ্ঠানিক ইংরেজি লেখা</summary>
         <p lang="en" dir="ltr">

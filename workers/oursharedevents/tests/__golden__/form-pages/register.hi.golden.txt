@@ -163,6 +163,7 @@
         <button type="submit" data-testid="register-submit">नाम लिखवाएँ</button>
         <div class="privacy-notice" data-testid="privacy-notice">
     <p class="privacy-summary" data-testid="privacy-summary">आपका नाम और ईमेल कार्यक्रम के अगले दिन मिटा दिए जाते हैं।</p>
+    <p class="privacy-lang-note" data-testid="privacy-english-note">यह अनुवाद है। अंग्रेज़ी पाठ ही आधिकारिक है।</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>निजता की जानकारी</summary>
       <p>
@@ -172,7 +173,6 @@
         
         <a href="/privacy" data-testid="privacy-policy-link">पूरी निजता नीति (अंग्रेज़ी में)</a>
       </p>
-      <p class="privacy-lang-note" data-testid="privacy-english-note">यह अनुवाद है। अंग्रेज़ी पाठ ही आधिकारिक है।</p>
       <details class="privacy-official" data-testid="privacy-official-english">
         <summary>आधिकारिक अंग्रेज़ी पाठ</summary>
         <p lang="en" dir="ltr">

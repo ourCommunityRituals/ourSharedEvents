@@ -161,6 +161,7 @@
         <button type="submit" data-testid="email-submit">Me cadastre</button>
         <div class="privacy-notice" data-testid="privacy-notice">
     <p class="privacy-summary" data-testid="privacy-summary">Seu e-mail é apagado depois de 30 dias.</p>
+    <p class="privacy-lang-note" data-testid="privacy-english-note">Esta é uma tradução. O texto oficial é o em inglês.</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Detalhes de privacidade</summary>
       <p>
@@ -170,7 +171,6 @@
         
         <a href="/privacy" data-testid="privacy-policy-link">Política de privacidade completa (em inglês)</a>
       </p>
-      <p class="privacy-lang-note" data-testid="privacy-english-note">Esta é uma tradução. O texto oficial é o em inglês.</p>
       <details class="privacy-official" data-testid="privacy-official-english">
         <summary>Texto oficial em inglês</summary>
         <p lang="en" dir="ltr">

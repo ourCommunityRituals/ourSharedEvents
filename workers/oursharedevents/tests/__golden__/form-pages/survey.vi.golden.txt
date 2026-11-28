@@ -168,6 +168,7 @@
         <button type="submit" data-testid="survey-submit">Gửi góp ý</button>
         <div class="privacy-notice" data-testid="privacy-notice">
     <p class="privacy-summary" data-testid="privacy-summary">Nhận xét được làm sạch thông tin cá nhân trong vòng 24 giờ.</p>
+    <p class="privacy-lang-note" data-testid="privacy-english-note">Đây là bản dịch. Văn bản tiếng Anh là bản chính thức.</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Chi tiết quyền riêng tư</summary>
       <p>
@@ -177,7 +178,6 @@
         
         <a href="/privacy" data-testid="privacy-policy-link">Chính sách quyền riêng tư đầy đủ (tiếng Anh)</a>
       </p>
-      <p class="privacy-lang-note" data-testid="privacy-english-note">Đây là bản dịch. Văn bản tiếng Anh là bản chính thức.</p>
       <details class="privacy-official" data-testid="privacy-official-english">
         <summary>Văn bản chính thức bằng tiếng Anh</summary>
         <p lang="en" dir="ltr">

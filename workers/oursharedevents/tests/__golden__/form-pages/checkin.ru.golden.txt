@@ -160,6 +160,7 @@
       <div class="count" id="count" data-testid="checkin-count" role="status" aria-live="polite"></div>
       <div class="privacy-notice" data-testid="privacy-notice">
     <p class="privacy-summary" data-testid="privacy-summary">Считаем, но никогда не называем.</p>
+    <p class="privacy-lang-note" data-testid="privacy-english-note">Это перевод. Официальный текст — английский.</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Подробнее о конфиденциальности</summary>
       <p>
@@ -169,7 +170,6 @@
         
         <a href="/privacy" data-testid="privacy-policy-link">Полная политика конфиденциальности (на английском)</a>
       </p>
-      <p class="privacy-lang-note" data-testid="privacy-english-note">Это перевод. Официальный текст — английский.</p>
       <details class="privacy-official" data-testid="privacy-official-english">
         <summary>Официальный текст на английском</summary>
         <p lang="en" dir="ltr">

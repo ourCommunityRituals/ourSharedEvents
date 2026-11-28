@@ -161,6 +161,7 @@
         <button type="submit" data-testid="email-submit">등록하기</button>
         <div class="privacy-notice" data-testid="privacy-notice">
     <p class="privacy-summary" data-testid="privacy-summary">이메일은 30일 뒤에 삭제해요.</p>
+    <p class="privacy-lang-note" data-testid="privacy-english-note">이 글은 번역이에요. 공식 글은 영어 원문이에요.</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>개인정보 자세히</summary>
       <p>
@@ -170,7 +171,6 @@
         
         <a href="/privacy" data-testid="privacy-policy-link">개인정보 처리방침 전문(영어)</a>
       </p>
-      <p class="privacy-lang-note" data-testid="privacy-english-note">이 글은 번역이에요. 공식 글은 영어 원문이에요.</p>
       <details class="privacy-official" data-testid="privacy-official-english">
         <summary>공식 영어 원문</summary>
         <p lang="en" dir="ltr">

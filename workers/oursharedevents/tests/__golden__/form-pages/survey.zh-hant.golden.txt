@@ -168,6 +168,7 @@
         <button type="submit" data-testid="survey-submit">送出意見</button>
         <div class="privacy-notice" data-testid="privacy-notice">
     <p class="privacy-summary" data-testid="privacy-summary">留言中的個人資訊會在 24 小時內清除。</p>
+    <p class="privacy-lang-note" data-testid="privacy-english-note">這是譯文。以英文原文為準。</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>隱私詳情</summary>
       <p>
@@ -177,7 +178,6 @@
         
         <a href="/privacy" data-testid="privacy-policy-link">完整隱私權政策（英文）</a>
       </p>
-      <p class="privacy-lang-note" data-testid="privacy-english-note">這是譯文。以英文原文為準。</p>
       <details class="privacy-official" data-testid="privacy-official-english">
         <summary>英文正式文本</summary>
         <p lang="en" dir="ltr">
