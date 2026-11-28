@@ -583,7 +583,7 @@ export async function handleFormEmailSignup(
 
     const inserted = await env.FORMS_DB.prepare(
       `INSERT INTO email_signups (id, event_id, email_hash, email_encrypted, signup_bucket, retention_expires_at, anonymous_id, consent_given_at)
-       SELECT ?, ?, ?, ?, ?, ?, ?, ?
+       SELECT ?, ?, ?, ?, ?, ?, ?, ? FROM (SELECT 1)
        WHERE NOT EXISTS (SELECT 1 FROM email_signups WHERE event_id = ? AND email_hash = ?)`
     )
       .bind(
