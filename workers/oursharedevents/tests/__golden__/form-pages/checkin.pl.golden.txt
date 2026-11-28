@@ -173,7 +173,7 @@
       <details class="privacy-official" data-testid="privacy-official-english">
         <summary>Oficjalny tekst po angielsku</summary>
         <p lang="en" dir="ltr">
-        We record an <strong>anonymous count only</strong> — no personal data is stored. Legal basis: GDPR Art. 6(1)(f) — legitimate interest in knowing attendance numbers. Anonymous aggregate counts are kept for event reporting only.
+        We record an <strong>anonymous count only</strong>, never your name. A random id in a cookie on this device counts you once. Legal basis: GDPR Art. 6(1)(f) — legitimate interest in knowing attendance numbers. Anonymous aggregate counts are kept for event reporting only.
         You have the right to access, correct, or erase your data, and to lodge a complaint with your local data protection
         <strong>supervisory authority</strong>.
         

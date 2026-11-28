@@ -311,6 +311,7 @@
  *
  *   Data Subject Rights (OSE-203 / GDPR Art. 17 / CCPA §1798.105):
  *   POST /api/v2/admin/data-subject/erase → handleDataSubjectErase (auth required)
+ *   POST /api/v2/admin/data-subject/export → handleDataSubjectExport (auth required)
  *
  *   GET /.well-known/openid-configuration  → OIDC discovery (WIF)
  *   GET /.well-known/jwks.json             → WIF public key
@@ -623,6 +624,7 @@ import {
   type UploadEnv,
 } from './handlers/upload';
 import { handleDataSubjectErase, type DataSubjectEnv } from './handlers/data-subject';
+import { handleDataSubjectExport } from './handlers/data-subject-export';
 import {
   handleAdminMintSharedReportLink,
   handleGetSharedReport,
@@ -2762,6 +2764,26 @@ export async function route(
     _audit(
       reqId,
       'DATA_SUBJECT_ERASE',
+      response.status < 400 ? 'success' : 'denied',
+      'data-subject'
+    );
+    return response;
+  }
+
+  // POST /api/v2/admin/data-subject/export — GDPR Art. 15 / Art. 20 access
+  if (pathname === '/api/v2/admin/data-subject/export' && method === 'POST') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'DATA_SUBJECT_EXPORT', 'denied', 'data-subject');
+      return deny;
+    }
+    const offPlatform = await _platformOnly(reqId);
+    if (offPlatform) return offPlatform;
+    const response = await handleDataSubjectExport(request, env);
+    _audit(
+      reqId,
+      'DATA_SUBJECT_EXPORT',
       response.status < 400 ? 'success' : 'denied',
       'data-subject'
     );

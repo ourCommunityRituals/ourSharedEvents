@@ -521,7 +521,7 @@ const en = {
   'privacy.purpose.register':
     'We collect your name and, if you choose, your email, so the organizer can reach you if this event changes.',
   'privacy.purpose.checkin':
-    'We record an <strong>anonymous count only</strong> — no personal data is stored.',
+    'We record an <strong>anonymous count only</strong>, never your name. A random id in a cookie on this device counts you once.',
   'privacy.purpose.survey':
     'We collect your ratings and optional comments to improve future events.',
   'privacy.purpose.email':
