@@ -279,9 +279,10 @@ test.describe('landing: the Type row is the event categories', () => {
     await expect(row).not.toContainText('Etr ');
     await expect(page.locator('label[for="type-all"]')).toHaveText('All types');
     await expect(page.locator('#type-all')).toBeChecked();
-    const arts = page.locator('label[for="cat-art"]');
-    await expect(arts).toHaveText('Arts, Culture & Live Music');
-    await expect(page.locator('label[for="cat-biz"]')).toHaveText('Business & Networking');
+    // The row is the nine plain buckets, each by its short name (owner, 2026-11-28).
+    const arts = page.locator('label[for="cat-shw"]');
+    await expect(arts).toHaveText('Music & Shows');
+    await expect(page.locator('label[for="cat-lrn"]')).toHaveText('Learn');
 
     const card = (title: string) =>
       page.getByTestId('area-card').filter({ has: page.getByText(title, { exact: true }) });
@@ -291,7 +292,7 @@ test.describe('landing: the Type row is the event categories', () => {
     const requestsAfterLoad: string[] = [];
     page.on('request', (r) => requestsAfterLoad.push(r.url()));
     await arts.click();
-    await expect(page.locator('#cat-art')).toBeChecked();
+    await expect(page.locator('#cat-shw')).toBeChecked();
     await showAllCards(page);
     await expect(card(titles.music)).toBeVisible();
     await expect(card(titles.gallery)).toBeVisible();

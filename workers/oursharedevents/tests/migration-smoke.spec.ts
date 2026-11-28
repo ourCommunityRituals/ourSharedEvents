@@ -61,6 +61,7 @@ const DB_TABLES = [
   'event_codes', // 0096 (OSE-1684 — one short code per event, every screen)
   'event_series', // 0033 (OSE-272 SharedReport pipeline)
   'event_templates', // 0014
+  'event_type_bucket', // 0127 (event type buckets — the 9 plain groups the landing and picker show)
   'event_type_category_registry', // 0076 (OSE-1344 — Category → Type picker lookup)
   'event_type_registry', // 0023
   'events', // 0001 + 0034 series_id column

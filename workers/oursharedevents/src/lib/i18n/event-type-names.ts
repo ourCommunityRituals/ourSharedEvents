@@ -7,8 +7,9 @@
  * category cards do not translate to the selected language ... this applies to
  * all selected, available languages").
  *
- * WHAT. One table per language, keyed by the registry's own keys: the category
- * code (migration 0076) and the type id (migrations 0024, 0097, 0115). English
+ * WHAT. One table per language, keyed by the registry's own keys: the bucket
+ * code (migration 0127), the category code (migration 0076) and the type id
+ * (migrations 0024, 0097, 0115, 0127). English
  * is the registry's own name, so its table is empty. The registry rows do not
  * change; this is only what a visitor reads. A code or id with no entry falls
  * back to the registry's English name, never to nothing.
@@ -87,7 +88,7 @@ const TYPE_ES: Names = {
   'etr-rec-pickup': 'Básquetbol informal',
   'etr-rec-kickball': 'Partido de kickball',
   'etr-soc-dinner': 'Cena comunitaria',
-  'etr-soc-potluck': 'Comida compartida del barrio',
+  'etr-soc-potluck': 'Comida compartida',
   'etr-soc-block': 'Fiesta de cuadra',
   'etr-soc-cookout': 'Parrillada comunitaria',
   'etr-soc-watchparty': 'Ver el partido juntos',
@@ -97,19 +98,19 @@ const TYPE_ES: Names = {
   'etr-art-gallery': 'Exposición de arte',
   'etr-art-music': 'Música en vivo',
   'etr-art-cultural': 'Festival cultural',
-  'etr-art-mural': 'Presentación de un mural',
+  'etr-art-mural': 'Presentación de un mural nuevo',
   'etr-art-photo': 'Exposición de fotos',
   'etr-vol-cleanup': 'Limpieza del barrio',
   'etr-vol-fooddrive': 'Colecta de alimentos',
-  'etr-vol-mutual': 'Reparto de ayuda mutua',
+  'etr-vol-mutual': 'Reparto de cosas gratis',
   'etr-civ-meeting': 'Reunión de vecinos',
   'etr-civ-forum': 'Foro comunitario',
-  'etr-civ-captain': 'Elección de capitán de cuadra',
+  'etr-civ-captain': 'Votación de capitán de cuadra',
   'etr-biz-network': 'Encuentro de negocios',
-  'etr-biz-workshop': 'Taller de desarrollo profesional',
-  'etr-biz-mixer': 'Encuentro del sector',
+  'etr-biz-workshop': 'Clase de habilidades para el trabajo',
+  'etr-biz-mixer': 'Encuentro de trabajo',
   'etr-fnd-auction': 'Subasta silenciosa',
-  'etr-fnd-walkathon': 'Caminata o carrera solidaria',
+  'etr-fnd-walkathon': 'Carrera o caminata por una causa',
   'etr-fnd-carwash': 'Lavado de autos solidario',
   'etr-ent-film': 'Proyección de película',
   'etr-ent-trivia': 'Noche de trivia',
@@ -119,16 +120,42 @@ const TYPE_ES: Names = {
   'etr-gar-harvest': 'Fiesta de la cosecha',
   'etr-gar-trail': 'Caminata por la naturaleza',
   'etr-fai-service': 'Servicio de fe',
-  'etr-fai-interfaith': 'Encuentro interreligioso',
+  'etr-fai-interfaith': 'Muchas fes juntas',
   'etr-per-openmic': 'Noche de micrófono abierto',
   'etr-per-poetry': 'Slam de poesía',
   'etr-per-story': 'Noche de cuentos',
   'etr-per-storytime': 'Hora de cuentos',
   'etr-per-comedy': 'Noche de comedia',
   'etr-tab-boardgame': 'Noche de juegos de mesa',
-  'etr-tab-rpg': 'Sesión de juego de rol',
+  'etr-tab-rpg': 'Noche de juegos de rol',
   'etr-fit-running': 'Club de corredores',
   'etr-lit-bookclub': 'Club de lectura',
+  // Migration 0127 (event type buckets).
+  'etr-rec-soccer': 'Fútbol',
+  'etr-rec-barleague': 'Liga de bar (dardos, billar)',
+  'etr-rec-shuffleboard': 'Tejo de mesa',
+  'etr-rec-petanque': 'Petanca',
+  'etr-rec-kubb': 'Kubb',
+  'etr-rec-skating': 'Patinaje',
+  'etr-gar-daytrip': 'Excursión de un día',
+  'etr-ent-bingo': 'Noche de bingo',
+  'etr-ent-pinball': 'Pinball',
+  'etr-tab-foosball': 'Futbolín',
+  'etr-tab-cards': 'Juegos de cartas',
+  'etr-soc-dance': 'Baile',
+  'etr-civ-parade': 'Desfile',
+  'etr-soc-newyear': 'Fiesta de Año Nuevo',
+  'etr-mkt-yardsale': 'Venta de garaje',
+  'etr-mkt-resale': 'Día de reventa y ofertas',
+  'etr-soc-kidsparty': 'Fiesta para niños',
+  'etr-rec-camp': 'Campamento',
+  'etr-biz-class': 'Clase o lección',
+  'etr-fnd-charity': 'Noche benéfica',
+  'etr-mkt-farmers': 'Mercado de agricultores',
+  'etr-mkt-sidewalk': 'Venta en la acera',
+  'etr-art-walk': 'Paseo de arte',
+  'etr-civ-housewalk': 'Paseo de casas y jardines',
+  'etr-soc-restaurantweek': 'Semana de restaurantes',
 };
 
 const TYPE_PL: Names = {
@@ -139,7 +166,7 @@ const TYPE_PL: Names = {
   'etr-rec-pickup': 'Koszykówka dla chętnych',
   'etr-rec-kickball': 'Mecz kickballa',
   'etr-soc-dinner': 'Wspólna kolacja',
-  'etr-soc-potluck': 'Sąsiedzki składkowy posiłek',
+  'etr-soc-potluck': 'Wspólny posiłek',
   'etr-soc-block': 'Impreza uliczna',
   'etr-soc-cookout': 'Wspólny grill',
   'etr-soc-watchparty': 'Wspólne oglądanie',
@@ -149,19 +176,19 @@ const TYPE_PL: Names = {
   'etr-art-gallery': 'Wystawa sztuki',
   'etr-art-music': 'Muzyka na żywo',
   'etr-art-cultural': 'Festiwal kultury',
-  'etr-art-mural': 'Odsłonięcie muralu',
+  'etr-art-mural': 'Odsłonięcie nowego muralu',
   'etr-art-photo': 'Wystawa zdjęć',
   'etr-vol-cleanup': 'Sprzątanie okolicy',
   'etr-vol-fooddrive': 'Zbiórka żywności',
-  'etr-vol-mutual': 'Rozdawanie pomocy sąsiedzkiej',
+  'etr-vol-mutual': 'Rozdawanie darmowych rzeczy',
   'etr-civ-meeting': 'Zebranie mieszkańców',
   'etr-civ-forum': 'Forum mieszkańców',
-  'etr-civ-captain': 'Wybór gospodarza ulicy',
+  'etr-civ-captain': 'Głosowanie na gospodarza ulicy',
   'etr-biz-network': 'Spotkanie biznesowe',
-  'etr-biz-workshop': 'Warsztat rozwoju zawodowego',
-  'etr-biz-mixer': 'Spotkanie branżowe',
+  'etr-biz-workshop': 'Zajęcia z umiejętności do pracy',
+  'etr-biz-mixer': 'Spotkanie zawodowe',
   'etr-fnd-auction': 'Cicha aukcja',
-  'etr-fnd-walkathon': 'Marsz lub bieg charytatywny',
+  'etr-fnd-walkathon': 'Bieg lub marsz na szczytny cel',
   'etr-fnd-carwash': 'Charytatywne mycie aut',
   'etr-ent-film': 'Pokaz filmu',
   'etr-ent-trivia': 'Wieczór quizowy',
@@ -171,16 +198,42 @@ const TYPE_PL: Names = {
   'etr-gar-harvest': 'Święto plonów',
   'etr-gar-trail': 'Spacer szlakiem przyrody',
   'etr-fai-service': 'Nabożeństwo',
-  'etr-fai-interfaith': 'Spotkanie różnych wyznań',
+  'etr-fai-interfaith': 'Wiele wyznań razem',
   'etr-per-openmic': 'Wieczór otwartego mikrofonu',
   'etr-per-poetry': 'Slam poetycki',
   'etr-per-story': 'Wieczór opowieści',
   'etr-per-storytime': 'Czas opowieści',
   'etr-per-comedy': 'Wieczór stand-upu',
   'etr-tab-boardgame': 'Wieczór gier planszowych',
-  'etr-tab-rpg': 'Sesja gry fabularnej',
+  'etr-tab-rpg': 'Wieczór gier fabularnych',
   'etr-fit-running': 'Spotkanie klubu biegowego',
   'etr-lit-bookclub': 'Spotkanie klubu książki',
+  // Migration 0127 (event type buckets).
+  'etr-rec-soccer': 'Piłka nożna',
+  'etr-rec-barleague': 'Liga barowa (rzutki, bilard)',
+  'etr-rec-shuffleboard': 'Shuffleboard',
+  'etr-rec-petanque': 'Bule',
+  'etr-rec-kubb': 'Kubb',
+  'etr-rec-skating': 'Łyżwy i rolki',
+  'etr-gar-daytrip': 'Wycieczka jednodniowa',
+  'etr-ent-bingo': 'Wieczór bingo',
+  'etr-ent-pinball': 'Pinball',
+  'etr-tab-foosball': 'Piłkarzyki',
+  'etr-tab-cards': 'Gry karciane',
+  'etr-soc-dance': 'Potańcówka',
+  'etr-civ-parade': 'Parada',
+  'etr-soc-newyear': 'Impreza sylwestrowa',
+  'etr-mkt-yardsale': 'Wyprzedaż garażowa',
+  'etr-mkt-resale': 'Dzień okazji i odsprzedaży',
+  'etr-soc-kidsparty': 'Przyjęcie dla dzieci',
+  'etr-rec-camp': 'Obóz',
+  'etr-biz-class': 'Zajęcia lub lekcja',
+  'etr-fnd-charity': 'Wieczór charytatywny',
+  'etr-mkt-farmers': 'Targ rolniczy',
+  'etr-mkt-sidewalk': 'Wyprzedaż na chodniku',
+  'etr-art-walk': 'Spacer po sztuce',
+  'etr-civ-housewalk': 'Spacer po domach i ogrodach',
+  'etr-soc-restaurantweek': 'Tydzień restauracji',
 };
 
 const TYPE_AR: Names = {
@@ -191,7 +244,7 @@ const TYPE_AR: Names = {
   'etr-rec-pickup': 'كرة سلة حرة',
   'etr-rec-kickball': 'مباراة كيكبول',
   'etr-soc-dinner': 'عشاء جماعي',
-  'etr-soc-potluck': 'وجبة مشتركة في الحي',
+  'etr-soc-potluck': 'وجبة مشتركة',
   'etr-soc-block': 'حفلة الشارع',
   'etr-soc-cookout': 'شواء جماعي',
   'etr-soc-watchparty': 'مشاهدة جماعية',
@@ -201,19 +254,19 @@ const TYPE_AR: Names = {
   'etr-art-gallery': 'معرض فني',
   'etr-art-music': 'موسيقى حية',
   'etr-art-cultural': 'مهرجان ثقافي',
-  'etr-art-mural': 'إزاحة الستار عن جدارية',
+  'etr-art-mural': 'كشف جدارية جديدة',
   'etr-art-photo': 'معرض صور',
   'etr-vol-cleanup': 'تنظيف الحي',
   'etr-vol-fooddrive': 'حملة جمع الطعام',
-  'etr-vol-mutual': 'توزيع المساعدات المتبادلة',
+  'etr-vol-mutual': 'توزيع أشياء مجانية',
   'etr-civ-meeting': 'اجتماع سكان الحي',
   'etr-civ-forum': 'منتدى مجتمعي',
-  'etr-civ-captain': 'انتخاب مسؤول الشارع',
+  'etr-civ-captain': 'تصويت على مسؤول الشارع',
   'etr-biz-network': 'لقاء أعمال',
-  'etr-biz-workshop': 'ورشة تطوير مهني',
+  'etr-biz-workshop': 'درس مهارات العمل',
   'etr-biz-mixer': 'لقاء مهني',
   'etr-fnd-auction': 'مزاد صامت',
-  'etr-fnd-walkathon': 'مشي أو جري خيري',
+  'etr-fnd-walkathon': 'جري أو مشي من أجل قضية',
   'etr-fnd-carwash': 'غسيل سيارات خيري',
   'etr-ent-film': 'عرض فيلم',
   'etr-ent-trivia': 'أمسية مسابقات',
@@ -223,16 +276,116 @@ const TYPE_AR: Names = {
   'etr-gar-harvest': 'مهرجان الحصاد',
   'etr-gar-trail': 'نزهة في الطبيعة',
   'etr-fai-service': 'صلاة جماعية',
-  'etr-fai-interfaith': 'لقاء بين الأديان',
+  'etr-fai-interfaith': 'أديان كثيرة معًا',
   'etr-per-openmic': 'أمسية المايك المفتوح',
   'etr-per-poetry': 'أمسية شعر',
   'etr-per-story': 'أمسية حكايات',
   'etr-per-storytime': 'وقت الحكايات',
   'etr-per-comedy': 'أمسية كوميديا',
   'etr-tab-boardgame': 'أمسية ألعاب الطاولة',
-  'etr-tab-rpg': 'جلسة لعب أدوار',
+  'etr-tab-rpg': 'أمسية ألعاب أدوار',
   'etr-fit-running': 'لقاء نادي الجري',
   'etr-lit-bookclub': 'لقاء نادي الكتاب',
+  // Migration 0127 (event type buckets).
+  'etr-rec-soccer': 'كرة القدم',
+  'etr-rec-barleague': 'دوري الحانة (السهام، البلياردو)',
+  'etr-rec-shuffleboard': 'لعبة شفلبورد',
+  'etr-rec-petanque': 'لعبة البيتانك',
+  'etr-rec-kubb': 'لعبة الكوب',
+  'etr-rec-skating': 'التزلج',
+  'etr-gar-daytrip': 'رحلة يوم واحد',
+  'etr-ent-bingo': 'أمسية بينغو',
+  'etr-ent-pinball': 'لعبة الكرة والدبابيس',
+  'etr-tab-foosball': 'كرة الطاولة',
+  'etr-tab-cards': 'ألعاب الورق',
+  'etr-soc-dance': 'حفلة رقص',
+  'etr-civ-parade': 'موكب',
+  'etr-soc-newyear': 'حفلة رأس السنة',
+  'etr-mkt-yardsale': 'بيع مستعمل أمام البيت',
+  'etr-mkt-resale': 'يوم إعادة البيع والعروض',
+  'etr-soc-kidsparty': 'حفلة للأطفال',
+  'etr-rec-camp': 'مخيم',
+  'etr-biz-class': 'درس أو حصة',
+  'etr-fnd-charity': 'أمسية خيرية',
+  'etr-mkt-farmers': 'سوق المزارعين',
+  'etr-mkt-sidewalk': 'تخفيضات على الرصيف',
+  'etr-art-walk': 'جولة فنية',
+  'etr-civ-housewalk': 'جولة البيوت والحدائق',
+  'etr-soc-restaurantweek': 'أسبوع المطاعم',
+};
+
+// The 9 buckets (migration 0127): the full name (picker) and the short name
+// (landing row). English is the bucket table's own display_name / short_name.
+const BUCKET_ES: Names = {
+  SPT: 'Deportes y recreación',
+  GAM: 'Juegos y trivia',
+  SHW: 'Música y espectáculos',
+  PTY: 'Fiestas y festivales',
+  BGN: 'Gangas',
+  KID: 'Niños y familia',
+  LRN: 'Aprender y conectar',
+  GIV: 'Ayudar',
+  CMT: 'Barrio y fe',
+};
+
+const BUCKET_SHORT_ES: Names = {
+  SPT: 'Deportes',
+  GAM: 'Juegos',
+  SHW: 'Música y shows',
+  PTY: 'Fiestas',
+  BGN: 'Gangas',
+  KID: 'Niños',
+  LRN: 'Aprender',
+  GIV: 'Ayudar',
+  CMT: 'Comunidad',
+};
+
+const BUCKET_PL: Names = {
+  SPT: 'Sport i rekreacja',
+  GAM: 'Gry i quizy',
+  SHW: 'Muzyka i występy',
+  PTY: 'Imprezy i festiwale',
+  BGN: 'Okazje',
+  KID: 'Dzieci i rodzina',
+  LRN: 'Nauka i kontakty',
+  GIV: 'Pomaganie',
+  CMT: 'Sąsiedztwo i wiara',
+};
+
+const BUCKET_SHORT_PL: Names = {
+  SPT: 'Sport',
+  GAM: 'Gry',
+  SHW: 'Muzyka',
+  PTY: 'Imprezy',
+  BGN: 'Okazje',
+  KID: 'Dzieci',
+  LRN: 'Nauka',
+  GIV: 'Pomaganie',
+  CMT: 'Społeczność',
+};
+
+const BUCKET_AR: Names = {
+  SPT: 'الرياضة والترفيه',
+  GAM: 'ألعاب ومسابقات',
+  SHW: 'موسيقى وعروض',
+  PTY: 'حفلات ومهرجانات',
+  BGN: 'صفقات',
+  KID: 'الأطفال والعائلة',
+  LRN: 'تعلّم وتواصل',
+  GIV: 'العطاء',
+  CMT: 'الحي والإيمان',
+};
+
+const BUCKET_SHORT_AR: Names = {
+  SPT: 'رياضة',
+  GAM: 'ألعاب',
+  SHW: 'موسيقى وعروض',
+  PTY: 'حفلات',
+  BGN: 'صفقات',
+  KID: 'أطفال',
+  LRN: 'تعلّم',
+  GIV: 'العطاء',
+  CMT: 'المجتمع',
 };
 
 // Machine drafts (needs native read, OSE-1968), like the rest of each catalog.
@@ -1522,6 +1675,22 @@ export const CATEGORY_NAMES: Readonly<Record<Lang, Names>> = {
   fa: CATEGORY_FA,
 };
 
+/** Bucket names per language, keyed by `event_type_bucket.bucket_code`. */
+export const BUCKET_NAMES: Readonly<Record<Lang, Names>> = {
+  en: {},
+  es: BUCKET_ES,
+  pl: BUCKET_PL,
+  ar: BUCKET_AR,
+};
+
+/** Short bucket names for the landing row, keyed by `event_type_bucket.bucket_code`. */
+export const BUCKET_SHORT_NAMES: Readonly<Record<Lang, Names>> = {
+  en: {},
+  es: BUCKET_SHORT_ES,
+  pl: BUCKET_SHORT_PL,
+  ar: BUCKET_SHORT_AR,
+};
+
 /** Type names per language, keyed by `event_type_registry.id`. */
 export const TYPE_NAMES: Readonly<Record<Lang, Names>> = {
   en: {},
@@ -1553,9 +1722,30 @@ function pick(table: Readonly<Record<Lang, Names>>, lang: Lang, key: string): st
   return Object.prototype.hasOwnProperty.call(names, key) ? names[key] : undefined;
 }
 
-/** A category's name in `lang`; the registry's own name when the code is unknown. */
+/**
+ * A catalog group's name in `lang`: a bucket (0127) or a category (0076) code.
+ * The registry's own name when the code is unknown.
+ */
 export function categoryName(lang: Lang, code: string, registryName: string): string {
-  return pick(CATEGORY_NAMES, lang, code) ?? registryName;
+  return pick(BUCKET_NAMES, lang, code) ?? pick(CATEGORY_NAMES, lang, code) ?? registryName;
+}
+
+/**
+ * The group's name on the landing row: the bucket's short name in `lang`, else
+ * its full name in `lang`, else the registry's short name, else its name.
+ */
+export function rowLabel(
+  lang: Lang,
+  code: string,
+  registryName: string,
+  registryShort?: string
+): string {
+  return (
+    pick(BUCKET_SHORT_NAMES, lang, code) ??
+    pick(BUCKET_NAMES, lang, code) ??
+    pick(CATEGORY_NAMES, lang, code) ??
+    (registryShort || registryName)
+  );
 }
 
 /** A type's name in `lang`; the registry's own name when the id is unknown. */

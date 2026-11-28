@@ -91,6 +91,7 @@ import {
 import { categoryByTypeId, type TypeCategory } from '../lib/event-type-catalog.js';
 import { eventTypeName } from '../lib/i18n/event-type-names.js';
 import { readEventTypeCatalog } from '../lib/event-type-catalog-read.js';
+import { resolveAllowedMaxTier, type ClearanceEnv } from '../lib/template-clearance.js';
 import { loadStreetLayer, type StreetMapEnv } from '../lib/street-map.js';
 import { renderShareButton } from '../lib/share-button.js';
 import { fetchPlaceLinks } from '../lib/map-place-links.js';
@@ -3185,7 +3186,9 @@ export async function handleLandingPage(
     // read only folds every event into "Other" (one choice, so no row); the
     // cards still show. tests/landing-category-scenarios.spec.ts.
     const typeCategoriesRead: Promise<Map<string, TypeCategory> | undefined> = (async () =>
-      categoryByTypeId(await readEventTypeCatalog(db)))().catch(() => undefined);
+      categoryByTypeId(
+        await readEventTypeCatalog(db, resolveAllowedMaxTier(env as ClearanceEnv))
+      ))().catch(() => undefined);
     const dp = getDataProvider(env as LandingEnv, ctx ?? null);
     const result = await dp.listEvents('root');
     // OSE-2012: an online event is link only. It has no cell, so it could never
