@@ -35,7 +35,7 @@
  *   Derived from the templates, so it can never claim an id the app does not
  *   emit. Dynamically-built ids (`data-testid="row-' + id + '"`) are excluded
  *   on purpose: t() would accept one while nothing ever renders it.
- * Generated 2026-11-28 — 848 ids.
+ * Generated 2026-11-28 — 849 ids.
  */
 (function (root, factory) {
   const api = factory();
@@ -666,8 +666,9 @@
       'wizard-when-tomorrow',
       'wizard-zip-auto-note',
     ]),
-    // public.html — 22 ids
+    // public.html — 23 ids
     PUBLIC: Object.freeze([
+      'brand-tagline',
       'nav-events',
       'nav-map',
       'public-events',

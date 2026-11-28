@@ -42,15 +42,15 @@
     .ose-choice-btn:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
     .ose-choice-note { margin: 0; font-size: 0.85rem; color: var(--ose-muted); }
 
-    .ose-event-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-start; margin: 1rem 0 0.5rem; }
-    .ose-share-btn, .ose-calendar-link { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 0.75rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 44px; margin: 0; text-decoration: none; flex: 1 1 120px; }
+    .ose-event-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: stretch; margin: 1rem 0 0.5rem; }
+    .ose-share-btn, .ose-calendar-link { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 0.75rem; border-radius: 6px; font-size: 1rem; font-weight: 600; line-height: 1.25; text-align: center; font-family: inherit; box-sizing: border-box; cursor: pointer; min-height: 44px; margin: 0; text-decoration: none; flex: 1 1 120px; }
     .ose-share-btn:hover, .ose-calendar-link:hover, .ose-calendar-option:hover { background: var(--ose-accent-tint); }
     .ose-share-btn:focus, .ose-calendar-link:focus, .ose-calendar-option:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
-    .ose-calendar-menu { flex: 1 1 120px; }
-    .ose-calendar-summary { width: 100%; list-style: none; cursor: pointer; }
+    .ose-calendar-menu { flex: 1 1 120px; position: relative; display: flex; flex-direction: column; }
+    .ose-calendar-summary { width: 100%; flex: 1 1 auto; list-style: none; cursor: pointer; }
     .ose-calendar-summary::-webkit-details-marker { display: none; }
-    .ose-calendar-options { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
-    .ose-calendar-option { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0.65rem 1rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; color: var(--ose-accent); text-decoration: none; font-weight: 600; font-size: 1rem; }
+    .ose-calendar-options { position: absolute; top: 100%; inset-inline: 0; z-index: 2; display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; padding: 0.5rem; background: var(--ose-card); border-radius: 6px; }
+    .ose-calendar-option { display: inline-flex; align-items: center; justify-content: center; text-align: center; line-height: 1.25; min-height: 44px; padding: 0.65rem 1rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; color: var(--ose-accent); text-decoration: none; font-weight: 600; font-size: 1rem; }
     .ose-back { margin: 1.5rem 0 0.5rem; }
     .ose-back-btn { display: flex; align-items: center; justify-content: center; box-sizing: border-box; width: 100%; min-height: 44px; padding: 0.75rem 1.5rem; border: 1.5px solid var(--accent); border-radius: 6px; background: transparent; color: var(--accent); font-size: 1.05rem; font-weight: 600; line-height: 1.5; text-decoration: none; }
     .ose-back-btn:focus { outline: 3px solid var(--accent); outline-offset: 2px; }
@@ -73,6 +73,7 @@
     .ose-langmenu-item { display: flex; align-items: center; gap: 0.5rem; box-sizing: border-box; min-height: 48px; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; text-decoration: none; }
     .ose-langmenu-current { background: var(--accent); color: var(--on-accent); }
     .ose-langmenu-check { display: inline-block; width: 1.25em; }
+    .ose-langmenu-flag { flex: 0 0 auto; border-radius: 2px; }
     .ose-langmenu-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; box-sizing: border-box; min-height: 48px; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; }
     .ose-langmenu-sub[open] > .ose-langmenu-row .ose-langmenu-caret { transform: rotate(90deg); }
     [dir="rtl"] .ose-langmenu-sub[open] > .ose-langmenu-row .ose-langmenu-caret { transform: rotate(-90deg); }

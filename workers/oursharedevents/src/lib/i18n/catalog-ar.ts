@@ -416,9 +416,8 @@ export const ar: Record<MessageKey, string> = {
   'provenance.degradedChip': 'البيانات غير متاحة',
   'provenance.degradedText': 'نعرض محتوى نموذجيًا ريثما تعود البيانات الفعلية.',
   'provenance.degradedLabel': 'تنبيه عدم توفر البيانات مؤقتًا',
-  // The form pages (OSE-1850). No privacy or consent text here: it shows in
-  // English with `form.privacy.englishNote` until a human translation and a
-  // legal read.
+  // The form pages (OSE-1850). The privacy notice is translated too (owner
+  // 2026-11-28); the English text under it stays the official one.
   'form.eventFallback': 'فعالية',
   'form.sponsorThanks': 'الفعالية بدعم من',
   'form.register.heading': 'سجّل في هذه الفعالية',
@@ -464,5 +463,48 @@ export const ar: Record<MessageKey, string> = {
   'form.next.checkin': 'في يوم الفعالية، سجّل حضورك بنقرة واحدة.',
   'form.next.browse': 'اطّلع على ما سيأتي أيضًا',
   'form.privacy.details': 'تفاصيل الخصوصية',
-  'form.privacy.englishNote': 'إشعار الخصوصية هذا باللغة الإنجليزية إلى أن تتوفر ترجمة مُراجَعة.',
+  'form.privacy.englishNote': 'هذه ترجمة. النص الإنجليزي هو النص الرسمي.',
+  // MACHINE DRAFT, awaiting the native read (OSE-1968).
+  'brand.tagline': 'فعاليات مجتمعك',
+  'privacy.summary.register': 'يُحذف اسمك وبريدك الإلكتروني في اليوم التالي للفعالية.',
+  'privacy.summary.survey': 'تُزال البيانات الشخصية من التعليقات خلال 24 ساعة.',
+  'privacy.summary.email': 'يُحذف بريدك الإلكتروني بعد 30 يومًا.',
+  'privacy.purpose.register':
+    'نطلب اسمك، وبريدك الإلكتروني إن شئت، ليتمكن المنظّم من إبلاغك إذا تغيّرت هذه الفعالية.',
+  'privacy.purpose.checkin':
+    'نسجّل <strong>عددًا مجهول الهوية فقط</strong>، ولا نحفظ أي بيانات شخصية.',
+  'privacy.purpose.survey': 'نطلب تقييماتك وتعليقاتك الاختيارية لتحسين الفعاليات القادمة.',
+  'privacy.purpose.email': 'نطلب بريدك الإلكتروني لإبلاغك بفعاليات المجتمع القادمة.',
+  'privacy.basisLabel': 'الأساس القانوني:',
+  'privacy.basis.register':
+    'المادة 6(1)(أ) من اللائحة العامة لحماية البيانات: <strong>موافقتك</strong>.',
+  'privacy.basis.checkin':
+    'المادة 6(1)(و) من اللائحة العامة لحماية البيانات: مصلحة مشروعة في معرفة عدد الحضور.',
+  'privacy.basis.survey':
+    'المادة 6(1)(أ) من اللائحة العامة لحماية البيانات: <strong>موافقتك</strong>.',
+  'privacy.basis.email':
+    'المادة 6(1)(أ) من اللائحة العامة لحماية البيانات: <strong>موافقتك</strong>. يمكنك <strong>سحب موافقتك</strong> في أي وقت.',
+  'privacy.retention.register':
+    'يُشفَّر اسمك وبريدك الإلكتروني <strong>ويُحذفان في اليوم التالي للفعالية</strong>. ويُحذف باقي التسجيل بعد 90 يومًا من تسجيلك، أو في اليوم التالي للفعالية إن كان ذلك لاحقًا.',
+  'privacy.retention.checkin': 'تُحفظ الأعداد الإجمالية المجهولة لتقارير الفعالية فقط.',
+  'privacy.retention.survey':
+    'تُزال البيانات الشخصية من التعليقات خلال <strong>24</strong> ساعة. وتُحفظ التقييمات الإجمالية دون موعد انتهاء.',
+  'privacy.retention.email':
+    'يُحفظ بريدك الإلكتروني مشفّرًا ويُحذف تلقائيًا بعد <strong>30</strong> يومًا.',
+  'privacy.rights': 'يحق لك الاطلاع على بياناتك أو تصحيحها أو حذفها، وتقديم شكوى إلى',
+  'privacy.authority': 'هيئة حماية البيانات في منطقتك',
+  'privacy.commerce':
+    '<strong>إشعار الدفع:</strong> تتولى بيانات الدفع جهة معالجة ملتزمة بمعيار PCI DSS، ولا نحفظها نحن أبدًا.',
+  'privacy.policyLink': 'سياسة الخصوصية الكاملة (بالإنجليزية)',
+  'privacy.officialEnglish': 'النص الرسمي بالإنجليزية',
+  'sponsorCard.whatsOn': 'ما الجديد',
+  'sponsorCard.call': 'اتصل على {phone}',
+  'sponsorCard.email': 'راسل {email}',
+  'sponsorCard.website': 'زُر الموقع',
+  'sponsorCard.notFoundTitle': 'لم نجد هذا الراعي',
+  'sponsorCard.notFoundBody': 'هذا الراعي غير معروض الآن.',
+  'sponsorCard.limitTitle': 'طلبات كثيرة جدًا',
+  'sponsorCard.limitBody': 'انتظر دقيقة ثم حاول مرة أخرى.',
+  'sponsorCard.errorTitle': 'حدث خطأ ما',
+  'sponsorCard.errorBody': 'حاول مرة أخرى بعد لحظة.',
 };

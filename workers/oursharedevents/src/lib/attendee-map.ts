@@ -243,8 +243,26 @@ const NAME_HALF_UNITS = 9;
 export const OSM_COPYRIGHT_URL: Record<Lang, string> = {
   en: 'https://www.openstreetmap.org/copyright/en',
   es: 'https://www.openstreetmap.org/copyright/es',
-  pl: 'https://www.openstreetmap.org/copyright/pl',
+  'zh-hans': 'https://www.openstreetmap.org/copyright/zh-CN',
+  'zh-hant': 'https://www.openstreetmap.org/copyright/zh-TW',
+  hi: 'https://www.openstreetmap.org/copyright/hi',
   ar: 'https://www.openstreetmap.org/copyright/ar',
+  pt: 'https://www.openstreetmap.org/copyright/pt-BR',
+  bn: 'https://www.openstreetmap.org/copyright/bn',
+  ru: 'https://www.openstreetmap.org/copyright/ru',
+  ja: 'https://www.openstreetmap.org/copyright/ja',
+  fr: 'https://www.openstreetmap.org/copyright/fr',
+  de: 'https://www.openstreetmap.org/copyright/de',
+  ur: 'https://www.openstreetmap.org/copyright/ur',
+  id: 'https://www.openstreetmap.org/copyright/id',
+  ko: 'https://www.openstreetmap.org/copyright/ko',
+  vi: 'https://www.openstreetmap.org/copyright/vi',
+  tr: 'https://www.openstreetmap.org/copyright/tr',
+  it: 'https://www.openstreetmap.org/copyright/it',
+  tl: 'https://www.openstreetmap.org/copyright/tl',
+  pl: 'https://www.openstreetmap.org/copyright/pl',
+  uk: 'https://www.openstreetmap.org/copyright/uk',
+  fa: 'https://www.openstreetmap.org/copyright/fa',
 };
 
 /**

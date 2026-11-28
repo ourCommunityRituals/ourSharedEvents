@@ -80,6 +80,7 @@ interface Header {
   edgeLeft: number;
   edgeRight: number;
   logo: Measured;
+  logoName: Measured;
   events: Measured;
   map: Measured;
 }
@@ -123,6 +124,7 @@ async function measure(page: Page): Promise<Header> {
       edgeLeft: box.left + parseFloat(pad.paddingLeft),
       edgeRight: box.right - parseFloat(pad.paddingRight),
       logo: one('landing-logo'),
+      logoName: one('landing-logo-name'),
       events: one('nav-events'),
       map: one('nav-map'),
     };
@@ -134,7 +136,8 @@ function expectMenuFits(m: Header, where: string, rtl: boolean, width: number): 
   expect(m.scrollWidth, `${where}: nothing pushes the page sideways`).toBeLessThanOrEqual(
     m.clientWidth
   );
-  expect(m.logo.lines, `${where}: the name is whole, on one line`).toBe(1);
+  // The name on one line; the translated tagline sits under it (owner 2026-11-28).
+  expect(m.logoName.lines, `${where}: the name is whole, on one line`).toBe(1);
   expect(m.events.lines, `${where}: "${m.events.words}" is on one line`).toBe(1);
   expect(m.map.lines, `${where}: "${m.map.words}" is on one line`).toBe(1);
 

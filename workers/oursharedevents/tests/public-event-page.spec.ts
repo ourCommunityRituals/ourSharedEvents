@@ -703,8 +703,8 @@ describe('OSE-1760: the page language comes from Accept-Language, by quality val
     }
   });
 
-  test('quality value, not position, decides: "fr, es;q=0.5" is Spanish', async () => {
-    const res = await get('fr, es;q=0.5');
+  test('quality value, not position, decides: "nl, es;q=0.5" is Spanish (Dutch is not listed)', async () => {
+    const res = await get('nl, es;q=0.5');
     expect(await res.text()).toContain('<html lang="es"');
   });
 

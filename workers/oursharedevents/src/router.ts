@@ -51,6 +51,8 @@
  *   GET /es/events/:id/register|checkin|survey|updates → the form page in that language
  *                                  (OSE-1850); /es stands for any listed language. The form posts
  *                                  to the unprefixed API; no language is stored.
+ *   GET /es/sponsors/:id         → the public sponsor card in that language (owner 2026-11-28);
+ *                                  the same gate and read limit as /sponsors/:id
  *   GET /events                  → the public events list page; limited per caller, its own scope
  *   GET /events/:id              → the public event page (any path under /events/ with one segment)
  *   GET /events/:id/:name        → the same page at its readable address (OSE-1684); a name that
@@ -217,6 +219,7 @@
  *   GET    /sponsors/:id                       → public sponsor card: title, location, contact (0083)
  *   GET    /sponsor?t=<token>                  → the sponsor's own page (token-gated, read-limited)
  *   GET    /sponsor-default-logo.svg           → the OSE default sponsor image (0083)
+ *   GET    /flags/:lang.svg                    → the flag or letter badge beside a language's name
  *   GET    /event-default-thumb.svg            → the OSE default event card image
  *   POST   /api/v2/events/:id/sponsors/:sid/impression → log impression
  *   POST   /api/v2/events/:id/sponsors/:sid/click      → log click
@@ -336,6 +339,7 @@ import {
   type PublicReadLimitEnv,
 } from './lib/public-read-limit.js';
 import { SPONSOR_DEFAULT_LOGO_PATH, sponsorDefaultLogoResponse } from './lib/sponsor-card.js';
+import { flagLangFromPath, languageFlagResponse } from './lib/i18n/language-flags.js';
 import { EVENT_DEFAULT_THUMB_PATH, eventDefaultThumbResponse } from './lib/event-thumb.js';
 import { handleSponsorCardPage } from './handlers/sponsor-card.js';
 import {
@@ -956,6 +960,11 @@ export async function route(
         (req) => pageLimitResponse(req, langPrefix.lang, '/events')
       )(request, env);
     }
+    if (page?.kind === 'sponsor') {
+      // The same card as /sponsors/<id>, in the path's language. The handler
+      // keeps its own public read limit, so a prefix is no second allowance.
+      return handleSponsorCardPage(request, env, page.id, langPrefix.lang);
+    }
     if (page?.kind === 'share') {
       // The same count and per-caller limit as /e/<code>: a share open, what + when.
       return publicCountLimited('event-code-share', (req, e: typeof env, countable) =>
@@ -1007,6 +1016,11 @@ export async function route(
   // OSE default sponsor image (0083) — static, same-origin, locked down.
   if (pathname === SPONSOR_DEFAULT_LOGO_PATH && method === 'GET') {
     return sponsorDefaultLogoResponse();
+  }
+  // The flag or letter badge beside a language's name — static, same-origin.
+  if (method === 'GET' && pathname.startsWith('/flags/')) {
+    const flagLang = flagLangFromPath(pathname);
+    if (flagLang) return languageFlagResponse(flagLang);
   }
 
   if (pathname === '/ui.css') {

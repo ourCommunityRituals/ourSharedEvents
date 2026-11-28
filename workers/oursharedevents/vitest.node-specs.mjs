@@ -263,6 +263,7 @@ export const NODE_SPECS = [
   'tests/language-menu-third-language.spec.ts',
   'tests/language-menu-close.spec.ts',
   'tests/language-permutations.spec.ts',
+  'tests/i18n-no-english-left.spec.ts',
   'tests/i18n-polish-arabic.spec.ts',
   'tests/i18n-layer-mutants.spec.ts',
   'tests/language-switch-single.spec.ts',

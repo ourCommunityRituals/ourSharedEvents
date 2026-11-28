@@ -98,6 +98,25 @@ export async function fetchStaticMapImage(
     );
   }
 
+  // Google answers some refusals (a key it will not serve, billing off) with a
+  // picture of the error and a warning header. That picture is not a map, so
+  // it is an upstream error like any other status, and the page hides it.
+  const warning = upstream.headers.get('x-staticmap-api-warning');
+  if (upstream.ok && warning) {
+    console.warn(
+      JSON.stringify({
+        type: 'MAPS_UPSTREAM_WARNING',
+        venue: trimmed,
+        warning: warning.slice(0, 200),
+        timestamp: new Date().toISOString(),
+      })
+    );
+    return Response.json(
+      { ok: false, code: 'MAPS_UPSTREAM_WARNING', error: 'Google Maps refused the request' },
+      { status: 502 }
+    );
+  }
+
   if (!upstream.ok) {
     console.warn(
       JSON.stringify({

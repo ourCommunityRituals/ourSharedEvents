@@ -95,6 +95,26 @@ describe('OSE-1263 — fetchStaticMapImage upstream branches (fetch stubbed)', (
     expect((await res.json()).code).toBe('MAPS_UPSTREAM_STATUS');
   });
 
+  test('502 when Google sends its error picture with a 200 and a warning header (owner 2026-11-28)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), {
+            status: 200,
+            headers: {
+              'content-type': 'image/png',
+              'x-staticmap-api-warning': 'Map error: g.co/staticmaperror',
+            },
+          })
+      )
+    );
+    const res = await fetchStaticMapImage(withKey, 'Chicago, IL');
+    expect(res.status).toBe(502);
+    expect(res.headers.get('Content-Type')).not.toContain('image');
+    expect((await res.json()).code).toBe('MAPS_UPSTREAM_WARNING');
+  });
+
   test('502 when the upstream fetch throws', async () => {
     vi.stubGlobal(
       'fetch',

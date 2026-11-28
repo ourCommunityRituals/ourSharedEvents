@@ -269,6 +269,12 @@ function readerText(html: string): string {
 /** Keys whose text is the same word in English and in that language. */
 const SAME_AS_ENGLISH: Partial<Record<Lang, readonly MessageKey[]>> = {
   pl: ['menu.label', 'area.online', 'provenance.demoChip'],
+  // "Menu" in Portuguese and French, "site" and "type" in French, "site" in
+  // Turkish and "poster" in Indonesian are those languages' own words.
+  pt: ['menu.label'],
+  fr: ['menu.label', 'nav.site', 'area.type'],
+  tr: ['nav.site'],
+  id: ['nav.poster'],
 };
 
 /** English catalog text, cut at its `{slots}`, that the language has replaced. */
