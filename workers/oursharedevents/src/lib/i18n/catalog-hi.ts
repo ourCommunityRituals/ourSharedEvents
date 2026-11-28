@@ -476,4 +476,17 @@ export const hi: Record<MessageKey, string> = {
   'sponsorCard.limitBody': 'एक मिनट रुककर फिर कोशिश करें।',
   'sponsorCard.errorTitle': 'कुछ गड़बड़ हुई',
   'sponsorCard.errorBody': 'थोड़ी देर में फिर कोशिश करें।',
+  // Stamp passport and partner links (owner 2026-11-28).
+  'passport.label': 'स्टैम्प पासपोर्ट',
+  'passport.scanHere': 'इस पड़ाव का कोड स्कैन करें और उसकी मुहर पाएं।',
+  'passport.saved': 'इस पड़ाव की मुहर सहेज ली गई।',
+  'passport.count': 'आपके पास {total} में से {have} मुहरें हैं।',
+  'passport.done': 'कार्ड पूरा! इनाम की मेज़ पर यह स्क्रीन दिखाएं।',
+  'passport.private': 'आपकी मुहरें इसी फ़ोन पर रहती हैं। हम उन्हें कभी नहीं देखते।',
+  'passport.clear': 'मेरी मुहरें मिटाएं',
+  'passport.stamped': 'मुहर लगी',
+  'passport.noScript': 'इस फ़ोन पर मुहरें रखने के लिए JavaScript चालू करें।',
+  'partners.coHostedWith': '{names} के साथ मिलकर आयोजित',
+  'partners.with': '{names} के साथ',
+  'partners.publicBody': '{name} (सरकारी संस्था)',
 };

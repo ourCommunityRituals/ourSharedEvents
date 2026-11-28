@@ -1,0 +1,34 @@
+info:
+  name: "Passport | the organizer turns the stamp passport on"
+  type: http
+  seq: 192
+
+# Mock-layer twin: workers/oursharedevents/tests/passport-route.spec.ts.
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/events/{{boothLiveFairId}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"settings\": {\"passport\": true}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('Passport switch: on saves (200)', function () { expect(res.getStatus()).to.eql(200); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

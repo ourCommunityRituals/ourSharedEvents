@@ -487,4 +487,17 @@ export const ru: Record<MessageKey, string> = {
   'sponsorCard.limitBody': 'Подождите минуту и попробуйте снова.',
   'sponsorCard.errorTitle': 'Что-то пошло не так',
   'sponsorCard.errorBody': 'Попробуйте чуть позже.',
+  // Stamp passport and partner links (owner 2026-11-28).
+  'passport.label': 'Паспорт со штампами',
+  'passport.scanHere': 'Отсканируйте код этой точки, чтобы получить штамп.',
+  'passport.saved': 'Штамп этой точки сохранён.',
+  'passport.count': 'У вас {have} из {total} штампов.',
+  'passport.done': 'Карточка заполнена! Покажите этот экран у стола с призами.',
+  'passport.private': 'Ваши штампы хранятся только на этом телефоне. Мы их не видим.',
+  'passport.clear': 'Удалить мои штампы',
+  'passport.stamped': 'Есть штамп',
+  'passport.noScript': 'Включите JavaScript, чтобы хранить штампы на этом телефоне.',
+  'partners.coHostedWith': 'Совместно с {names}',
+  'partners.with': 'При участии: {names}',
+  'partners.publicBody': '{name} (государственное учреждение)',
 };

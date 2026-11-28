@@ -470,4 +470,17 @@ export const zh_hant: Record<MessageKey, string> = {
   'sponsorCard.limitBody': '請等一分鐘再試。',
   'sponsorCard.errorTitle': '出了點問題',
   'sponsorCard.errorBody': '請稍後再試。',
+  // Stamp passport and partner links (owner 2026-11-28).
+  'passport.label': '集章護照',
+  'passport.scanHere': '掃描此站點的條碼，領取它的印章。',
+  'passport.saved': '此站點的印章已儲存。',
+  'passport.count': '你已集到 {have} / {total} 個印章。',
+  'passport.done': '集章完成！請到獎品台出示此畫面。',
+  'passport.private': '印章只保存在這支手機上，我們永遠看不到。',
+  'passport.clear': '清除我的印章',
+  'passport.stamped': '已蓋章',
+  'passport.noScript': '請開啟 JavaScript，才能在此手機上保存印章。',
+  'partners.coHostedWith': '與 {names} 共同主辦',
+  'partners.with': '合作夥伴：{names}',
+  'partners.publicBody': '{name}（公共機構）',
 };

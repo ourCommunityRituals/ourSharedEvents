@@ -503,4 +503,17 @@ export const de: Record<MessageKey, string> = {
   'sponsorCard.limitBody': 'Warten Sie eine Minute und versuchen Sie es erneut.',
   'sponsorCard.errorTitle': 'Etwas ist schiefgegangen',
   'sponsorCard.errorBody': 'Versuchen Sie es gleich erneut.',
+  // Stamp passport and partner links (owner 2026-11-28).
+  'passport.label': 'Stempelpass',
+  'passport.scanHere': 'Scannen Sie den Code dieser Station, um ihren Stempel zu sammeln.',
+  'passport.saved': 'Stempel für diese Station gespeichert.',
+  'passport.count': 'Sie haben {have} von {total} Stempeln.',
+  'passport.done': 'Karte voll! Zeigen Sie diesen Bildschirm am Preistisch.',
+  'passport.private': 'Ihre Stempel bleiben auf diesem Handy. Wir sehen sie nie.',
+  'passport.clear': 'Meine Stempel löschen',
+  'passport.stamped': 'Gestempelt',
+  'passport.noScript': 'Schalten Sie JavaScript ein, um Stempel auf diesem Handy zu speichern.',
+  'partners.coHostedWith': 'Gemeinsam veranstaltet mit {names}',
+  'partners.with': 'Mit {names}',
+  'partners.publicBody': '{name} (öffentliche Stelle)',
 };

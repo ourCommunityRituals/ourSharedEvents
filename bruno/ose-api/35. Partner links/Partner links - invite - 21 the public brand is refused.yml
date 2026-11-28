@@ -1,0 +1,34 @@
+info:
+  name: "Partner links | invite | the public brand cannot be a partner"
+  type: http
+  seq: 21
+
+# Mock-layer twin: workers/oursharedevents/tests/event-partners-route.spec.ts.
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{partnerEventId}}/partners"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"partner_brand_id\": \"root\", \"partner_name\": \"Everyone\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('Partner links invite: the public brand is refused (400)', function () { expect(res.getStatus()).to.eql(400); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

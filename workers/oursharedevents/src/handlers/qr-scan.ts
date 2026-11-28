@@ -46,6 +46,7 @@
  */
 
 import { eventLiveSql } from '../domain/event-state';
+import { passportStopSql, stampTarget } from '../lib/passport';
 import { isValidQrTokenShape } from '../lib/qr-token';
 import { getOrCreateAnonId, setAnonCookie, type AnonCookieValue } from '../lib/anonymous-id';
 import { scanHourOf, takePosterHourPlace } from '../lib/poster-hour-cap';
@@ -109,6 +110,15 @@ const SCAN_FORM_TYPES = new Set(['register', 'checkin', 'survey', 'email-signup'
  * (via the poster-deployments list response, OSE-1357) and must never drift
  * from what /q/ actually does.
  */
+/** The poster code's row, as the scan reads it. */
+interface ScanDeploymentRow {
+  id: string;
+  event_id: string;
+  is_vote_code: number | null;
+  /** The stop's number when the event's passport is on, else null (lib/passport.ts). */
+  stamp_stop: string | null;
+}
+
 export function qrScanTarget(
   origin: string,
   eventId: string,
@@ -153,14 +163,15 @@ export async function handleQrScan(
   // no cookie, and no event id in the Location (eventLiveSql, the shared test).
   const lookupDeployment = () =>
     env.DB.prepare(
-      `SELECT pd.id AS id, pd.event_id AS event_id, pd.is_vote_code AS is_vote_code
+      `SELECT pd.id AS id, pd.event_id AS event_id, pd.is_vote_code AS is_vote_code,
+              ${passportStopSql('pd', 'e')} AS stamp_stop
          FROM poster_deployments pd
          JOIN events e ON e.id = pd.event_id
         WHERE pd.qr_token = ? AND pd.is_active = 1 AND ${eventLiveSql('e')} LIMIT 1`
     )
       .bind(qrToken)
-      .first<{ id: string; event_id: string; is_vote_code: number | null }>();
-  let deployment: { id: string; event_id: string; is_vote_code: number | null } | null;
+      .first<ScanDeploymentRow>();
+  let deployment: ScanDeploymentRow | null;
   try {
     deployment = await lookupDeployment().catch(() => lookupDeployment());
   } catch (err) {
@@ -180,6 +191,11 @@ export async function handleQrScan(
   }
 
   const { id: deploymentId, event_id: eventId } = deployment;
+  // Stamp passport (lib/passport.ts): on an event with the passport on, a
+  // stop's code lands on the stop's page with #stamp, where the phone saves
+  // the stamp. The scan is counted exactly as any other; only the landing
+  // page differs. A vote code never stamps.
+  const stampStop = deployment.stamp_stop ?? null;
 
   // Past the caller's limit (OSE-1496): send the visitor on, count nothing. No
   // row, no dedup marker and no new anonymous id, so a flood from one client
@@ -190,7 +206,9 @@ export async function handleQrScan(
     return new Response(null, {
       status: 302,
       headers: {
-        Location: qrScanTarget(here.origin, eventId, deploymentId, here.searchParams.get('type')),
+        Location: stampStop
+          ? stampTarget(here.origin, eventId, stampStop)
+          : qrScanTarget(here.origin, eventId, deploymentId, here.searchParams.get('type')),
         'Cache-Control': 'no-store',
       },
     });
@@ -337,12 +355,9 @@ export async function handleQrScan(
   // Pass `?type=` through to the event page (e.g. ?type=checkin from the QR URL).
   // Also embed `?deployment=` so the event-page CTA can continue to the form
   // without losing sourcePlacementId attribution.
-  let redirectTarget = qrScanTarget(
-    url.origin,
-    eventId,
-    deploymentId,
-    url.searchParams.get('type')
-  );
+  let redirectTarget = stampStop
+    ? stampTarget(url.origin, eventId, stampStop)
+    : qrScanTarget(url.origin, eventId, deploymentId, url.searchParams.get('type'));
 
   // OSE-2133: a vote code whose scan stands may carry a pass, in the fragment
   // only. A failure here (a D1 blip reading the set) mints none and the

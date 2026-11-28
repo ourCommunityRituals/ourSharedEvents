@@ -188,6 +188,15 @@ Rules for the build:
 
 Not done in this draft: the CCR worksheet the ticket asks for (95% gate, Dr of Security in the review). It should run on the decided text, after the owner answers the open decisions.
 
+## Addendum, 2026-11-28: the stamp passport changes where a stop's code lands
+
+Owner direction, 2026-11-28: a walk, market or fair whose stops each stamp a card kept on the visitor's own phone (`src/lib/passport.ts`).
+
+- An event opts in with the `passport` setting in `settings_json`. Only a JSON `true` turns it on.
+- When it is on, a stop's code (a placement with a `booth_id`, not a vote code) lands on `/events/:id/booths/:number#stamp` instead of the event page. That is a read of the booth's number for the `Location` header, in one SQL expression in `lib/passport.ts` (`passportStopSql`).
+- Decision 1's "`/q`, the scan path and the hourly dedupe are untouched" now reads: the scan row, the dedupe and every count are untouched, and the scan path reads a booth only for that landing. No scan row carries a booth. `tests/event-booths.spec.ts` holds the narrower rule.
+- The stamp is kept in the phone's local storage only. The page script makes no request and sets no cookie, so the Worker never learns which stops one phone has stamped. `tests/passport.spec.ts` reads the script to hold this.
+
 ## References
 
 - OSE-1996 (epic), OSE-1997 (this decision), OSE-1998, OSE-1999, OSE-2000, OSE-2001, OSE-2002, OSE-2004, OSE-2011

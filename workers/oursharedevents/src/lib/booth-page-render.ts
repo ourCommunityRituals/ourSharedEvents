@@ -29,6 +29,7 @@ import { msg } from './i18n/catalog';
 import { sponsorCardPath, sponsorTitle } from './sponsor-card';
 import { BOOTH_CATEGORIES, type BoothCategory } from './event-booths';
 import { boothListPath, type PublicBooth } from './public-booths';
+import { passportScript, renderPassportCard } from './passport';
 
 /** The words a visitor reads for each category. Same keys as BOOTH_CATEGORIES. */
 export const BOOTH_CATEGORY_LABELS: Readonly<Record<BoothCategory, string>> = {
@@ -59,6 +60,11 @@ export interface BoothPageInput {
   sponsors: BoothPageSponsor[];
   /** The fair is open by link but off the map: ask search engines to skip it. */
   noindex: boolean;
+  /**
+   * The fair's stamp passport, when it has one on: every stop number in use
+   * (lib/passport.ts). Absent or null: no passport card.
+   */
+  passportStops?: string[] | null;
 }
 
 /** The page's own CSS: layout only, no colour. Under the 400-character inline budget. */
@@ -176,6 +182,15 @@ export function renderBoothPage(input: BoothPageInput): string {
         <h1 class="bp-name" id="booth-name" data-testid="booth-name">${name}</h1>
         ${category ? `<p class="detail-card-sub" data-testid="booth-category">${esc(category)}</p>` : ''}
       </section>
+      ${
+        input.passportStops
+          ? renderPassportCard({
+              eventId: event.id,
+              stops: input.passportStops,
+              stop: booth.number,
+            }) + passportScript()
+          : ''
+      }
       <a class="btn btn-secondary btn-block bp-gap" href="${esc(boothListPath(event.id))}" data-testid="booth-all-stalls-link">All stalls at this fair</a>
       <a class="btn btn-primary btn-block bp-gap" href="${esc(eventPath)}" data-testid="booth-event-link">See the fair: ${eventTitle}</a>
       ${renderBackButton({ fallbackHref: eventPath, testid: 'booth-back', className: 'btn btn-secondary btn-block' })}`,

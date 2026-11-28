@@ -492,4 +492,17 @@ export const vi: Record<MessageKey, string> = {
   'sponsorCard.limitBody': 'Hãy chờ một phút rồi thử lại.',
   'sponsorCard.errorTitle': 'Đã có lỗi',
   'sponsorCard.errorBody': 'Hãy thử lại sau giây lát.',
+  // Stamp passport and partner links (owner 2026-11-28).
+  'passport.label': 'Hộ chiếu đóng dấu',
+  'passport.scanHere': 'Quét mã của điểm dừng này để nhận con dấu.',
+  'passport.saved': 'Đã lưu con dấu cho điểm dừng này.',
+  'passport.count': 'Bạn có {have} trên {total} con dấu.',
+  'passport.done': 'Đủ thẻ rồi! Hãy cho xem màn hình này ở bàn nhận quà.',
+  'passport.private': 'Con dấu của bạn chỉ nằm trên điện thoại này. Chúng tôi không bao giờ thấy.',
+  'passport.clear': 'Xóa con dấu của tôi',
+  'passport.stamped': 'Đã đóng dấu',
+  'passport.noScript': 'Hãy bật JavaScript để giữ con dấu trên điện thoại này.',
+  'partners.coHostedWith': 'Đồng tổ chức với {names}',
+  'partners.with': 'Cùng với {names}',
+  'partners.publicBody': '{name} (cơ quan công)',
 };
