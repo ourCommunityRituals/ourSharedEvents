@@ -24,11 +24,15 @@
 #     for when the Claude weekly limit is used up. Flip it back to `claude` after.
 # The @claude respond job ignores the switch: a person asked for it by name.
 #
-# Auth (one is enough; the subscription token wins when both are set):
-#   - CLAUDE_CODE_OAUTH_TOKEN: Claude subscription token (`claude setup-token`).
-#     Reviews count against the subscription's usage limits, not API billing.
-#   - ANTHROPIC_API_KEY: pay-as-you-go API key, used only without the token.
-# With neither, both jobs skip with a ::warning:: rather than a silent pass.
+# Auth: workload identity federation (OSE-1109). No Claude key is stored: each
+# job swaps GitHub's short-lived OIDC token for a short-lived Claude API token.
+# Repository variables (identifiers, not credentials):
+#   - ANTHROPIC_ORGANIZATION_ID: the Claude Console organization.
+#   - ANTHROPIC_WIF_RULE_PR: federation rule for pull_request runs (review).
+#   - ANTHROPIC_WIF_RULE_MAIN: federation rule for runs on main (@claude comments).
+# Never add anthropic_api_key or claude_code_oauth_token: either one silently
+# takes precedence over federation. Without the variables, both jobs skip with
+# a ::warning:: rather than a silent pass.
 #
 # @see .github/claude-review/security-charter.md - the review charter
 # @see CLAUDE.md - Project conventions and architecture decisions
@@ -68,10 +72,14 @@ jobs:
     defaults:
       run:
         shell: bash
+    # id-token: write is for Claude API sign-in only. The action also gets this
+    # job's own github_token, so it never trades for a Claude GitHub App token
+    # and what it can do on GitHub is exactly this block.
     permissions:
       contents: read
       pull-requests: write
       issues: write
+      id-token: write
 
     steps:
       - name: Harden runner
@@ -82,8 +90,7 @@ jobs:
         id: check-key
         env:
           PR_REVIEWER: ${{ vars.PR_REVIEWER || 'claude' }}
-          HAS_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
-          HAS_API_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+          HAS_RULE: ${{ vars.ANTHROPIC_WIF_RULE_PR != '' && vars.ANTHROPIC_ORGANIZATION_ID != '' }}
         run: |
           case "$PR_REVIEWER" in
             copilot)
@@ -94,11 +101,11 @@ jobs:
             claude) ;;
             *) echo "::warning title=Unknown PR_REVIEWER::'$PR_REVIEWER' is not claude or copilot — using claude." ;;
           esac
-          if [ "$HAS_OAUTH" != "true" ] && [ "$HAS_API_KEY" != "true" ]; then
+          if [ "$HAS_RULE" != "true" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             # warning, not notice: a skipped reviewer must be visible on the PR,
             # not read as a passed review (OSE-1400).
-            echo "::warning title=Claude security review NOT run::Neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY is configured — this PR was not security-reviewed by Claude."
+            echo "::warning title=Claude security review NOT run::Claude sign-in (ANTHROPIC_WIF_RULE_PR, ANTHROPIC_ORGANIZATION_ID) is not configured — this PR was not security-reviewed by Claude."
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
@@ -240,10 +247,11 @@ jobs:
         if: steps.check-key.outputs.skip != 'true' && steps.charter.outputs.skip != 'true'
         continue-on-error: true # the next step decides; a failed review goes red, not green
         with:
-          # Subscription first; the API key is passed only when no token is set,
-          # so a configured subscription is never silently bypassed for billing.
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          anthropic_api_key: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN == '' && secrets.ANTHROPIC_API_KEY || '' }}
+          # Workload identity federation (see the header). No stored key.
+          anthropic_federation_rule_id: ${{ vars.ANTHROPIC_WIF_RULE_PR }}
+          anthropic_organization_id: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
+          # This job's own token, bounded by `permissions:` above.
+          github_token: ${{ github.token }}
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
@@ -265,7 +273,7 @@ jobs:
       - name: Fail when the review did not run
         if: steps.claude-review.outcome == 'failure'
         run: |
-          echo "::error title=Claude review did not run::No review was produced for this PR (auth, credit, model or API error). See the step above."
+          echo "::error title=Claude review did not run::No review was produced for this PR (sign-in, credit, model or API error). See the step above. Sign-in refusals show under Workload identity > History in the Claude Console."
           exit 1
 
   respond:
@@ -286,10 +294,12 @@ jobs:
     defaults:
       run:
         shell: bash
+    # id-token: write is for Claude API sign-in only (see the review job).
     permissions:
       contents: read
       pull-requests: write
       issues: write
+      id-token: write
 
     steps:
       - name: Harden runner
@@ -299,12 +309,11 @@ jobs:
       - name: Check auth
         id: check-key
         env:
-          HAS_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
-          HAS_API_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+          HAS_RULE: ${{ vars.ANTHROPIC_WIF_RULE_MAIN != '' && vars.ANTHROPIC_ORGANIZATION_ID != '' }}
         run: |
-          if [ "$HAS_OAUTH" != "true" ] && [ "$HAS_API_KEY" != "true" ]; then
+          if [ "$HAS_RULE" != "true" ]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::warning title=Claude not run::Neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY is configured — @claude cannot respond."
+            echo "::warning title=Claude not run::Claude sign-in (ANTHROPIC_WIF_RULE_MAIN, ANTHROPIC_ORGANIZATION_ID) is not configured — @claude cannot respond."
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
@@ -319,14 +328,16 @@ jobs:
         if: steps.check-key.outputs.skip != 'true'
         continue-on-error: true
         with:
-          # Subscription first; the API key is passed only when no token is set,
-          # so a configured subscription is never silently bypassed for billing.
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          anthropic_api_key: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN == '' && secrets.ANTHROPIC_API_KEY || '' }}
+          # Workload identity federation. A PR comment runs on main, so the
+          # main-branch rule applies.
+          anthropic_federation_rule_id: ${{ vars.ANTHROPIC_WIF_RULE_MAIN }}
+          anthropic_organization_id: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
+          # This job's own token, bounded by `permissions:` above.
+          github_token: ${{ github.token }}
           # --setting-sources user (OSE-2231, security sweep 2026-11-25 H1): tag
           # mode checks out the PR branch itself, after any restore step could
           # run, so a .claude/settings.json hook added on that branch would run
-          # here next to the Claude credentials. Only user settings are loaded:
+          # here next to the Claude sign-in. Only user settings are loaded:
           # no in-repo settings, hooks or CLAUDE.md. Context goes in the comment.
           claude_args: |
             --model claude-sonnet-5-5

@@ -424,15 +424,17 @@ function github() {
       deploy.length === 0 ? 'PASS' : 'FAIL',
       deploy.length ? `${deploy.length} repo-level: ${deploy.join(', ')}` : 'none at repo level'
     );
-    // G7 the PR security reviewer has a credential (warn: the job is advisory)
-    const hasKey = names.includes('CLAUDE_CODE_OAUTH_TOKEN') || names.includes('ANTHROPIC_API_KEY');
+    // G7 no stored Claude key is left behind: the reviewer signs in by
+    // workload identity federation (OSE-1109), so a leftover key is unused
+    // risk. Warn, not fail: deleting it is an owner step.
+    const stored = names.filter((n) => n === 'CLAUDE_CODE_OAUTH_TOKEN' || n === 'ANTHROPIC_API_KEY');
     add(
       'G7',
-      'Claude PR security review has a credential (otherwise it skips with a warning)',
-      hasKey ? 'PASS' : 'WARN',
-      hasKey
-        ? 'present'
-        : 'not a repository secret (organization or environment secret not checked)'
+      'No stored Claude key (the PR reviewer signs in by federation)',
+      stored.length === 0 ? 'PASS' : 'WARN',
+      stored.length === 0
+        ? 'none at repo level (organization or environment secrets not checked)'
+        : `delete: ${stored.join(', ')}`
     );
   }
 
