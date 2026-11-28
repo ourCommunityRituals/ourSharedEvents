@@ -110,6 +110,9 @@ async function html(screen: EventFormScreen, o: RenderOpts = {}): Promise<string
  * screen and language alone is parsed once and shared: most cases read the
  * same 88 pages, and every test that reads one only reads it. Parsing each
  * one again made this spec a minute long, and the mutation pass reruns it.
+ * A test that must catch a change to the page on its own asks with any other
+ * option (`query: ''` will do), so it renders the page itself: the mutation
+ * pass reruns only the tests that ran the mutated code.
  */
 const PARSED = new Map<string, Promise<Document>>();
 async function doc(screen: EventFormScreen, o: RenderOpts = {}): Promise<Document> {
@@ -1084,10 +1087,27 @@ describe('E3 | headers, the log, and the parts around the words', () => {
     expect(tpl.content.querySelector('[data-testid="register-next-step"]')).toBeNull();
   });
 
+  // Check-in reads its deployment another way (its button posts it), so it has
+  // no field; the three forms with a submit button carry it in the form.
+  test('a form reached from a poster carries its deployment in a hidden field, in every language', async () => {
+    for (const lang of LANGUAGES) {
+      for (const screen of SCREENS.filter((s) => s !== 'checkin')) {
+        const d = await doc(screen, { lang, query: '?deployment=dep_poster7' });
+        const field = d.querySelector('[data-testid="form-deployment-id"]');
+        expect(field, `${screen} ${lang}`).not.toBeNull();
+        expect(field!.getAttribute('type'), `${screen} ${lang}`).toBe('hidden');
+        expect(field!.getAttribute('name'), `${screen} ${lang}`).toBe('deploymentId');
+        expect(field!.getAttribute('value'), `${screen} ${lang}`).toBe('dep_poster7');
+      }
+    }
+  });
+
   test('a form with no poster deployment has no deployment field and nothing in its place', async () => {
     for (const lang of LANGUAGES) {
       for (const screen of SCREENS) {
-        const d = await doc(screen, { lang });
+        // A fresh render, not the shared page: the mutation pass reruns only the
+        // tests that ran the code, and a shared page ran it in an earlier test.
+        const d = await doc(screen, { lang, query: '' });
         expect(
           d.querySelector('[data-testid="form-deployment-id"]'),
           `${screen} ${lang}`
