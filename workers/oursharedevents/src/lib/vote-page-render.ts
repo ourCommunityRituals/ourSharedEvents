@@ -60,6 +60,12 @@ export interface VotePageInput {
   channel?: 'room' | 'crowd';
   /** The Online Pick's result, once both are final; shown under the Room Pick's. */
   crowdResult?: PublicCrowdResult | null;
+  /**
+   * The Online Pick's bot check (owner, 2026-11-28, ADR-040 decision 13, D3):
+   * the Turnstile loader and widget, already built by lib/turnstile.ts, or ''
+   * while it is off. Shown on the Online Pick's page only, never the room's.
+   */
+  turnstile?: { script: string; widget: string };
 }
 
 /** The words for a page opened with no pass, or one that has run out. */
@@ -74,6 +80,10 @@ export const ACCESS_PASS_LINE =
 
 /** The words for a vote that went in (counted or already counted alike). */
 export const VOTE_IN_WORDS = 'Thanks. Your vote is in.';
+
+/** The Online Pick's words when the bot check is not done or did not pass (D3). */
+export const CHECK_FIRST_WORDS = 'Please finish the check above, then vote.';
+export const CHECK_FAILED_WORDS = 'The check did not go through. Please try it again.';
 
 /**
  * The house rule's ten risks (ADR-040 decision 9), in plain words. A draft for
@@ -205,8 +215,18 @@ export const VOTE_PAGE_SCRIPT = `(function () {
       }).catch(function () {});
     }
 
+    function botToken() {
+      return crowd && window.turnstile && window.turnstile.getResponse ? (window.turnstile.getResponse() || '') : '';
+    }
+    function botReset() {
+      if (crowd && window.turnstile && window.turnstile.reset) { try { window.turnstile.reset(); } catch (e) {} }
+    }
+
     function cast(objectId, side, btns) {
       if (!pass || busy) return;
+      var checked = !!document.querySelector('.cf-turnstile');
+      var token = checked ? botToken() : '';
+      if (checked && !token) { say(${JSON.stringify(CHECK_FIRST_WORDS)}); return; }
       busy = true;
       Array.prototype.forEach.call(btns.querySelectorAll('button'), function (b) { b.disabled = true; });
       say('Sending your vote.');
@@ -215,11 +235,12 @@ export const VOTE_PAGE_SCRIPT = `(function () {
         credentials: 'omit',
         cache: 'no-store',
         referrerPolicy: 'no-referrer',
-        headers: { 'Content-Type': 'application/json' },
+        headers: token ? { 'Content-Type': 'application/json', 'cf-turnstile-response': token } : { 'Content-Type': 'application/json' },
         body: JSON.stringify({ object_id: objectId, side: side, pass: pass })
       }).then(function (res) {
         return res.json().catch(function () { return {}; }).then(function (body) {
           busy = false;
+          if (token) botReset();
           if (res.status === 200) {
             voted[objectId] = true;
             say(${JSON.stringify(VOTE_IN_WORDS)});
@@ -230,11 +251,17 @@ export const VOTE_PAGE_SCRIPT = `(function () {
           if (code === 'VOTE_PASS_INVALID') { showScanAgain(); return; }
           if (res.status === 404) { closed(); return; }
           if (code === 'VOTE_CLOSED') { say('Voting on that one has closed.'); load(); return; }
+          if (code === 'TURNSTILE_FAILED') {
+            say(${JSON.stringify(CHECK_FAILED_WORDS)});
+            Array.prototype.forEach.call(btns.querySelectorAll('button'), function (b) { b.disabled = false; });
+            return;
+          }
           say('That did not go through. Please try again.');
           Array.prototype.forEach.call(btns.querySelectorAll('button'), function (b) { b.disabled = false; });
         });
       }).catch(function () {
         busy = false;
+        if (token) botReset();
         say('We could not reach the vote. Check your connection and try again.');
         Array.prototype.forEach.call(btns.querySelectorAll('button'), function (b) { b.disabled = false; });
       });
@@ -330,6 +357,7 @@ export function renderVotePage(input: VotePageInput): string {
   const voting = input.votingOn ? 'on' : 'off';
 
   const crowd = input.channel === 'crowd';
+  const bot = crowd && input.turnstile ? input.turnstile : { script: '', widget: '' };
   const heading = crowd ? ONLINE_PICK_WORDS : 'Vote';
   const againWords = crowd ? OPEN_AGAIN_WORDS : SCAN_AGAIN_WORDS;
   const channelNote = crowd
@@ -351,6 +379,7 @@ export function renderVotePage(input: VotePageInput): string {
     <meta name="robots" content="noindex" />
     <meta name="referrer" content="no-referrer" />
     <script>${VOTE_PAGE_SCRIPT}</script>
+    ${bot.script}
     <title>${esc(heading)} · ${eventTitle}</title>
     <link rel="stylesheet" href="/ui.css" />
     <style>${VOTE_PAGE_CSS}</style>
@@ -371,6 +400,7 @@ export function renderVotePage(input: VotePageInput): string {
         ${results}
         ${channelNote}
         ${closedNote}
+        ${bot.widget}
         <p class="vp-gap" id="vote-scan-again" data-testid="vote-scan-again" hidden>${esc(againWords)}</p>
         <p class="vp-gap" id="vote-status" role="status" aria-live="polite" data-testid="vote-status"></p>
         <ul class="vp-list" id="vote-list" data-testid="vote-list" aria-labelledby="vote-title"></ul>

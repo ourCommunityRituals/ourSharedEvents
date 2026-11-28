@@ -19,7 +19,7 @@
  */
 
 import { env, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
-import { describe, test, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, test, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { route, type RouterEnv } from '../src/router';
 import {
   accessVoterKey,
@@ -864,5 +864,128 @@ describe('SEC-1: the Online Pick alarm sees volume, not only a burst [no volume 
     const view = await admin('GET', vp(N1));
     expect(view.json.online_pick).toEqual({ on: true, final: false, burst_seen: true });
     expect((await roomTally(a)).up_count).toBe(0);
+  });
+});
+
+describe('D3: the Online Pick bot check (owner, 2026-11-28) [no bot check on the crowd route]', () => {
+  const BOT_ON: Partial<RouterEnv> = {
+    TURNSTILE_ENABLED: 'true',
+    TURNSTILE_SECRET: 'test-secret',
+    TURNSTILE_HOSTNAMES: 'ose.test',
+    TURNSTILE_SITE_KEY: 'test-site-key',
+  } as Partial<RouterEnv>;
+  const verified = (action = 'online-pick', hostname = 'ose.test', success = true) =>
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ success, action, hostname }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+  const botVote = async (
+    objectId: string,
+    pass: string,
+    token?: string,
+    path = `/api/v2/vote/${N1}/crowd`
+  ) => {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Sec-Fetch-Site': 'same-origin',
+      'CF-Connecting-IP': nextIp(),
+    };
+    if (token !== undefined) headers['cf-turnstile-response'] = token;
+    const res = await routed(
+      new Request(`${ORIGIN}${path}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ object_id: objectId, side: 'up', pass }),
+      }),
+      BOT_ON
+    );
+    return { status: res.status, json: (await res.json().catch(() => ({}))) as Json };
+  };
+  afterEach(() => vi.restoreAllMocks());
+
+  test('with the check on, a crowd vote with no token is refused and counts nothing', async () => {
+    const [a] = await openNight(N1);
+    await admin('POST', vp(N1, '/online-pick'), { on: true });
+    const spy = verified();
+    const res = await botVote(a, await crowdPass(N1, 701));
+    expect(res.status).toBe(403);
+    expect(res.json.code).toBe('TURNSTILE_FAILED');
+    expect(spy).not.toHaveBeenCalled();
+    expect(await crowdTally(a)).toBeNull();
+  });
+
+  test('with the check on, a verified token counts, and the visitor address is never sent on', async () => {
+    const [a] = await openNight(N1);
+    await admin('POST', vp(N1, '/online-pick'), { on: true });
+    const spy = verified();
+    const res = await botVote(a, await crowdPass(N1, 702), 'tok-ok');
+    expect(res.status).toBe(200);
+    expect(await crowdTally(a)).toEqual({ up_count: 1, down_count: 0 });
+    expect(spy).toHaveBeenCalledTimes(1);
+    const sent = String((spy.mock.calls[0][1] as RequestInit).body);
+    expect(sent).toContain('response=tok-ok');
+    expect(sent).not.toContain('remoteip');
+  });
+
+  test('a token made for another action or host, or one that failed, is refused', async () => {
+    const [a] = await openNight(N1);
+    await admin('POST', vp(N1, '/online-pick'), { on: true });
+    for (const [action, host, ok] of [
+      ['checkin', 'ose.test', true],
+      ['online-pick', 'evil.test', true],
+      ['online-pick', 'ose.test', false],
+    ] as const) {
+      vi.restoreAllMocks();
+      verified(action, host, ok);
+      const res = await botVote(a, await crowdPass(N1, 703), 'tok');
+      expect(res.status).toBe(403);
+      expect(res.json.code).toBe('TURNSTILE_FAILED');
+    }
+    expect(await crowdTally(a)).toBeNull();
+  });
+
+  test('a forged pass is refused before any check is paid for', async () => {
+    const [a] = await openNight(N1);
+    await admin('POST', vp(N1, '/online-pick'), { on: true });
+    const spy = verified();
+    const res = await botVote(a, 'vc1.forged.pass', 'tok');
+    expect(res.json.code).toBe('VOTE_PASS_INVALID');
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  test('the Room Pick never asks for the check: a room vote counts with no token, and none is verified', async () => {
+    const [a] = await openNight(N1);
+    const spy = verified();
+    const res = await botVote(a, await roomPass(N1, 704), undefined, `/api/v2/vote/${N1}`);
+    expect(res.status).toBe(200);
+    expect(spy).not.toHaveBeenCalled();
+    expect((await roomTally(a)).up_count).toBe(1);
+  });
+
+  test('the widget shows on the Online Pick page only, with the Turnstile host in its CSP', async () => {
+    await openNight(N1);
+    const page = async (path: string, over: Partial<RouterEnv>) => {
+      const res = await routed(
+        new Request(`${ORIGIN}${path}`, {
+          headers: { 'CF-Connecting-IP': nextIp(), Accept: 'text/html' },
+        }),
+        over
+      );
+      return { csp: res.headers.get('Content-Security-Policy') ?? '', html: await res.text() };
+    };
+    const crowd = await page(`/events/${N1}/online-pick`, BOT_ON);
+    expect(crowd.html).toContain('data-testid="turnstile-widget"');
+    expect(crowd.html).toContain('data-action="online-pick"');
+    expect(crowd.csp).toContain('https://challenges.cloudflare.com');
+    const room = await page(`/events/${N1}/vote`, BOT_ON);
+    expect(room.html).not.toContain('turnstile-widget');
+    expect(room.html).not.toContain('challenges.cloudflare.com');
+    expect(room.csp).not.toContain('challenges.cloudflare.com');
+    const off = await page(`/events/${N1}/online-pick`, {});
+    expect(off.html).not.toContain('turnstile-widget');
+    expect(off.html).not.toContain('challenges.cloudflare.com');
+    expect(off.csp).not.toContain('challenges.cloudflare.com');
   });
 });

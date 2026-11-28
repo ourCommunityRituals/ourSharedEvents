@@ -43,8 +43,9 @@ import { castVote, VOTE_SIDES, type VoteSide } from '../lib/vote-cast';
 import { voidOnEpochChange } from '../lib/vote-sets';
 import { accessPassUsable } from '../lib/vote-access-pass';
 import { castCrowdVote } from '../lib/vote-crowd';
+import { guardTurnstile, ONLINE_PICK_TURNSTILE_ACTION, type TurnstileEnv } from '../lib/turnstile';
 
-export interface VoteEnv {
+export interface VoteEnv extends TurnstileEnv {
   DB?: D1Database;
   ANON_ID_HASH_PEPPER?: string;
 }
@@ -209,6 +210,12 @@ export async function handleCrowdVote(
   if (!body) return answer(400, 'INVALID_VOTE', 'A vote names an object, a side and a pass');
   const claims = await openCrowdPass(pepper, body.pass, nowMs, eventId);
   if (!claims) return answer(403, 'VOTE_PASS_INVALID', OPEN_AGAIN);
+  // The bot check (owner, 2026-11-28, ADR-040 decision 13, D3): after the pass,
+  // so a forged pass never costs a siteverify call, and before any write. The
+  // token rides in the cf-turnstile-response header, so the body stays exactly
+  // three fields on both routes. Off while TURNSTILE_ENABLED is not "true".
+  const botDeny = await guardTurnstile(request, env, ONLINE_PICK_TURNSTILE_ACTION);
+  if (botDeny) return botDeny;
   try {
     const outcome = await castCrowdVote(db, pepper, {
       eventId,

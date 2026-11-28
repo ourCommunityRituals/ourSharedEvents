@@ -23,8 +23,16 @@ import { renderVotePage } from '../lib/vote-page-render';
 import { readPublicVoteResult, type PublicVoteResult } from '../lib/vote-public-result';
 import { votingEnabled, type VotingSwitchEnv } from '../lib/voting-switch';
 import { readPublicCrowdResult, type PublicCrowdResult } from '../lib/vote-crowd';
+import {
+  ONLINE_PICK_TURNSTILE_ACTION,
+  TURNSTILE_HOST,
+  turnstileClientEnabled,
+  turnstileScriptTag,
+  turnstileWidgetHtml,
+  type TurnstileEnv,
+} from '../lib/turnstile';
 
-export interface VotePageEnv extends VotingSwitchEnv {
+export interface VotePageEnv extends VotingSwitchEnv, TurnstileEnv {
   DB?: D1Database;
 }
 
@@ -54,7 +62,7 @@ function votePageUnavailable(): Response {
  * The voter page's own headers, over the house page headers: never stored,
  * no referrer, never framed, and the script may reach only this site.
  */
-export function votePageResponse(body: string): Response {
+export function votePageResponse(body: string, botCheck = false): Response {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
   let binary = '';
@@ -73,7 +81,8 @@ export function votePageResponse(body: string): Response {
       'Cache-Control': 'no-store',
       'Referrer-Policy': 'no-referrer',
       'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-      'Content-Security-Policy': `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`,
+      // The Online Pick's bot check (D3) loads from the Turnstile host only.
+      'Content-Security-Policy': `default-src 'self'; script-src 'self' 'nonce-${nonce}'${botCheck ? ` ${TURNSTILE_HOST}` : ''};${botCheck ? ` frame-src ${TURNSTILE_HOST};` : ''} style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`,
     },
   });
 }
@@ -118,6 +127,15 @@ export async function handleVotePage(
     }
   }
   const sponsors = await fetchFairSponsors(db, event.id);
+  // The Online Pick's bot check (owner, 2026-11-28, ADR-040 decision 13, D3):
+  // only on the crowd's page, only while voting and Turnstile are both on.
+  const botCheck = channel === 'crowd' && on && turnstileClientEnabled(env);
+  const turnstile = botCheck
+    ? {
+        script: turnstileScriptTag(env),
+        widget: turnstileWidgetHtml(env, ONLINE_PICK_TURNSTILE_ACTION),
+      }
+    : undefined;
   return votePageResponse(
     renderVotePage({
       event: { id: event.id, title: event.title, slug: event.slug },
@@ -127,6 +145,8 @@ export async function handleVotePage(
       result,
       channel,
       crowdResult,
-    })
+      turnstile,
+    }),
+    botCheck
   );
 }
