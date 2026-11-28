@@ -1,5 +1,5 @@
 info:
-  name: OSE-2155 | event-types | Storytime under Performing Arts
+  name: OSE-2155 | event-types | Storytime under Music & Shows
   type: http
   seq: 33
 
@@ -20,20 +20,21 @@ runtime:
         test('200 OK', function () { expect(res.getStatus()).to.eql(200); });
         const json = res.getBody() || {};
         // Part of OSE-2155 (migration 0115): Storytime is adults telling stories
-        // aloud, a type of its own beside an unchanged Storytelling Night.
-        const per = (json.categories || []).find(function (c) { return c.code === 'PER'; }) || { types: [] };
+        // aloud, a type of its own beside an unchanged Storytelling Night. Since
+        // migration 0126 the picker groups by bucket: both are in Music & Shows (SHW).
+        const per = (json.categories || []).find(function (c) { return c.code === 'SHW'; }) || { types: [] };
         const find = function (uec) {
           return per.types.find(function (t) { return t.uec_code === uec; });
         };
-        test('Storytime (PER-STORYTIME-001) is listed under Performing Arts', function () {
+        test('Storytime (PER-STORYTIME-001) is listed under Music & Shows', function () {
           const t = find('PER-STORYTIME-001');
-          expect(t, 'PER-STORYTIME-001 in PER').to.be.an('object');
+          expect(t, 'PER-STORYTIME-001 in SHW').to.be.an('object');
           expect(t.id).to.eql('etr-per-storytime');
           expect(t.name).to.eql('Storytime');
         });
         test('Storytelling Night (PER-STORY-001) is still there, unchanged', function () {
           const t = find('PER-STORY-001');
-          expect(t, 'PER-STORY-001 in PER').to.be.an('object');
+          expect(t, 'PER-STORY-001 in SHW').to.be.an('object');
           expect(t.name).to.eql('Storytelling Night');
         });
 

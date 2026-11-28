@@ -1,6 +1,10 @@
 /**
  * Category and type names in every page language (lib/i18n/event-type-names.ts).
  *
+ * Buckets (migration 0126, owner approval 2026-11-28): the landing row shows the
+ * 9 buckets by their short names, so every bucket needs a full and a short name
+ * in every language too.
+ *
  * Owner, 2026-11-28: "My category cards do not translate to the selected
  * language ... this applies to all selected, available languages." The landing's
  * "Kinds of events" cards printed the registry's English name on every page.
@@ -15,10 +19,13 @@
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import {
+  BUCKET_NAMES,
+  BUCKET_SHORT_NAMES,
   CATEGORY_NAMES,
   TYPE_NAMES,
   categoryName,
   eventTypeName,
+  rowLabel,
 } from '../src/lib/i18n/event-type-names';
 import { LANGUAGES, type Lang } from '../src/lib/i18n/languages';
 import { renderPreEventHtml, type PublicEventRow } from '../src/handlers/pages';
@@ -31,6 +38,8 @@ const files = readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql'));
 
 /** category_code → registry display_name, from every migration that seeds the lookup. */
 const CATEGORIES = new Map<string, string>();
+/** bucket_code → [display_name, short_name], from every migration that seeds the buckets. */
+const BUCKETS = new Map<string, [string, string]>();
 /** type id → registry name, from every migration that inserts a type. */
 const TYPES = new Map<string, string>();
 for (const f of files) {
@@ -38,6 +47,10 @@ for (const f of files) {
   if (/INSERT[^;]*INTO\s+event_type_category_registry/i.test(text)) {
     for (const m of text.matchAll(/\('([A-Z]{3})',\s*'([^']+)',\s*\d+\)/g))
       CATEGORIES.set(m[1], m[2]);
+  }
+  if (/INSERT[^;]*INTO\s+event_type_bucket/i.test(text)) {
+    for (const m of text.matchAll(/\('([A-Z]{3})',\s*'([^']+)',\s*'([^']+)',\s*\d+\)/g))
+      BUCKETS.set(m[1], [m[2], m[3]]);
   }
   if (/INSERT[^;]*INTO\s+event_type_registry/i.test(text)) {
     for (const m of text.matchAll(/\('(etr-[a-z0-9_-]+)',\s*'[A-Z0-9-]+',\s*'([^']+)'/g)) {
@@ -47,14 +60,18 @@ for (const f of files) {
 }
 
 describe('what the migrations seed', () => {
-  it('finds the 15 categories and 49 types', () => {
+  it('finds the 9 buckets, 15 categories and 69 types', () => {
+    expect(BUCKETS.size).toBe(9);
     expect(CATEGORIES.size).toBe(15);
-    expect(TYPES.size).toBe(49);
+    expect(TYPES.size).toBe(69);
   });
 
   it('English is the registry name itself, so its tables stay empty', () => {
     expect(Object.keys(CATEGORY_NAMES.en)).toEqual([]);
+    expect(Object.keys(BUCKET_NAMES.en)).toEqual([]);
+    expect(Object.keys(BUCKET_SHORT_NAMES.en)).toEqual([]);
     expect(Object.keys(TYPE_NAMES.en)).toEqual([]);
+    expect(rowLabel('en', 'SPT', 'Sports & Recreation', 'Sports & Rec')).toBe('Sports & Rec');
     expect(categoryName('en', 'REC', 'Sports & Recreation')).toBe('Sports & Recreation');
   });
 });
@@ -62,6 +79,17 @@ describe('what the migrations seed', () => {
 const TRANSLATED = LANGUAGES.filter((l) => l !== 'en');
 
 describe.each(TRANSLATED)('every name in %s', (lang) => {
+  it('names every bucket, full and short, with nothing extra and nothing blank', () => {
+    for (const table of [BUCKET_NAMES[lang], BUCKET_SHORT_NAMES[lang]]) {
+      expect(Object.keys(table).sort()).toEqual([...BUCKETS.keys()].sort());
+      for (const [code, name] of Object.entries(table)) {
+        expect(name.trim(), `${lang} ${code}`).not.toBe('');
+      }
+    }
+    const english = [...BUCKETS].filter(([c, [full]]) => BUCKET_NAMES[lang][c] === full);
+    expect(english, `${lang} buckets left in English`).toEqual([]);
+  });
+
   it('names every category, with nothing extra and nothing blank', () => {
     expect(Object.keys(CATEGORY_NAMES[lang]).sort()).toEqual([...CATEGORIES.keys()].sort());
     for (const [code, name] of Object.entries(CATEGORY_NAMES[lang])) {
@@ -86,6 +114,13 @@ describe.each(TRANSLATED)('every name in %s', (lang) => {
 });
 
 describe('lookups', () => {
+  it('the row shows the short bucket name in the page language', () => {
+    expect(rowLabel('es', 'BGN', 'Bargains', 'Bargains')).toBe(BUCKET_SHORT_NAMES.es.BGN);
+    expect(categoryName('es', 'SPT', 'Sports & Recreation')).toBe(BUCKET_NAMES.es.SPT);
+    expect(rowLabel('pl', 'ZZZ', 'Registry name', 'Short')).toBe('Short');
+    expect(rowLabel('ar', 'ZZZ', 'Registry name')).toBe('Registry name');
+  });
+
   it('give the page language, and fall back to the registry name for an unknown key', () => {
     expect(categoryName('es', 'REC', 'Sports & Recreation')).toBe('Deportes y recreación');
     expect(categoryName('es', 'ZZZ', 'Registry name')).toBe('Registry name');
@@ -97,8 +132,11 @@ describe('lookups', () => {
 describe('the landing cards use the page language', () => {
   const NOW = Date.parse('2026-11-22T12:00:00Z');
   const cats = new Map<string, TypeCategory>([
-    ['etr-rec-bocce', { code: 'REC', name: 'Sports & Recreation', order: 10 }],
-    ['etr-biz-network', { code: 'BIZ', name: 'Business & Networking', order: 80 }],
+    [
+      'etr-rec-bocce',
+      { code: 'SPT', name: 'Sports & Recreation', short: 'Sports & Rec', order: 0 },
+    ],
+    ['etr-biz-network', { code: 'LRN', name: 'Learn & Connect', short: 'Learn', order: 6 }],
   ]);
   const ev = (id: string, type: string): LandingAreaItem =>
     ({
@@ -122,12 +160,12 @@ describe('the landing cards use the page language', () => {
       (m) => m[1]
     );
     const esc = (s: string): string => s.replace(/&/g, '&amp;');
-    const name = (code: string, en: string): string => CATEGORY_NAMES[lang][code] ?? en;
-    expect(texts).toContain(esc(name('REC', 'Sports & Recreation')));
-    expect(texts).toContain(esc(name('BIZ', 'Business & Networking')));
+    const name = (code: string, en: string): string => BUCKET_SHORT_NAMES[lang][code] ?? en;
+    expect(texts).toContain(esc(name('SPT', 'Sports & Rec')));
+    expect(texts).toContain(esc(name('LRN', 'Learn')));
     if (lang !== 'en') {
-      expect(texts).not.toContain(esc('Sports & Recreation'));
-      expect(texts).not.toContain(esc('Business & Networking'));
+      expect(texts).not.toContain(esc('Sports & Rec'));
+      expect(texts).not.toContain(esc('Learn'));
     }
   });
 });

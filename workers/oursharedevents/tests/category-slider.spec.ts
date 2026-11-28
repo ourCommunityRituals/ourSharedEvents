@@ -23,14 +23,25 @@ const MIGRATION = readFileSync(
   'utf8'
 );
 const SEEDED = [...MIGRATION.matchAll(/\('([A-Z]{3})',\s*'[^']+',\s*\d+\)/g)].map((m) => m[1]);
+const BUCKET_MIGRATION = readFileSync(
+  new URL('../migrations/0126_event_type_buckets.sql', import.meta.url),
+  'utf8'
+);
+const BUCKETS = [
+  ...BUCKET_MIGRATION.matchAll(/\('([A-Z]{3})',\s*'[^']+',\s*'[^']+',\s*\d+\)/g),
+].map((m) => m[1]);
 
 describe('the icon set', () => {
   it('reads the 15 seeded categories from migration 0076', () => {
     expect(SEEDED).toHaveLength(15);
   });
 
-  it('every seeded category has a drawing of its own, and no two drawings are the same', () => {
-    for (const code of SEEDED) expect(CATEGORY_ICONS[code], code).toBeTruthy();
+  it('reads the 9 buckets from migration 0126', () => {
+    expect(BUCKETS).toHaveLength(9);
+  });
+
+  it('every seeded category and bucket has a drawing of its own, and no two drawings are the same', () => {
+    for (const code of [...SEEDED, ...BUCKETS]) expect(CATEGORY_ICONS[code], code).toBeTruthy();
     const drawings = Object.values(CATEGORY_ICONS);
     expect(new Set(drawings).size).toBe(drawings.length);
     expect(CATEGORY_ICONS.ALL).toBeTruthy();
@@ -92,6 +103,10 @@ describe('renderIconSlider', () => {
   it('the arrows are named buttons, hidden until the script finds the row wider than the screen', () => {
     const html = renderIconSlider({ ...base, items: [] });
     expect(html).toContain('<div class="icon-slider-nav" hidden>');
+    // Track and arrows share one row box, so the tuned row can lay the arrows over it.
+    expect(html).toMatch(
+      /<div class="icon-slider-row"><div class="icon-slider-track"[\s\S]*<div class="icon-slider-nav" hidden>/
+    );
     expect(html).toContain('aria-label="Show earlier choices" data-testid="kinds-prev"');
     expect(html).toContain('aria-label="Show more choices" data-testid="kinds-next"');
     expect(html.match(/<button type="button" class="icon-slider-arrow"/g)).toHaveLength(2);

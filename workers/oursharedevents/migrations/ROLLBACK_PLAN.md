@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0125; the entries below do not cover every migration after 0083, see the note at 0104)
+- `DB` — main / anonymous public surface (highest migration: 0126; the entries below do not cover every migration after 0083, see the note at 0104)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -110,6 +110,22 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0126: event_type_bucket, event_type_registry.bucket_code, 20 new types, the
+-- licensed_gathering template, plain display names for 17 types (event type
+-- buckets, owner approval 2026-11-28). Additive: one table, one column, one
+-- index, new rows. Ids, uec_code and category_code are unchanged. THE ROLLBACK
+-- IS: revert the Worker and LEAVE IT ALL. The older Worker groups by the 15
+-- categories again and never reads the bucket table or column. The 20 new
+-- types stay in the older picker under their home category; an event that
+-- already uses one keeps it.
+--
+-- To put the 17 old display names back (only if the plain names must go), run
+-- the UPDATEs in 0126 section 4 with the names from 0024.
+--
+-- Surgical reverse of the table, only if it must go:
+DROP INDEX IF EXISTS idx_event_type_registry_bucket;
+DROP TABLE IF EXISTS event_type_bucket;
+
 -- 0125: competitions, competition_stages, competition_entries, fixtures,
 -- fixture_results (leagues phase 1, OSE-525). Additive: five new tables, four
 -- indexes, no column on an existing table. THE ROLLBACK IS: revert the Worker
