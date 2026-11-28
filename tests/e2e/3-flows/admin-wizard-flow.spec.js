@@ -161,49 +161,19 @@ test.describe('🚀 S08: Admin "10-Minute Event" Wizard Flow', () => {
     await page.fill('[data-testid="wizard-event-venue"]', 'E2E Test Venue');
     await page.click('[data-testid="wizard-next-btn"]');
 
-    // Step 2: Template (just proceed with default)
-    await page.waitForTimeout(500);
-    await page.click('[data-testid="wizard-next-btn"]');
+    // Step 2: who can find it + sign-ups, then save it as a draft
+    await expect(page.locator('[data-testid="wizard-step-2"]')).toBeVisible();
+    await page.locator('[data-testid="wizard-signup-none"]').click();
+    await page.locator('[data-testid="wizard-save-draft-btn"]').click();
 
-    // Step 3: Sign-Ups (select "No sign-ups needed")
-    await expect(page.locator('[data-testid="wizard-step-3"]')).toBeVisible();
-    await page.locator('.wizard-signup-option[data-option="none"]').click();
-
-    // Click "Create Event" button
-    const createBtn = page.locator('[data-testid="wizard-next-btn"]');
-    await expect(createBtn).toContainText('Create Event');
-    await createBtn.click();
-
-    // Step 4: Your Links - verify links are generated
-    await expect(page.locator('[data-testid="wizard-step-4"]')).toBeVisible({ timeout: 15000 });
-
-    // Verify QR codes are rendered
-    await expect(page.locator('#wizardQrPublic img')).toBeVisible({ timeout: 5000 });
-    await expect(page.locator('#wizardQrPoster img')).toBeVisible();
-    await expect(page.locator('#wizardQrDisplay img')).toBeVisible();
-    await expect(page.locator('#wizardQrReport img')).toBeVisible();
-
-    // Verify link cards are present
+    // Step 3: the share screen - links are generated
+    await expect(page.locator('[data-testid="wizard-step-3"]')).toBeVisible({ timeout: 15000 });
     await expect(page.locator('[data-testid="wizard-link-public"]')).toBeVisible();
     await expect(page.locator('[data-testid="wizard-link-poster"]')).toBeVisible();
-    await expect(page.locator('[data-testid="wizard-link-display"]')).toBeVisible();
-    await expect(page.locator('[data-testid="wizard-link-report"]')).toBeVisible();
-
-    // Click Next to go to Launch Checklist
-    await page.click('[data-testid="wizard-next-btn"]');
-
-    // Step 5: Launch Checklist
-    await expect(page.locator('[data-testid="wizard-step-5"]')).toBeVisible();
 
     // Verify event summary is displayed
     const summary = page.locator('#wizardEventSummary');
     await expect(summary).toContainText(eventName);
-
-    // Verify checklist items exist
-    await expect(page.locator('#wizardCheckPublic')).toBeVisible();
-    await expect(page.locator('#wizardCheckPoster')).toBeVisible();
-    await expect(page.locator('#wizardCheckDisplay')).toBeVisible();
-    await expect(page.locator('#wizardCheckReport')).toBeVisible();
 
     // Verify "Done" button exists
     const doneBtn = page.locator('[data-testid="wizard-finish-btn"]');
@@ -244,7 +214,7 @@ test.describe('🚀 S08: Admin "10-Minute Event" Wizard Flow', () => {
     await expect(page.locator('[data-testid="wizard-event-name"]')).toHaveValue('Navigation Test');
   });
 
-  test('Skip button works on Sign-Ups step', async ({ page }) => {
+  test('No sign-ups still makes the event', async ({ page }) => {
     // Set up dialog handler for admin key prompt
     page.on('dialog', async (dialog) => {
       if (dialog.type() === 'prompt') {
@@ -252,22 +222,15 @@ test.describe('🚀 S08: Admin "10-Minute Event" Wizard Flow', () => {
       }
     });
 
-    // Go through Steps 1-2
     await page.fill('[data-testid="wizard-event-name"]', 'Skip Test Event');
     await page.fill('[data-testid="wizard-event-venue"]', 'Test Venue');
-    await page.click('[data-testid="wizard-next-btn"]'); // → Step 2
-    await page.waitForTimeout(500);
-    await page.click('[data-testid="wizard-next-btn"]'); // → Step 3
+    await page.click('[data-testid="wizard-next-btn"]'); // -> Step 2
 
-    // On Step 3, verify Skip button exists
-    const skipBtn = page.locator('#wizardSkipBtn');
-    await expect(skipBtn).toBeVisible();
-
-    // Click Skip - should create event without sign-up config
-    await skipBtn.click();
-
-    // Should proceed to Step 4 (event created)
-    await expect(page.locator('[data-testid="wizard-step-4"]')).toBeVisible({ timeout: 15000 });
+    // No sign-ups, then save: the event is made without a sign-up form
+    await page.locator('[data-testid="wizard-signup-none"]').click();
+    await page.locator('[data-testid="wizard-save-draft-btn"]').click();
+    await expect(page.locator('[data-testid="wizard-step-3"]')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('[data-testid="wizard-link-signup"]')).toBeHidden();
   });
 
   test('Clicking progress step indicators works for completed steps', async ({ page }) => {

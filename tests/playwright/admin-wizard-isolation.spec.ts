@@ -245,61 +245,59 @@ test.describe('OSE-1237 admin launch wizard — owns the screen', () => {
     expect(await rendered(page, 'sponsors-card')).toBe(true);
     await expect(page.locator('#launch-wizard')).toBeHidden();
   });
-});
 
-/**
- * Owner 2026-11-27: "Do not scroll." Every create screen fits one phone
- * screen: what a step asks ends above the bottom bar, at 375×812 (the smallest
- * phone this audit measures), with nothing to scroll to inside the card.
- *
- * @born-red no-scroll | method: run against the 2026-11-27 two-step build
- *   before the compact layout: step 1 ended at 1247px, the share screen at
- *   1801px and sponsor step 2 at 953px | date: 2026-11-28
- */
-test.describe('every create screen fits one phone screen', () => {
-  test.skip(!ADMIN_BEARER, 'needs OSE_ADMIN_BEARER; the blocking PR gate supplies a local one');
+  /**
+   * Owner 2026-11-27: "Do not scroll." Every create screen fits one phone
+   * screen: what a step asks ends above the bottom bar, at 375×812 (the smallest
+   * phone this audit measures), with nothing to scroll to inside the card.
+   *
+   * @born-red no-scroll | method: run against the 2026-11-27 two-step build
+   *   before the compact layout: step 1 ended at 1247px, the share screen at
+   *   1801px and sponsor step 2 at 953px | date: 2026-11-28
+   */
+  test.describe('every create screen fits one phone screen', () => {
+    /** Bottom of what the screen asks vs the top of its bottom bar (or the screen's foot). */
+    async function fits(page: Page, contentSel: string, barSel: string | null, label: string) {
+      await page.evaluate(() => window.scrollTo(0, 0));
+      const m = await page.evaluate(
+        ([c, b]) => {
+          const content = document.querySelector(c as string)!.getBoundingClientRect();
+          const bar = b ? document.querySelector(b)!.getBoundingClientRect() : null;
+          return { bottom: content.bottom, limit: bar ? bar.top : innerHeight };
+        },
+        [contentSel, barSel]
+      );
+      expect(
+        m.bottom,
+        `${label}: ends at ${Math.round(m.bottom)}px, past ${Math.round(m.limit)}px`
+      ).toBeLessThanOrEqual(m.limit + 1);
+    }
 
-  /** Bottom of what the screen asks vs the top of its bottom bar (or the screen's foot). */
-  async function fits(page: Page, contentSel: string, barSel: string | null, label: string) {
-    await page.evaluate(() => window.scrollTo(0, 0));
-    const m = await page.evaluate(
-      ([c, b]) => {
-        const content = document.querySelector(c as string)!.getBoundingClientRect();
-        const bar = b ? document.querySelector(b)!.getBoundingClientRect() : null;
-        return { bottom: content.bottom, limit: bar ? bar.top : innerHeight };
-      },
-      [contentSel, barSel]
-    );
-    expect(
-      m.bottom,
-      `${label}: ends at ${Math.round(m.bottom)}px, past ${Math.round(m.limit)}px`
-    ).toBeLessThanOrEqual(m.limit + 1);
-  }
+    test('the event flow: step 1, step 2 and the share screen', async ({ page }) => {
+      await openAdmin(page);
+      await page.click('[data-testid="admin-path-wizard"]');
+      await expect(page.getByTestId('wizard-step-1')).toBeVisible();
+      await fits(page, '#wizard-step-1', '.wizard-nav', 'step 1');
+      await page.getByTestId('wizard-event-name').fill('Thursday Trivia');
+      await page.getByTestId('wizard-event-venue').fill('Eagles Hall');
+      await page.getByTestId('wizard-next-btn').click();
+      await expect(page.getByTestId('wizard-step-2')).toBeVisible();
+      await fits(page, '#wizard-step-2', '.wizard-nav', 'step 2');
+      await page.getByTestId('wizard-save-draft-btn').click();
+      await expect(page.getByTestId('wizard-step-3')).toBeVisible({ timeout: 15000 });
+      await page.waitForTimeout(500);
+      await fits(page, '#wizard-step-3', '.wizard-nav', 'share screen');
+    });
 
-  test('the event flow: step 1, step 2 and the share screen', async ({ page }) => {
-    await openAdmin(page);
-    await page.click('[data-testid="admin-path-wizard"]');
-    await expect(page.getByTestId('wizard-step-1')).toBeVisible();
-    await fits(page, '#wizard-step-1', '.wizard-nav', 'step 1');
-    await page.getByTestId('wizard-event-name').fill('Thursday Trivia');
-    await page.getByTestId('wizard-event-venue').fill('Eagles Hall');
-    await page.getByTestId('wizard-next-btn').click();
-    await expect(page.getByTestId('wizard-step-2')).toBeVisible();
-    await fits(page, '#wizard-step-2', '.wizard-nav', 'step 2');
-    await page.getByTestId('wizard-save-draft-btn').click();
-    await expect(page.getByTestId('wizard-step-3')).toBeVisible({ timeout: 15000 });
-    await page.waitForTimeout(500);
-    await fits(page, '#wizard-step-3', '.wizard-nav', 'share screen');
-  });
-
-  test('the sponsor flow: step 1 and step 2', async ({ page }) => {
-    await openAdmin(page);
-    await page.click('[data-testid="admin-path-sponsor"]');
-    await expect(page.getByTestId('sponsor-step-1')).toBeVisible();
-    await fits(page, '[data-testid="sponsor-create-form"]', null, 'sponsor step 1');
-    await page.getByTestId('spon-name').fill('Acme');
-    await page.getByTestId('sponsor-next').click();
-    await expect(page.getByTestId('sponsor-step-2')).toBeVisible();
-    await fits(page, '[data-testid="sponsor-create-form"]', null, 'sponsor step 2');
+    test('the sponsor flow: step 1 and step 2', async ({ page }) => {
+      await openAdmin(page);
+      await page.click('[data-testid="admin-path-sponsor"]');
+      await expect(page.getByTestId('sponsor-step-1')).toBeVisible();
+      await fits(page, '[data-testid="sponsor-create-form"]', null, 'sponsor step 1');
+      await page.getByTestId('spon-name').fill('Acme');
+      await page.getByTestId('sponsor-next').click();
+      await expect(page.getByTestId('sponsor-step-2')).toBeVisible();
+      await fits(page, '[data-testid="sponsor-create-form"]', null, 'sponsor step 2');
+    });
   });
 });
