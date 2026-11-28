@@ -1796,6 +1796,40 @@ jobs:
         run: |
           node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/lakeside-league-competition-seed.sql
 
+      # Larkspur practice neighborhood tavern (stand-in names, staging only): a
+      # test account with larkspur-tavern over its nights, leagues and giving
+      # ventures, the bar as a venue and ten synthetic, unpublished events, two
+      # of them with practice poster scans so their reports have numbers. Then
+      # each event's poster art: one of the owner's photographs in stock/art/,
+      # put at the fixed key the seed's cover_image_url names, in the staging
+      # uploads bucket only. Reruns overwrite the same rows and objects.
+      # NOT continue-on-error.
+      - name: 'Seed Larkspur practice tavern'
+        if: matrix.section == 'api'
+        timeout-minutes: 8
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/larkspur-tavern-seed.sql
+          while read -r ev photo; do
+            npx wrangler r2 object put "ose-uploads-staging/events/${ev}/cover.jpg" \
+              --file "../../stock/art/${photo}.jpg" --content-type image/jpeg \
+              --env staging --remote
+          done <<'ART'
+          lks-trivia-nov-2026 holiday-train
+          lks-trivia-holiday-2027 holiday-train
+          lks-karaoke-2027 holiday-train
+          lks-vinyl-night-2027 passenger-seat
+          lks-pinball-league-2027 passenger-seat
+          lks-bocce-patio-2027 court-reflection
+          lks-pantry-drive-2026 city-sidewalk
+          lks-keg-rescue-2027 holiday-train
+          lks-craft-fair-2027 storefront-curb
+          lks-sweater-bingo-2027 holiday-train
+          ART
+
       # Showcase S14: campaigns, for Bruno folder 18. One campaign and one sponsor
       # per case (shown, sponsor pending, organizer declined, paused, switch off,
       # linked to another brand's campaign) on two root events and one ci-brand
