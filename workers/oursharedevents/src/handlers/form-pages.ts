@@ -55,6 +55,7 @@ import {
   turnstileClientEnabled,
   TURNSTILE_HOST,
 } from '../lib/turnstile';
+import { ANON_COOKIE_NAME } from '../lib/anonymous-id';
 
 export interface FormPagesEnv {
   // OSE-R-007 (2026-05-15): event title must come from the canonical
@@ -133,8 +134,7 @@ function privacyNotice(formType: NoticeForm, legalTier = 1, lang: Lang = DEFAULT
 
   switch (formType) {
     case 'checkin':
-      purpose =
-        'We record an <strong>anonymous count only</strong>, never your name. A random id in the <strong>ose_anon</strong> cookie counts you once.';
+      purpose = `We record an <strong>anonymous count only</strong>, never your name. A random id in the <strong>${ANON_COOKIE_NAME}</strong> cookie counts you once.`;
       legalBasis = 'GDPR Art. 6(1)(f) — legitimate interest in knowing attendance numbers.';
       retention = 'Anonymous aggregate counts are kept for event reporting only.';
       break;

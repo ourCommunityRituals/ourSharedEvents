@@ -14,6 +14,7 @@
 
 import { HARDENING_HEADERS } from '../lib/security-headers';
 import { CANONICAL_PATH, injectCanonical, type CanonicalEnv } from '../lib/canonical';
+import { ANON_COOKIE_NAME } from '../lib/anonymous-id';
 
 const PRIVACY_POLICY_HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -84,7 +85,7 @@ const PRIVACY_POLICY_HTML = `<!DOCTYPE html>
 
     <h2>4. Cookies</h2>
     <ul>
-      <li><strong>ose_anon</strong> — a random anonymous id, set when you open an event form or a room's voting code. It lets us count you once and see that people come back, without knowing who you are. It is not linked to your name or email. It lasts one year. You can delete it at any time in your browser settings.</li>
+      <li><strong>${ANON_COOKIE_NAME}</strong> — a random anonymous id, set when you open an event form or a room's voting code. It lets us count you once and see that people come back, without knowing who you are. It is not linked to your name or email. It lasts one year. You can delete it at any time in your browser settings.</li>
       <li><strong>Staff sign-in</strong> — venue staff and admins who sign in get a sign-in cookie from Cloudflare Access. Visitors never get it.</li>
     </ul>
     <p>We use no advertising cookies, no analytics or tracking tools, and no third-party scripts that follow you.</p>
@@ -115,7 +116,7 @@ const PRIVACY_POLICY_HTML = `<!DOCTYPE html>
     <p>To exercise any of these rights, email <a href="mailto:privacy@oursharedevents.com">privacy@oursharedevents.com</a>. Please tell us the email you used, and which event if you know. We will respond within one month.</p>
     <p>
       Because anonymous counting never stores who you are, we cannot find those records by your name or email.
-      Deleting the <strong>ose_anon</strong> cookie in your browser breaks the link to them.
+      Deleting the <strong>${ANON_COOKIE_NAME}</strong> cookie in your browser breaks the link to them.
     </p>
 
     <h2>7. Right to complain (GDPR Art. 13(2)(d))</h2>

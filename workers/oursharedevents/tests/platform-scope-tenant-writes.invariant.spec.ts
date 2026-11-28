@@ -154,6 +154,7 @@ const PLATFORM_ROUTES: Array<[string, string, unknown?]> = [
   ['GET', '/api/v2/admin/security/rate-limit-stats'],
   ['GET', '/api/v2/admin/audit-log'],
   ['POST', '/api/v2/admin/data-subject/erase', { email: 'someone@example.org' }],
+  ['POST', '/api/v2/admin/data-subject/export', { email: 'someone@example.org' }],
   ['POST', '/api/v2/admin/events/backfill-h3-cells', {}],
   ['POST', '/api/v2/admin/poster-deployments/backfill-h3', {}],
   ['GET', '/briefing'],

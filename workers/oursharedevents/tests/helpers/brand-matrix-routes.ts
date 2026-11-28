@@ -557,6 +557,8 @@ export const ROUTE_EXEMPTIONS: Readonly<Record<string, string>> = {
     'Tier application across every brand; key actor only (R-5), same spec.',
   '/api/v2/admin/data-subject/erase':
     'Platform-wide erase by hashed identifier; platform-only (AUD-3).',
+  '/api/v2/admin/data-subject/export':
+    'Platform-wide access request by hashed identifier; platform-only (AUD-3).',
   '/api/v2/admin/security/rate-limit-stats':
     'Platform telemetry (HMAC buckets); platform-only (AUD-3).',
   '/api/v2/admin/subscribers': 'Platform subscriber list; platform-only (AUD-3).',
