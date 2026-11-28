@@ -116,6 +116,14 @@ simple = { limit = 300, period = 60 }
 [observability]
 enabled = true
 
+# Our own structured console lines are kept; the per-request invocation log
+# (request metadata and headers) is not. Staging and production inherit this
+# block, so do not add an [env.*.observability] block: it would replace this
+# one and turn the invocation log back on. Guarded by
+# tests/e2e/0-architecture/log-redaction.invariant.spec.ts.
+[observability.logs]
+invocation_logs = false
+
 # ── Cron trigger: data lifecycle job (destroy expired forms data) ──
 # Runs daily at 3 AM UTC. Deletes expired registrations, scrubs survey PII,
 # removes email signups past 30-day retention.
