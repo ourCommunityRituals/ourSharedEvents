@@ -57,9 +57,12 @@ describe('both create paths ask the question', () => {
 
   test('the wizard says the choice is not fully reversible', () => {
     // §6.2c: the toggle is symmetric, the act is not. This has to be said once,
-    // before the first publish, or the interface is quietly misleading.
-    const note = ADMIN.slice(ADMIN.indexOf('data-testid="wizard-publish-note"'));
-    expect(note.slice(0, 500)).toMatch(/copied|cannot be undone|already public/i);
+    // before the first publish, or the interface is quietly misleading. Since
+    // 2026-11-27 it is said in the question's Deeper Dive (owner: one arrow
+    // for every explanation).
+    const at = ADMIN.indexOf('data-testid="wizard-publish-dive"');
+    expect(at).toBeGreaterThan(-1);
+    expect(ADMIN.slice(at, at + 600)).toMatch(/copied|cannot be undone|already public/i);
   });
 
   test('both surfaces say the invite links keep working when unpublished', () => {
