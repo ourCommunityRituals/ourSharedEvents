@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{lang}}" dir="{{dir}}">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -16,8 +16,9 @@
   </head>
   <body>
     <header class="header">
-      <h1>OurSharedEvents</h1>
-      <a class="btn btn-link" href="/events" data-testid="sponsor-card-nav-events">What's on</a>
+      <!--OCR_LANGUAGE_MENU-->
+      <h1>OurSharedEvents<span class="sub-line" data-testid="brand-tagline">{{t:brand.tagline}}</span></h1>
+      <a class="btn btn-link" href="/{{langdir}}events" data-testid="sponsor-card-nav-events">{{t:sponsorCard.whatsOn}}</a>
     </header>
     <main id="main-content" data-testid="sponsor-card" data-sponsor-id="<!--OCR_SPONSOR_ID-->">
       <section class="card" aria-labelledby="sponsor-card-title">

@@ -36,8 +36,9 @@ async function applyMigrations(): Promise<void> {
   }
 }
 
-// Two types under one category (Arts), one under another (Business), one event
-// with no type at all.
+// Two types under one bucket (Music & Shows), one under another (Learn & Connect),
+// one event with no type at all. Since migration 0127 the row shows the 9 buckets
+// by their short names (owner approval 2026-11-28).
 const EVENTS = [
   { id: 'cat-test-music', title: 'Category Test Music Night', type: 'etr-art-music' },
   { id: 'cat-test-gallery', title: 'Category Test Gallery Walk', type: 'etr-art-gallery' },
@@ -90,11 +91,9 @@ describe('GET / Type row: one chip per category, named from the catalog', () => 
   test('All types first, then each category with listed events in catalog order, Other last', () => {
     expect(chips()[0]).toEqual({ id: 'type-all', label: 'All types' });
     const labels = chips().map((c) => c.label);
-    // Catalog display_order: Arts (50) before Business (80); "Other" last.
-    expect(labels.indexOf('Arts, Culture &amp; Live Music')).toBeGreaterThan(0);
-    expect(labels.indexOf('Business &amp; Networking')).toBeGreaterThan(
-      labels.indexOf('Arts, Culture &amp; Live Music')
-    );
+    // Bucket display_order: Music & Shows (30) before Learn (70); "Other" last.
+    expect(labels.indexOf('Music &amp; Shows')).toBeGreaterThan(0);
+    expect(labels.indexOf('Learn')).toBeGreaterThan(labels.indexOf('Music &amp; Shows'));
     expect(labels[labels.length - 1]).toBe('Other');
     // All types is the default.
     expect(body).toContain('id="type-all" class="toggle-radio" checked');
@@ -108,26 +107,26 @@ describe('GET / Type row: one chip per category, named from the catalog', () => 
     const labels = chips().map((c) => c.label);
     expect(labels).not.toContain('Art Show &amp; Gallery Opening');
     expect(labels).not.toContain('Live Music Event');
-    expect(labels.filter((l) => l.startsWith('Arts')).length).toBe(1);
+    expect(labels.filter((l) => l.startsWith('Music')).length).toBe(1);
   });
 
   test('a category with no listed event has no chip', () => {
     // Nothing seeded here is a sport, a fundraiser or a book club.
     const labels = chips().map((c) => c.label);
-    expect(labels).not.toContain('Sports &amp; Recreation');
-    expect(labels).not.toContain('Fundraisers');
-    expect(labels).not.toContain('Literary &amp; Book Clubs');
+    expect(labels).not.toContain('Sports &amp; Rec');
+    expect(labels).not.toContain('Give Back');
+    expect(labels).not.toContain('Bargains');
   });
 
-  test('both types under Arts carry the Arts class, and its rule keeps exactly that class', () => {
-    expect(cardClassOf('cat-test-music')).toContain('cat-art');
-    expect(cardClassOf('cat-test-gallery')).toContain('cat-art');
-    expect(cardClassOf('cat-test-mixer')).toContain('cat-biz');
-    expect(cardClassOf('cat-test-mixer')).not.toContain('cat-art');
+  test('both types under Music & Shows carry its class, and its rule keeps exactly that class', () => {
+    expect(cardClassOf('cat-test-music')).toContain('cat-shw');
+    expect(cardClassOf('cat-test-gallery')).toContain('cat-shw');
+    expect(cardClassOf('cat-test-mixer')).toContain('cat-lrn');
+    expect(cardClassOf('cat-test-mixer')).not.toContain('cat-shw');
     expect(cardClassOf('cat-test-untyped')).toContain('cat-other');
     const css = body.match(/<style data-testid="area-type-css">([\s\S]*?)<\/style>/)?.[1] ?? '';
     expect(css).toContain(
-      '#cat-art:checked ~ .area .event-card:not(.cat-art),#cat-art:checked ~ .area .amap-f:not(.cat-art){display:none}'
+      '#cat-shw:checked ~ .area .event-card:not(.cat-shw),#cat-shw:checked ~ .area .amap-f:not(.cat-shw){display:none}'
     );
   });
 

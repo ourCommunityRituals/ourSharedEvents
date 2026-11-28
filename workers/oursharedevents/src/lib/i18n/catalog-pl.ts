@@ -413,9 +413,8 @@ export const pl: Record<MessageKey, string> = {
   'provenance.degradedChip': 'DANE NIEDOSTĘPNE',
   'provenance.degradedText': 'Pokazujemy przykładowe treści, dopóki prawdziwe dane nie wrócą.',
   'provenance.degradedLabel': 'Informacja o chwilowym braku danych',
-  // The form pages (OSE-1850). No privacy or consent text here: it shows in
-  // English with `form.privacy.englishNote` until a human translation and a
-  // legal read.
+  // The form pages (OSE-1850). The privacy notice is translated too (owner
+  // 2026-11-28); the English text under it stays the official one.
   'form.eventFallback': 'Wydarzenie',
   'form.sponsorThanks': 'Wydarzenie wspierają',
   'form.register.heading': 'Zapisz się na to wydarzenie',
@@ -426,7 +425,7 @@ export const pl: Record<MessageKey, string> = {
   'form.register.emailPlaceholder': 'anna@przyklad.pl',
   'form.register.done': 'Zapisano!',
   'form.checkin.heading': 'Zamelduj się',
-  'form.checkin.tap': 'Dotknij, aby<br/>się zameldować',
+  'form.checkin.tap': 'Dotknij:<br/>Już jestem!',
   'form.checkin.noRegistration': 'Nie zapisałeś się?',
   'form.checkin.walkIn': 'Zamelduj się bez zapisu',
   'form.checkin.done': 'Zameldowano.',
@@ -461,8 +460,52 @@ export const pl: Record<MessageKey, string> = {
   'form.next.checkin': 'W dniu wydarzenia zamelduj się jednym dotknięciem.',
   'form.next.browse': 'Zobacz, co jeszcze się zbliża',
   'form.privacy.details': 'Szczegóły prywatności',
-  'form.privacy.englishNote':
-    'Ta informacja o prywatności jest po angielsku, dopóki nie będzie sprawdzonego tłumaczenia.',
+  'form.privacy.englishNote': 'To jest tłumaczenie. Oficjalny jest tekst po angielsku.',
+  // MACHINE DRAFT, awaiting the native read (OSE-1968).
+  'brand.tagline': 'Wydarzenia Twojej okolicy',
+  'privacy.summary.register': 'Twoje imię i e-mail są usuwane dzień po wydarzeniu.',
+  'privacy.summary.survey': 'Z komentarzy usuwamy dane osobowe w ciągu 24 godzin.',
+  'privacy.summary.email': 'Twój e-mail jest usuwany po 30 dniach.',
+  'privacy.purpose.register':
+    'Prosimy o Twoje imię i, jeśli chcesz, e-mail, aby organizator mógł Cię powiadomić, gdy wydarzenie się zmieni.',
+  'privacy.purpose.checkin':
+    'Zapisujemy <strong>tylko anonimową liczbę</strong>; nie przechowujemy danych osobowych.',
+  'privacy.purpose.survey':
+    'Prosimy o Twoje oceny i opcjonalne komentarze, aby ulepszać kolejne wydarzenia.',
+  'privacy.purpose.email':
+    'Prosimy o Twój e-mail, aby informować Cię o kolejnych wydarzeniach w okolicy.',
+  'privacy.basisLabel': 'Podstawa prawna:',
+  'privacy.basis.register': 'RODO art. 6 ust. 1 lit. a: Twoja <strong>zgoda</strong>.',
+  'privacy.basis.checkin':
+    'RODO art. 6 ust. 1 lit. f: prawnie uzasadniony interes w poznaniu liczby uczestników.',
+  'privacy.basis.survey': 'RODO art. 6 ust. 1 lit. a: Twoja <strong>zgoda</strong>.',
+  'privacy.basis.email':
+    'RODO art. 6 ust. 1 lit. a: Twoja <strong>zgoda</strong>. Możesz <strong>wycofać zgodę</strong> w każdej chwili.',
+  'privacy.retention.register':
+    'Twoje imię i e-mail są szyfrowane i <strong>usuwane dzień po wydarzeniu</strong>. Reszta zgłoszenia jest usuwana 90 dni po rejestracji albo dzień po wydarzeniu, jeśli to później.',
+  'privacy.retention.checkin':
+    'Anonimowe łączne liczby przechowujemy tylko do raportów z wydarzenia.',
+  'privacy.retention.survey':
+    'Z komentarzy usuwamy dane osobowe w ciągu <strong>24</strong> godzin. Łączne oceny przechowujemy bez końca.',
+  'privacy.retention.email':
+    'Twój e-mail jest przechowywany w postaci zaszyfrowanej i usuwany automatycznie po <strong>30</strong> dniach.',
+  'privacy.rights':
+    'Masz prawo dostępu do swoich danych, ich poprawienia lub usunięcia oraz prawo do złożenia skargi do',
+  'privacy.authority': 'organu ochrony danych osobowych',
+  'privacy.commerce':
+    '<strong>Płatności:</strong> dane płatnicze obsługuje nasz operator zgodny z PCI DSS; my ich nigdy nie przechowujemy.',
+  'privacy.policyLink': 'Pełna polityka prywatności (po angielsku)',
+  'privacy.officialEnglish': 'Oficjalny tekst po angielsku',
+  'sponsorCard.whatsOn': 'Co się dzieje',
+  'sponsorCard.call': 'Zadzwoń: {phone}',
+  'sponsorCard.email': 'Napisz: {email}',
+  'sponsorCard.website': 'Odwiedź stronę',
+  'sponsorCard.notFoundTitle': 'Nie znaleziono sponsora',
+  'sponsorCard.notFoundBody': 'Ten sponsor nie jest teraz pokazywany.',
+  'sponsorCard.limitTitle': 'Za dużo wejść',
+  'sponsorCard.limitBody': 'Poczekaj minutę i spróbuj ponownie.',
+  'sponsorCard.errorTitle': 'Coś poszło nie tak',
+  'sponsorCard.errorBody': 'Spróbuj ponownie za chwilę.',
   'passport.label': 'Paszport z pieczątkami',
   'passport.scanHere': 'Zeskanuj kod tego przystanku, aby zebrać pieczątkę.',
   'passport.saved': 'Pieczątka zapisana dla tego przystanku.',

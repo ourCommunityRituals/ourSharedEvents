@@ -14,6 +14,8 @@
  * custom image, a display name and the card are available at every tier.
  */
 
+import { DEFAULT_LANG, type Lang } from './i18n/languages';
+import { withLangPrefix } from './i18n/path-prefix';
 import { useSponsorsSql } from './event-settings';
 import { eventLiveSql } from '../domain/event-state';
 
@@ -202,9 +204,13 @@ export const PLACEMENT_ON_SHOW_SQL = `(sp.is_active = 1 AND sb.is_active = 1
   AND ${eventLiveSql('e')} AND e.brand_id = sb.brand_id
   AND ${eventUsesSponsorsSql('e')})`;
 
-/** The public card for a sponsor (no website → a tap lands here). */
-export function sponsorCardPath(sponsorId: string): string {
-  return `/sponsors/${encodeURIComponent(sponsorId)}`;
+/**
+ * The public card for a sponsor (no website → a tap lands here). With a
+ * language, the card opens in it (`/es/sponsors/<id>`), so a reader who chose
+ * a language keeps it when they tap a sponsor.
+ */
+export function sponsorCardPath(sponsorId: string, lang: Lang = DEFAULT_LANG): string {
+  return withLangPrefix(lang, `/sponsors/${encodeURIComponent(sponsorId)}`);
 }
 
 /** tel: href — digits and a leading + only, so the link dials what was shown. */

@@ -192,9 +192,10 @@ describe('OSE-1520 | one filter control, four or five chips', () => {
     ).html;
     const legend = (testid: string) =>
       mixed.match(new RegExp(`data-testid="${testid}"><legend[^>]*>([^<]*)<`))?.[1] ?? '';
-    // The category choice is the icon slider (OSE-2207): a visible heading names it.
+    // The category choice is the icon slider (OSE-2207). Since the buckets
+    // (owner 2026-11-28, D5) the heading is for screen readers only.
     expect(mixed).toMatch(
-      /data-testid="toggle-type"><p class="icon-slider-heading" id="toggle-type-label">Kinds of events<\/p>/
+      /data-testid="toggle-type"><p class="sr-only" id="toggle-type-label">Kinds of events<\/p>/
     );
     expect(legend('toggle-modality')).toBe('Where');
   });

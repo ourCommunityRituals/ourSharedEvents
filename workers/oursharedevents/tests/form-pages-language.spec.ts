@@ -105,9 +105,27 @@ async function html(screen: EventFormScreen, o: RenderOpts = {}): Promise<string
   return (await respond(screen, o)).text();
 }
 
-/** The page parsed, scripts off: what the server wrote. */
+/**
+ * The page parsed, scripts off: what the server wrote. A page asked for by
+ * screen and language alone is parsed once and shared: most cases read the
+ * same 88 pages, and every test that reads one only reads it. Parsing each
+ * one again made this spec a minute long, and the mutation pass reruns it.
+ * A test that must catch a change to the page on its own asks with any other
+ * option (`query: ''` will do), so it renders the page itself: the mutation
+ * pass reruns only the tests that ran the mutated code.
+ */
+const PARSED = new Map<string, Promise<Document>>();
 async function doc(screen: EventFormScreen, o: RenderOpts = {}): Promise<Document> {
-  return new JSDOM(await html(screen, o)).window.document;
+  const plainAsk = Object.keys(o).every((k) => k === 'lang');
+  if (!plainAsk) return new JSDOM(await html(screen, o)).window.document;
+  const key = `${screen}|${o.lang ?? ''}`;
+  if (!PARSED.has(key)) {
+    PARSED.set(
+      key,
+      html(screen, o).then((h) => new JSDOM(h).window.document)
+    );
+  }
+  return PARSED.get(key)!;
 }
 
 interface Posted {
@@ -198,8 +216,18 @@ function readerText(d: Document): string {
 }
 
 /** A catalog value as the reader sees it (entities and tags gone). */
+// One parser for every value: a new JSDOM per value made the 22-language run
+// slow enough to time out.
+const PLAIN_P = new JSDOM('<p></p>').window.document.querySelector('p')!;
+const PLAIN_CACHE = new Map<string, string>();
 function plain(s: string): string {
-  return new JSDOM(`<p>${s}</p>`).window.document.querySelector('p')!.textContent ?? '';
+  let out = PLAIN_CACHE.get(s);
+  if (out === undefined) {
+    PLAIN_P.innerHTML = s;
+    out = PLAIN_P.textContent ?? '';
+    PLAIN_CACHE.set(s, out);
+  }
+  return out;
 }
 
 // ── The page is in its language ─────────────────────────────────────────────
@@ -216,6 +244,13 @@ describe('H1 | every form page, in every language, says what language it is in',
   }
 });
 
+// A word that is that language's own as well as English: "Menu" in French
+// ("Menu principal") and Portuguese.
+const SAME_WORD: Partial<Record<Lang, readonly MessageKey[]>> = {
+  fr: ['menu.label'],
+  pt: ['menu.label'],
+};
+
 describe('H2 | no English word a reader sees on a page in another language', () => {
   for (const lang of OTHERS) {
     for (const screen of SCREENS) {
@@ -224,6 +259,7 @@ describe('H2 | no English word a reader sees on a page in another language', () 
         for (const key of [...FORM_KEYS, ...SHELL_KEYS]) {
           const en = plain(msg('en', key));
           if (en === plain(msg(lang, key)) || key === 'form.privacy.englishNote') continue;
+          if (SAME_WORD[lang]?.includes(key)) continue;
           // A short word may sit inside another one (e.g. "Menu" in "Menú").
           const pattern = new RegExp(
             `(^|[^\\p{L}])${en.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^\\p{L}])`,
@@ -337,36 +373,48 @@ describe('H3 | the words come from the catalog, per form', () => {
   }
 });
 
-// ── Privacy and consent text: English, marked, with a note ──────────────────
+// ── Privacy and consent text: translated, with the official English under it ─
+//
+// Owner 2026-11-28: the privacy notice shows in the page's language. The
+// English text stays the official one: a note says so in the page's language,
+// and the English sits under it in its own block, marked lang="en".
 
-describe('H4 | privacy and consent text stays English until a human translation and a legal read', () => {
+describe('H4 | privacy text in the page language, the official English under it', () => {
   for (const lang of OTHERS) {
     for (const screen of SCREENS) {
-      test(`${screen}, ${lang}: the details are English, marked lang="en", with a note in ${lang}`, async () => {
+      test(`${screen}, ${lang}: the details are in ${lang}, with the English marked lang="en"`, async () => {
         const d = await doc(screen, { lang });
         const details = d.querySelector('[data-testid="privacy-details"]')!;
         expect(details.querySelector('summary')?.textContent).toBe(
           msg(lang, 'form.privacy.details')
         );
-        const legal = details.querySelector('p')!;
-        expect(legal.getAttribute('lang')).toBe('en');
-        expect(legal.textContent).toContain('Legal basis:');
-        expect(legal.textContent).toContain('supervisory authority');
+        const legal = details.querySelector(':scope > p')!;
+        expect(legal.hasAttribute('lang')).toBe(false);
+        expect(legal.textContent).toContain(msg(lang, 'privacy.basisLabel'));
+        expect(legal.textContent).not.toContain('Legal basis:');
+        const official = d.querySelector('[data-testid="privacy-official-english"]')!;
+        expect(official.querySelector('summary')?.textContent).toBe(
+          msg(lang, 'privacy.officialEnglish')
+        );
+        const english = official.querySelector('p')!;
+        expect(english.getAttribute('lang')).toBe('en');
+        expect(english.textContent).toContain('Legal basis:');
+        expect(english.textContent).toContain('supervisory authority');
         const note = d.querySelector('[data-testid="privacy-english-note"]');
         expect(note?.textContent).toBe(msg(lang, 'form.privacy.englishNote'));
         expect(note?.hasAttribute('lang')).toBe(false);
         const summary = d.querySelector('[data-testid="privacy-summary"]')!;
-        // Check-in's line is the event page's own promise; the others are
-        // retention text and keep their English.
-        expect(summary.getAttribute('lang')).toBe(screen === 'checkin' ? null : 'en');
+        expect(summary.hasAttribute('lang')).toBe(false);
+        expect(summary.textContent).not.toMatch(/\b(Your|Comments)\b/);
       });
     }
   }
 
   for (const screen of SCREENS) {
-    test(`${screen}, en: no note and no lang marks (the page is English)`, async () => {
+    test(`${screen}, en: no note, no second English block, no lang marks`, async () => {
       const d = await doc(screen);
       expect(d.querySelector('[data-testid="privacy-english-note"]')).toBeNull();
+      expect(d.querySelector('[data-testid="privacy-official-english"]')).toBeNull();
       expect(d.querySelector('[data-testid="privacy-details"] p')?.hasAttribute('lang')).toBe(
         false
       );
@@ -374,26 +422,20 @@ describe('H4 | privacy and consent text stays English until a human translation 
     });
   }
 
-  test('no catalog has a form key holding the legal text (no machine translation)', () => {
+  test('a commerce tier adds its notice in the page language and in the English', async () => {
     for (const lang of LANGUAGES) {
-      for (const [key, value] of Object.entries(CATALOG[lang])) {
-        if (!key.startsWith('form.')) continue;
-        expect(value, `${lang} ${key}`).not.toMatch(/\bGDPR\b|\bArt\. ?6|supervisory|\bPCI\b/);
+      const d = await doc('register', { lang, tier: 2 });
+      const legal = d.querySelector('[data-testid="privacy-details"] > p')!;
+      expect(legal.innerHTML, lang).toContain(msg(lang, 'privacy.commerce'));
+      if (lang !== DEFAULT_LANG) {
+        const english = d.querySelector('[data-testid="privacy-official-english"] p')!;
+        expect(english.textContent, lang).toContain('Commerce notice:');
       }
-    }
-  });
-
-  test('a commerce tier adds its notice inside the English block, in every language', async () => {
-    for (const lang of LANGUAGES) {
-      const legal = (await doc('register', { lang, tier: 2 })).querySelector(
-        '[data-testid="privacy-details"] p'
-      )!;
-      expect(legal.textContent, lang).toContain('Commerce notice:');
-      expect(legal.getAttribute('lang'), lang).toBe(lang === DEFAULT_LANG ? null : 'en');
       const plain = (await doc('register', { lang })).querySelector(
-        '[data-testid="privacy-details"] p'
+        '[data-testid="privacy-details"]'
       )!;
       expect(plain.textContent, lang).not.toContain('Commerce notice:');
+      expect(plain.innerHTML, lang).not.toContain(msg(lang, 'privacy.commerce'));
     }
   });
 
@@ -719,8 +761,16 @@ describe('N1 | refusals read in the page language, and never echo the server', (
     ['network down', () => 'reject', 'form.error.generic'],
   ];
 
+  // Which refusal maps to which words does not depend on the language, so every
+  // case runs in the first four languages (one of them right to left), and each
+  // other language runs a sample that reaches a coded, an uncoded and a network
+  // refusal. Each case is a live page with its scripts; all 17 in all 22
+  // languages was 374 of them, about 30 s per run, and the mutation pass reruns
+  // this spec for every static mutant of the page renderers.
+  const SAMPLE = new Set(['INVALID_EMAIL', '429, no code', 'network down']);
+  const FULL: readonly Lang[] = ['en', 'es', 'pl', 'ar'];
   for (const lang of LANGUAGES) {
-    for (const [name, answer, key] of CASES) {
+    for (const [name, answer, key] of CASES.filter(([n]) => FULL.includes(lang) || SAMPLE.has(n))) {
       test(`${lang}: ${name}`, async () => {
         const { doc: d, settle } = await live('checkin', lang, answer);
         (d.getElementById('checkin-btn') as HTMLButtonElement).click();
@@ -760,7 +810,9 @@ describe('H10 | the sponsor strip and the thanks, in the page language; names as
       );
       const names = Array.from(strip.querySelectorAll('.sponsor-name'));
       expect(names.map((n) => n.textContent)).toEqual(['TGI Fridays', 'Hilton Chicago/Oak Lawn']);
-      expect(names.every((n) => (n.querySelector('bdi') !== null) === (lang === 'ar'))).toBe(true);
+      expect(
+        names.every((n) => (n.querySelector('bdi') !== null) === (DIRECTION[lang] === 'rtl'))
+      ).toBe(true);
 
       void settle;
       // The thanks follows a confirmation (register), from the same fetched list.
@@ -776,9 +828,9 @@ describe('H10 | the sponsor strip and the thanks, in the page language; names as
       );
       const thanked = Array.from(thanks.querySelectorAll('.sponsor-name'));
       expect(thanked.map((n) => n.textContent)).toEqual(['TGI Fridays', 'Hilton Chicago/Oak Lawn']);
-      expect(thanked.every((n) => (n.querySelector('bdi') !== null) === (lang === 'ar'))).toBe(
-        true
-      );
+      expect(
+        thanked.every((n) => (n.querySelector('bdi') !== null) === (DIRECTION[lang] === 'rtl'))
+      ).toBe(true);
     });
   }
 
@@ -1035,10 +1087,27 @@ describe('E3 | headers, the log, and the parts around the words', () => {
     expect(tpl.content.querySelector('[data-testid="register-next-step"]')).toBeNull();
   });
 
+  // Check-in reads its deployment another way (its button posts it), so it has
+  // no field; the three forms with a submit button carry it in the form.
+  test('a form reached from a poster carries its deployment in a hidden field, in every language', async () => {
+    for (const lang of LANGUAGES) {
+      for (const screen of SCREENS.filter((s) => s !== 'checkin')) {
+        const d = await doc(screen, { lang, query: '?deployment=dep_poster7' });
+        const field = d.querySelector('[data-testid="form-deployment-id"]');
+        expect(field, `${screen} ${lang}`).not.toBeNull();
+        expect(field!.getAttribute('type'), `${screen} ${lang}`).toBe('hidden');
+        expect(field!.getAttribute('name'), `${screen} ${lang}`).toBe('deploymentId');
+        expect(field!.getAttribute('value'), `${screen} ${lang}`).toBe('dep_poster7');
+      }
+    }
+  });
+
   test('a form with no poster deployment has no deployment field and nothing in its place', async () => {
     for (const lang of LANGUAGES) {
       for (const screen of SCREENS) {
-        const d = await doc(screen, { lang });
+        // A fresh render, not the shared page: the mutation pass reruns only the
+        // tests that ran the code, and a shared page ran it in an earlier test.
+        const d = await doc(screen, { lang, query: '' });
         expect(
           d.querySelector('[data-testid="form-deployment-id"]'),
           `${screen} ${lang}`

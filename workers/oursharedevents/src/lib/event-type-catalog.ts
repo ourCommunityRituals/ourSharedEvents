@@ -22,6 +22,8 @@
 export interface EventTypeCategoryRow {
   category_code: string;
   display_name: string;
+  /** The bucket's name on the landing row ("Sports & Rec"); the full name when absent. */
+  short_name?: string | null;
   display_order: number;
   is_active?: number;
 }
@@ -46,6 +48,8 @@ export interface CatalogType {
 export interface CatalogCategory {
   code: string;
   name: string;
+  /** The short name for the landing row; the same as `name` when none is set. */
+  short: string;
   types: CatalogType[];
 }
 
@@ -83,12 +87,18 @@ export function buildEventTypeCatalog(
       (a, b) => a.display_order - b.display_order || a.category_code.localeCompare(b.category_code)
     );
   for (const c of ordered) {
-    byCode.set(c.category_code, { code: c.category_code, name: c.display_name, types: [] });
+    byCode.set(c.category_code, {
+      code: c.category_code,
+      name: c.display_name,
+      short: c.short_name || c.display_name,
+      types: [],
+    });
   }
 
   const other: CatalogCategory = {
     code: OTHER_CATEGORY_CODE,
     name: OTHER_CATEGORY_NAME,
+    short: OTHER_CATEGORY_NAME,
     types: [],
   };
   let orphans = 0;
@@ -125,6 +135,8 @@ export function buildEventTypeCatalog(
 export interface TypeCategory {
   code: string;
   name: string;
+  /** The short name for the landing row (absent: use `name`). */
+  short?: string;
   /** Position in the catalog: categories keep display_order, "Other" is last. */
   order: number;
 }
@@ -137,7 +149,7 @@ export interface TypeCategory {
 export function categoryByTypeId(catalog: EventTypeCatalog): Map<string, TypeCategory> {
   const out = new Map<string, TypeCategory>();
   catalog.categories.forEach((c, order) => {
-    for (const t of c.types) out.set(t.id, { code: c.code, name: c.name, order });
+    for (const t of c.types) out.set(t.id, { code: c.code, name: c.name, short: c.short, order });
   });
   return out;
 }

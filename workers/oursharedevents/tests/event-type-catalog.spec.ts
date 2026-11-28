@@ -75,14 +75,14 @@ describe('acceptance criterion — no orphaned types after 0076', () => {
     expect(row?.n).toBe(0);
   });
 
-  test('every type has the category of its UEC prefix (47 seeded + Watch Party, 0097 + Storytime, 0115)', async () => {
+  test('every type has the category of its UEC prefix (47 seeded + Watch Party, 0097 + Storytime, 0115 + 25 new, 0127)', async () => {
     const row = await env.DB.prepare(
       `SELECT COUNT(*) AS total,
               SUM(CASE WHEN category_code = substr(uec_code, 1, instr(uec_code, '-') - 1) THEN 1 ELSE 0 END) AS matched
          FROM event_type_registry`
     ).first<{ total: number; matched: number }>();
-    expect(row?.total).toBe(49);
-    expect(row?.matched).toBe(49);
+    expect(row?.total).toBe(74);
+    expect(row?.matched).toBe(74);
   });
 
   test('15 categories, and every one has at least one type', async () => {
@@ -189,7 +189,9 @@ describe('GET /api/v2/admin/event-types', () => {
     expect(res.status).toBe(401);
   });
 
-  test('returns the grouped catalog: 15 categories, 49 types, 0 orphans, Sports > Bocce', async () => {
+  // 0127: the picker groups by the 9 buckets. 65 types are offered; the four
+  // tier-2 types (Bingo, Charity Night, Parade, Camp) wait for the ceiling.
+  test('returns the grouped catalog: 9 buckets, 70 types, 0 orphans, Sports > Bocce', async () => {
     const res = await SELF.fetch('https://t.test/api/v2/admin/event-types', {
       headers: ADMIN_HEADERS,
     });
@@ -197,10 +199,20 @@ describe('GET /api/v2/admin/event-types', () => {
     const body = (await res.json()) as Catalog;
     expect(body.ok).toBe(true);
     expect(body.orphans).toBe(0);
-    expect(body.categories).toHaveLength(15);
-    expect(body.categories.reduce((n, c) => n + c.types.length, 0)).toBe(49);
-    const rec = body.categories.find((c) => c.code === 'REC');
-    expect(rec?.name).toMatch(/Sports/);
+    expect(body.categories.map((c) => c.code)).toEqual([
+      'SPT',
+      'GAM',
+      'SHW',
+      'PTY',
+      'BGN',
+      'KID',
+      'LRN',
+      'GIV',
+      'CMT',
+    ]);
+    expect(body.categories.reduce((n, c) => n + c.types.length, 0)).toBe(70);
+    const rec = body.categories.find((c) => c.code === 'SPT');
+    expect(rec?.name).toBe('Sports & Recreation');
     expect(rec?.types.some((t) => t.uec_code === 'REC-BOCCE-001')).toBe(true);
     expect(body.categories.some((c) => c.code === OTHER_CATEGORY_CODE)).toBe(false);
   });
@@ -209,13 +221,13 @@ describe('GET /api/v2/admin/event-types', () => {
 // Owner request 2026-10-10 (migration 0097): Watch Party is a type of its own,
 // under Social & Community Dining, and a sponsor can reach it.
 describe('Watch Party (0097)', () => {
-  test('the picker lists it under Social & Community Dining', async () => {
+  test('the picker lists it under Parties & Festivals (its bucket since 0127)', async () => {
     const res = await SELF.fetch('https://t.test/api/v2/admin/event-types', {
       headers: ADMIN_HEADERS,
     });
     const body = (await res.json()) as Catalog;
-    const soc = body.categories.find((c) => c.code === 'SOC');
-    expect(soc?.name).toBe('Social & Community Dining');
+    const soc = body.categories.find((c) => c.code === 'PTY');
+    expect(soc?.name).toBe('Parties & Festivals');
     expect(soc?.types.find((t) => t.uec_code === 'SOC-WATCHPARTY-001')).toEqual(
       expect.objectContaining({ id: 'etr-soc-watchparty', name: 'Watch Party' })
     );
@@ -255,12 +267,12 @@ describe('Watch Party (0097)', () => {
 // Storytelling Night itself is an assumption, not an owner ruling.
 // @born-red OSE-2155 | method: run with 0115 removed, every test here fails | date: 2026-11-21
 describe('Storytime (0115)', () => {
-  test('the picker lists it under Performing Arts, beside an unchanged Storytelling Night', async () => {
+  test('the picker lists it under Music & Shows (its bucket since 0127), beside an unchanged Storytelling Night', async () => {
     const res = await SELF.fetch('https://t.test/api/v2/admin/event-types', {
       headers: ADMIN_HEADERS,
     });
     const body = (await res.json()) as Catalog;
-    const per = body.categories.find((c) => c.code === 'PER');
+    const per = body.categories.find((c) => c.code === 'SHW');
     expect(per?.types.find((t) => t.uec_code === 'PER-STORYTIME-001')).toEqual(
       expect.objectContaining({ id: 'etr-per-storytime', name: 'Storytime' })
     );
@@ -446,5 +458,150 @@ describe('admin.html — the picker is on BOTH create paths', () => {
     expect(block).not.toMatch(/\.innerHTML\s*=/);
     expect(block).toContain('o.textContent = label;');
     expect(block).toContain('You can still save and set the type later.');
+  });
+});
+
+// Owner approval 2026-11-28 (OCR-docs PROPOSAL_event-type-buckets.md, D1 to D6):
+// the 9 buckets are a display layer. Ids, uec_code and category_code stay.
+// @born-red | method: run with 0127 removed, every test here fails | date: 2026-11-28
+describe('event type buckets (0127)', () => {
+  const BUCKET_OF: Record<string, string> = {
+    'etr-rec-bocce': 'SPT',
+    'etr-fit-running': 'SPT',
+    'etr-gar-trail': 'SPT',
+    'etr-rec-soccer': 'SPT',
+    'etr-ent-trivia': 'GAM',
+    'etr-tab-rpg': 'GAM',
+    'etr-ent-film': 'SHW',
+    'etr-ent-karaoke': 'SHW',
+    'etr-art-gallery': 'SHW',
+    'etr-art-cultural': 'PTY',
+    'etr-gar-harvest': 'PTY',
+    'etr-soc-potluck': 'PTY',
+    'etr-civ-parade': 'PTY',
+    'etr-mkt-craft': 'BGN',
+    'etr-mkt-yardsale': 'BGN',
+    'etr-mkt-farmers': 'BGN',
+    'etr-mkt-sidewalk': 'BGN',
+    'etr-art-walk': 'SHW',
+    'etr-civ-housewalk': 'CMT',
+    'etr-soc-restaurantweek': 'CMT',
+    'etr-soc-kidsparty': 'KID',
+    'etr-rec-camp': 'KID',
+    'etr-biz-network': 'LRN',
+    'etr-lit-bookclub': 'LRN',
+    'etr-gar-planting': 'GIV',
+    'etr-vol-mutual': 'GIV',
+    'etr-fnd-charity': 'GIV',
+    'etr-civ-meeting': 'CMT',
+    'etr-fai-service': 'CMT',
+  };
+
+  test('every type has a bucket that exists, and every bucket has a type', async () => {
+    const orphans = await env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM event_type_registry
+        WHERE bucket_code IS NULL OR bucket_code NOT IN (SELECT bucket_code FROM event_type_bucket)`
+    ).first<{ n: number }>();
+    expect(orphans?.n).toBe(0);
+    const empty = await env.DB.prepare(
+      `SELECT b.bucket_code FROM event_type_bucket b
+        WHERE NOT EXISTS (SELECT 1 FROM event_type_registry t WHERE t.bucket_code = b.bucket_code)`
+    ).all<{ bucket_code: string }>();
+    expect(empty.results).toEqual([]);
+  });
+
+  test('types sit in the bucket the proposal names (the exceptions too)', async () => {
+    const rows = await env.DB.prepare('SELECT id, bucket_code FROM event_type_registry').all<{
+      id: string;
+      bucket_code: string;
+    }>();
+    const got = new Map(rows.results.map((r) => [r.id, r.bucket_code]));
+    for (const [id, bucket] of Object.entries(BUCKET_OF)) expect(got.get(id), id).toBe(bucket);
+  });
+
+  test('the guts stay: the 15 categories are unchanged and every old id keeps its code', async () => {
+    const cats = await env.DB.prepare(
+      'SELECT COUNT(*) AS n FROM event_type_category_registry WHERE is_active = 1'
+    ).first<{ n: number }>();
+    expect(cats?.n).toBe(15);
+    const mutual = await env.DB.prepare(
+      "SELECT uec_code, category_code FROM event_type_registry WHERE id = 'etr-vol-mutual'"
+    ).first<{ uec_code: string; category_code: string }>();
+    expect(mutual).toEqual({ uec_code: 'VOL-MUTUAL-001', category_code: 'VOL' });
+  });
+
+  test('plain names (D6) change the display name only', async () => {
+    const r = await env.DB.prepare(
+      "SELECT name FROM event_type_registry WHERE id IN ('etr-vol-mutual', 'etr-biz-workshop', 'etr-soc-potluck') ORDER BY id"
+    ).all<{ name: string }>();
+    expect(r.results.map((x) => x.name)).toEqual([
+      'Job Skills Class',
+      'Potluck',
+      'Free Supplies Giveaway',
+    ]);
+  });
+
+  test('types that can need a licence are tier 2, hidden from the picker, on an unselectable template', async () => {
+    const tiered = await env.DB.prepare(
+      'SELECT id FROM event_type_registry WHERE legal_clearance_tier > 1 ORDER BY id'
+    ).all<{ id: string }>();
+    expect(tiered.results.map((r) => r.id)).toEqual([
+      'etr-civ-parade',
+      'etr-ent-bingo',
+      'etr-fnd-charity',
+      'etr-rec-camp',
+    ]);
+    const res = await SELF.fetch('https://t.test/api/v2/admin/event-types', {
+      headers: ADMIN_HEADERS,
+    });
+    const body = (await res.json()) as Catalog;
+    const offered = body.categories.flatMap((c) => c.types.map((t) => t.id));
+    for (const r of tiered.results) expect(offered, r.id).not.toContain(r.id);
+    expect(offered).toContain('etr-rec-soccer');
+    // No template people can choose today was raised above tier 1 by a new type.
+    const raised = await env.DB.prepare(
+      `SELECT DISTINCT t.template_id FROM template_event_types t
+         JOIN event_type_registry r ON r.uec_code = t.uec_code
+        WHERE r.legal_clearance_tier > 1`
+    ).all<{ template_id: string }>();
+    expect(raised.results.map((r) => r.template_id)).toEqual(['licensed_gathering']);
+  });
+
+  // The markets-and-walks test account found five gaps (owner: build fully, 2026-11-28).
+  test('the five markets-and-walks types are offered, each in its bucket and on a template', async () => {
+    const want: Record<string, [string, string]> = {
+      'etr-mkt-farmers': ['BGN', 'Farmers Market'],
+      'etr-mkt-sidewalk': ['BGN', 'Sidewalk Sale'],
+      'etr-art-walk': ['SHW', 'Art Walk'],
+      'etr-civ-housewalk': ['CMT', 'House and Garden Walk'],
+      'etr-soc-restaurantweek': ['CMT', 'Restaurant Week'],
+    };
+    const res = await SELF.fetch('https://t.test/api/v2/admin/event-types', {
+      headers: ADMIN_HEADERS,
+    });
+    const body = (await res.json()) as Catalog;
+    for (const [id, [bucket, name]] of Object.entries(want)) {
+      const cat = body.categories.find((c) => c.types.some((t) => t.id === id));
+      expect(cat?.code, id).toBe(bucket);
+      expect(cat?.types.find((t) => t.id === id)?.name, id).toBe(name);
+      const tpl = await env.DB.prepare(
+        `SELECT COUNT(*) AS n FROM template_event_types t
+           JOIN event_type_registry r ON r.uec_code = t.uec_code WHERE r.id = ?`
+      )
+        .bind(id)
+        .first<{ n: number }>();
+      expect(tpl?.n, id).toBeGreaterThan(0);
+    }
+    const farm = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM template_event_types WHERE template_id = 'farmers_market' AND uec_code = 'MKT-FARMERS-001'"
+    ).first<{ n: number }>();
+    expect(farm?.n).toBe(1);
+  });
+
+  test('drinking games are never a type', async () => {
+    const r = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM event_type_registry WHERE lower(name) LIKE '%drinking%' OR lower(name) LIKE '%beer pong%'"
+    ).first<{ n: number }>();
+    expect(r?.n).toBe(0);
   });
 });

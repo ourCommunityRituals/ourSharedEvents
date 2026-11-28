@@ -4,7 +4,9 @@
  * "a component that can be used throughout the application").
  *
  * One sideways row of choices, each a picture over its name, with two arrow
- * buttons under it. Its look is the design system's `.icon-slider` (`@ocr/ui`,
+ * buttons. The track and the arrows sit in `.icon-slider-row`, so with the
+ * design system's tuned row (hub PR 96, owner 2026-11-28) the arrows lie over
+ * the row's two ends; with an older pin they stay under it. Its look is the design system's `.icon-slider` (`@ocr/ui`,
  * served as /ui.css), so this module sets no colour and carries no stylesheet: it
  * writes the markup, holds our own icon set, and ships the small script that
  * wires the arrows.
@@ -21,9 +23,9 @@
  * keyboard focus scrolls its label into view.
  *
  * ICONS. Line drawings on a 24 px grid in `currentColor`, drawn for this product
- * (not copied from any icon set or site). Every event category in the registry
- * (migration 0076) has its own; a category added later shows the general tag
- * until it gets one, and tests/category-slider.spec.ts fails until it does.
+ * (not copied from any icon set or site). Every bucket (migration 0127) and every
+ * event category (migration 0076) has its own; a code added later shows the
+ * general tag until it gets one, and tests/category-slider.spec.ts fails until it does.
  */
 
 import { escapeHtml } from './html-escape.js';
@@ -68,6 +70,25 @@ export const CATEGORY_ICONS: Readonly<Record<string, string>> = {
   LIT: '<path d="M12 6.5C10.3 5 7.8 4.5 4 4.5v13c3.8 0 6.3.5 8 2 1.7-1.5 4.2-2 8-2v-13c-3.8 0-6.3.5-8 2zM12 6.5v13"/>',
   // Faith Community: a lit candle (no one faith's symbol).
   FAI: '<path d="M12 3c1.6 1.9 2 3.1 2 4a2 2 0 0 1-4 0c0-.9.4-2.1 2-4z"/><rect x="9" y="11" width="6" height="9.5" rx="1"/><path d="M6 20.5h12"/>',
+  // ── The 9 buckets (migration 0127), what the landing row shows. ──
+  // Sports & Recreation: a soccer ball.
+  SPT: '<circle cx="12" cy="12" r="8.5"/><path d="M12 8l3 2.2-1.1 3.6h-3.8L9 10.2zM12 8V3.5M15 10.2l4.6-1.4M13.9 13.8l2.8 3.9M10.1 13.8l-2.8 3.9M9 10.2l-4.6-1.4"/>',
+  // Games & Trivia: two playing cards.
+  GAM: '<rect x="4" y="5" width="10" height="14" rx="1.5"/><path d="M14 7.5l5 1.3a1.5 1.5 0 0 1 1 1.8l-2.6 9.6a1.5 1.5 0 0 1-1.8 1L11 20"/><path d="M9 9.5l1.8 2.5L9 14.5 7.2 12z"/>',
+  // Music & Shows: two notes.
+  SHW: '<path d="M9 18V5.5l10-2V16"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>',
+  // Parties & Festivals: a balloon.
+  PTY: '<ellipse cx="12" cy="9" rx="5.5" ry="6.5"/><path d="M12 15.5l-1 1.5h2zM12 17c0 2-2 2.5-2 4.5"/>',
+  // Bargains: a price tag.
+  BGN: '<path d="M20.5 3.5H13l-9.5 9.5 7.5 7.5 9.5-9.5z"/><circle cx="16.5" cy="7.5" r="1.3"/><path d="M8.5 15.5l5-5"/>',
+  // Kids & Family: a kite.
+  KID: '<path d="M12 3l6 7-6 8-6-8z"/><path d="M6 10h12M12 3v15M12 18c-1 1.5 1 2 0 3.5"/>',
+  // Learn & Connect: a graduation cap.
+  LRN: '<path d="M2.5 9 12 4.5 21.5 9 12 13.5z"/><path d="M6.5 11v4.5c0 1.4 2.5 3 5.5 3s5.5-1.6 5.5-3V11M21.5 9v5"/>',
+  // Give Back: a heart with a plus.
+  GIV: '<path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.3 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z"/><path d="M12 10.5v5M9.5 13h5"/>',
+  // Neighborhood & Faith: two houses side by side.
+  CMT: '<path d="M3 11.5 8 7l5 4.5M4.5 10.2V20h7v-8.5M11 11.5 16 7l5 4.5M19.5 10.2V20h-6M7 20v-4h2v4"/>',
   // Other: three dots.
   OTHER:
     '<circle cx="12" cy="12" r="8.5"/><g fill="currentColor"><circle cx="8" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="16" cy="12" r="1"/></g>',
@@ -142,7 +163,7 @@ export function renderIconSlider(o: IconSliderOptions): string {
   // track is the keyboard's stop for scrolling the row (WCAG 2.1.1; axe
   // scrollable-region-focusable). Button items are their own stops.
   const stop = o.items.some((it) => it.forId !== undefined) ? ' tabindex="0"' : '';
-  return `<div class="icon-slider" data-icon-slider data-testid="${escapeHtml(o.testid)}">${heading}<div class="icon-slider-track" role="group" aria-labelledby="${escapeHtml(id)}"${stop}>${items}</div>${field}<div class="icon-slider-nav" hidden><button type="button" class="icon-slider-arrow" data-step="-1" aria-label="${escapeHtml(o.prevLabel)}" data-testid="${escapeHtml(o.testid)}-prev">${arrowSvg(ARROW_PREV)}</button><button type="button" class="icon-slider-arrow" data-step="1" aria-label="${escapeHtml(o.nextLabel)}" data-testid="${escapeHtml(o.testid)}-next">${arrowSvg(ARROW_NEXT)}</button></div></div>`;
+  return `<div class="icon-slider" data-icon-slider data-testid="${escapeHtml(o.testid)}">${heading}<div class="icon-slider-row"><div class="icon-slider-track" role="group" aria-labelledby="${escapeHtml(id)}"${stop}>${items}</div><div class="icon-slider-nav" hidden><button type="button" class="icon-slider-arrow" data-step="-1" aria-label="${escapeHtml(o.prevLabel)}" data-testid="${escapeHtml(o.testid)}-prev">${arrowSvg(ARROW_PREV)}</button><button type="button" class="icon-slider-arrow" data-step="1" aria-label="${escapeHtml(o.nextLabel)}" data-testid="${escapeHtml(o.testid)}-next">${arrowSvg(ARROW_NEXT)}</button></div></div>${field}</div>`;
 }
 
 /**

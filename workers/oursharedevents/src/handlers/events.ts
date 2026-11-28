@@ -96,6 +96,7 @@ const INVALID_COVER_MESSAGE =
 import { WHAT_URL_TYPES, isValidWhatUrlType } from '../lib/what-url-types';
 import { isEventTypeIdShape } from '../lib/event-type-catalog';
 import { readEventTypeCatalog } from '../lib/event-type-catalog-read';
+import { resolveAllowedMaxTier, type ClearanceEnv } from '../lib/template-clearance';
 import { isValidIanaTimezone, zonedDateTimeToUtcIso, zonedTimePart } from '../lib/event-datetime';
 import { listedFromForPublish } from '../lib/publish-grace';
 import {
@@ -2332,7 +2333,10 @@ export async function handleAdminListEventTypes(
     return errorResponse('DB_NOT_CONFIGURED', 'Database not available', 503, rid);
   }
   try {
-    const catalog = await readEventTypeCatalog(env.DB);
+    const catalog = await readEventTypeCatalog(
+      env.DB,
+      resolveAllowedMaxTier(env as unknown as ClearanceEnv)
+    );
     return Response.json(
       { ok: true, ...catalog },
       {

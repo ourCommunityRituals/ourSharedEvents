@@ -119,6 +119,22 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 -- Surgical reverse, only if the table itself must go (every link is lost):
 DROP TABLE IF EXISTS event_partners;
 
+-- 0127: event_type_bucket, event_type_registry.bucket_code, 25 new types, the
+-- licensed_gathering template, plain display names for 17 types (event type
+-- buckets, owner approval 2026-11-28). Additive: one table, one column, one
+-- index, new rows. Ids, uec_code and category_code are unchanged. THE ROLLBACK
+-- IS: revert the Worker and LEAVE IT ALL. The older Worker groups by the 15
+-- categories again and never reads the bucket table or column. The 25 new
+-- types stay in the older picker under their home category; an event that
+-- already uses one keeps it.
+--
+-- To put the 17 old display names back (only if the plain names must go), run
+-- the UPDATEs in 0127 section 4 with the names from 0024.
+--
+-- Surgical reverse of the table, only if it must go:
+DROP INDEX IF EXISTS idx_event_type_registry_bucket;
+DROP TABLE IF EXISTS event_type_bucket;
+
 -- 0126: competitions.rules, competition_entries.team_size and the new table
 -- fixture_lineups (leagues slice 2). Additive: two nullable columns and one
 -- table, no index. THE ROLLBACK IS: revert the Worker and LEAVE THEM. The older

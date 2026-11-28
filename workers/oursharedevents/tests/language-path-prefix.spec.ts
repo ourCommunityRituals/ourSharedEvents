@@ -259,7 +259,7 @@ describe('OSE-1761 | a share link keeps the page’s language', () => {
 describe('OSE-1761 | everything else under a prefix is the ordinary 404', () => {
   test('a prefix that is not a listed language', async () => {
     const e = await publicEvent('Unsupported prefix');
-    for (const prefix of ['fr', 'ES', 'Es', 'en', 'es-MX', 'zh-hans', 'espanol', 'xx']) {
+    for (const prefix of ['nl', 'ES', 'Es', 'en', 'es-MX', 'zh-cn', 'espanol', 'xx']) {
       const res = await get(`/${prefix}${readablePath(e)}`);
       expect(res.status, prefix).toBe(404);
       await res.text();

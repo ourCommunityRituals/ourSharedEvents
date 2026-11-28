@@ -48,8 +48,8 @@ vi.mock('../src/lib/event-type-catalog-read', async (importOriginal) => {
   const real = await importOriginal<typeof import('../src/lib/event-type-catalog-read')>();
   return {
     ...real,
-    readEventTypeCatalog: (db: D1Database | null | undefined) =>
-      state.read ? state.read() : real.readEventTypeCatalog(db),
+    readEventTypeCatalog: (db: D1Database | null | undefined, maxTier?: number) =>
+      state.read ? state.read() : real.readEventTypeCatalog(db, maxTier),
   };
 });
 
@@ -101,40 +101,63 @@ const TYPES: EventTypeRow[] = [
 
 function fakeDb(opts: { results?: 'missing'; fail?: boolean } = {}) {
   const sql: string[] = [];
+  const binds: unknown[][] = [];
   const db = {
     prepare(q: string) {
       sql.push(q);
-      return {
+      const stmt = {
+        bind: (...args: unknown[]) => {
+          binds.push(args);
+          return stmt;
+        },
         all: async () => {
           if (opts.fail) throw new Error('D1 down');
           if (opts.results === 'missing') return {};
-          if (/FROM event_type_category_registry\b/.test(q) && /is_active = 1/.test(q))
+          // The catalog's groups are the buckets (0127).
+          if (/FROM event_type_bucket\b/.test(q) && /is_active = 1/.test(q))
             return { results: CATS };
           if (/FROM event_type_registry\b/.test(q) && /is_active = 1/.test(q))
             return { results: TYPES };
           return { results: [] };
         },
       };
+      return stmt;
     },
   };
-  return { db: db as unknown as D1Database, sql };
+  return { db: db as unknown as D1Database, sql, binds };
 }
 
 // ── the catalog read (src/lib/event-type-catalog-read.ts) ─────────────────
 describe('readEventTypeCatalog', () => {
   it('happy: both registry tables, grouped by the pure catalog', async () => {
-    const { db, sql } = fakeDb();
+    const { db, sql, binds } = fakeDb();
     const cat = await readEventTypeCatalog(db);
     expect(cat).toEqual(buildEventTypeCatalog(CATS, TYPES));
     expect(cat.categories.map((c) => c.code)).toEqual(['REC', 'ART']);
     expect(cat.orphans).toBe(0);
     expect(sql).toHaveLength(2);
-    for (const col of ['category_code', 'display_name', 'display_order']) {
+    // Groups are the 9 buckets (0127), read as the catalog's category_code.
+    for (const col of [
+      'bucket_code AS category_code',
+      'display_name',
+      'short_name',
+      'display_order',
+    ]) {
       expect(sql[0]).toContain(col);
     }
-    for (const col of ['id', 'uec_code', 'name', 'description', 'category_code']) {
+    expect(sql[0]).toContain('FROM event_type_bucket');
+    for (const col of ['id', 'uec_code', 'name', 'description', 'bucket_code AS category_code']) {
       expect(sql[1]).toContain(col);
     }
+    // A type above the clearance ceiling (Bingo, Parade: tier 2) is never offered.
+    expect(sql[1]).toContain('legal_clearance_tier <= ?');
+    expect(binds).toEqual([[1]]);
+  });
+
+  it('a raised ceiling is passed through to the read', async () => {
+    const { db, binds } = fakeDb();
+    await readEventTypeCatalog(db, 2);
+    expect(binds).toEqual([[2]]);
   });
 
   it('negative: no database (null or undefined) is an empty catalog, never a throw', async () => {
@@ -169,10 +192,25 @@ describe('categoryByTypeId', () => {
         },
       ])
     );
-    expect(map.get('etr-rec-bocce')).toEqual({ code: 'REC', name: 'Sports', order: 0 });
-    expect(map.get('etr-art-music')).toEqual({ code: 'ART', name: 'Arts', order: 1 });
-    expect(map.get('etr-art-gallery')).toEqual({ code: 'ART', name: 'Arts', order: 1 });
-    expect(map.get('etr-zzz')).toEqual({ code: 'OTHER', name: 'Other', order: 2 });
+    expect(map.get('etr-rec-bocce')).toEqual({
+      code: 'REC',
+      name: 'Sports',
+      short: 'Sports',
+      order: 0,
+    });
+    expect(map.get('etr-art-music')).toEqual({
+      code: 'ART',
+      name: 'Arts',
+      short: 'Arts',
+      order: 1,
+    });
+    expect(map.get('etr-art-gallery')).toEqual({
+      code: 'ART',
+      name: 'Arts',
+      short: 'Arts',
+      order: 1,
+    });
+    expect(map.get('etr-zzz')).toEqual({ code: 'OTHER', name: 'Other', short: 'Other', order: 2 });
     expect(map.size).toBe(4);
   });
 

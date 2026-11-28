@@ -1,0 +1,58 @@
+info:
+  name: event-types | nine buckets, licensed types held back
+  type: http
+  seq: 34
+
+http:
+  method: GET
+  url: '{{baseUrl}}/api/v2/admin/event-types'
+  headers:
+    - name: CF-Access-Client-Id
+      value: '{{cfAccessClientId}}'
+    - name: CF-Access-Client-Secret
+      value: '{{cfAccessClientSecret}}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |
+        test('200 OK', function () { expect(res.getStatus()).to.eql(200); });
+        const json = res.getBody() || {};
+        const cats = json.categories || [];
+        // Migration 0127 (owner approval 2026-11-28): the picker groups by the
+        // 9 plain buckets. Ids and codes do not change.
+        test('the 9 buckets, in order', function () {
+          expect(cats.map(function (c) { return c.code; })).to.eql(
+            ['SPT', 'GAM', 'SHW', 'PTY', 'BGN', 'KID', 'LRN', 'GIV', 'CMT']
+          );
+        });
+        const ids = [];
+        cats.forEach(function (c) { (c.types || []).forEach(function (t) { ids.push(t.id); }); });
+        test('a new tier-1 type is offered (Soccer)', function () {
+          expect(ids).to.include('etr-rec-soccer');
+        });
+        test('the markets-and-walks types are offered, each in its bucket', function () {
+          const where = {};
+          cats.forEach(function (c) { (c.types || []).forEach(function (t) { where[t.id] = c.code; }); });
+          expect(where['etr-mkt-farmers']).to.eql('BGN');
+          expect(where['etr-mkt-sidewalk']).to.eql('BGN');
+          expect(where['etr-art-walk']).to.eql('SHW');
+          expect(where['etr-civ-housewalk']).to.eql('CMT');
+          expect(where['etr-soc-restaurantweek']).to.eql('CMT');
+        });
+        test('types that can need a licence are not offered yet', function () {
+          ['etr-ent-bingo', 'etr-fnd-charity', 'etr-civ-parade', 'etr-rec-camp'].forEach(function (id) {
+            expect(ids, id).to.not.include(id);
+          });
+        });
+        test('no type is left without a bucket', function () {
+          expect(json.orphans).to.eql(0);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

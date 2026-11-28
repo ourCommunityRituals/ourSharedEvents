@@ -40,6 +40,7 @@ export const UNLIMITED_PAGES: Readonly<Record<string, Unlimited>> = {
   '/ui-toast.js': fixed('The shared toast script'),
   'const:EVENT_DEFAULT_THUMB_PATH': fixed('The default event thumbnail'),
   'const:SPONSOR_DEFAULT_LOGO_PATH': fixed('The default sponsor logo'),
+  '/flags/*': fixed('A language flag or letter badge, built from fixed shapes in the bundle'),
   '/.well-known/jwks.json': fixed('The public key set'),
   '/.well-known/openid-configuration': fixed('The OIDC discovery document'),
   '/privacy': fixed('The privacy page'),

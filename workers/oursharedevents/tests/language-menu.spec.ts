@@ -128,7 +128,7 @@ describe('renderLanguageMenu | safety', () => {
       path: '/events',
       query: '?q="><img src=x onerror=alert(1)>',
     });
-    expect(html).not.toContain('<img');
+    expect(html).not.toContain('<img src=x');
     expect(
       html.match(/href="\/es\/events\?q=&quot;&gt;&lt;img src=x onerror=alert\(1\)&gt;"/g)?.length
     ).toBe(2);

@@ -783,7 +783,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 19
+      "testCount": 20
     },
     {
       "file": "workers/oursharedevents/tests/ci-service-actor-router.spec.ts",
@@ -1441,14 +1441,14 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch, env.DB",
-      "testCount": 24
+      "testCount": 31
     },
     {
       "file": "workers/oursharedevents/tests/event-type-names.spec.ts",
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 10
+      "testCount": 13
     },
     {
       "file": "workers/oursharedevents/tests/event-type-reachability.spec.ts",
@@ -1878,25 +1878,32 @@
       "testCount": 9
     },
     {
+      "file": "workers/oursharedevents/tests/i18n-no-english-left.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 3
+    },
+    {
       "file": "workers/oursharedevents/tests/i18n-path-prefix.spec.ts",
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 27
+      "testCount": 28
     },
     {
       "file": "workers/oursharedevents/tests/i18n-polish-arabic.spec.ts",
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 24
+      "testCount": 25
     },
     {
       "file": "workers/oursharedevents/tests/i18n-resolve-language.spec.ts",
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 14
+      "testCount": 15
     },
     {
       "file": "workers/oursharedevents/tests/impression-dedup-hour.spec.ts",
@@ -1952,7 +1959,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 29
+      "testCount": 30
     },
     {
       "file": "workers/oursharedevents/tests/landing-read-limit.spec.ts",
@@ -1988,6 +1995,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch",
       "testCount": 23
+    },
+    {
+      "file": "workers/oursharedevents/tests/language-flags.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 6
     },
     {
       "file": "workers/oursharedevents/tests/language-layer-golden.spec.ts",
@@ -2204,7 +2218,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 7
+      "testCount": 8
     },
     {
       "file": "workers/oursharedevents/tests/migration-smoke.spec.ts",
@@ -3695,7 +3709,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch, env.DB",
-      "testCount": 7
+      "testCount": 8
     },
     {
       "file": "workers/oursharedevents/tests/sponsor-class-breakdown.spec.ts",

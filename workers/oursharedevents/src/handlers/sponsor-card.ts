@@ -15,6 +15,9 @@ import { isPublicReadLimited, type PublicReadLimitEnv } from '../lib/public-read
 import { publicWebsiteUrl } from '../lib/sponsor-resolver';
 import { renderSponsorCardPage } from '../lib/sponsor-card-render';
 import { SPONSOR_ON_SHOW_SQL } from '../lib/sponsor-card';
+import { msg } from '../lib/i18n/catalog';
+import { DEFAULT_LANG, type Lang } from '../lib/i18n/languages';
+import { withLangPrefix } from '../lib/i18n/path-prefix';
 
 export interface SponsorCardEnv extends PublicReadLimitEnv {
   DB?: D1Database;
@@ -23,13 +26,23 @@ export interface SponsorCardEnv extends PublicReadLimitEnv {
 export async function handleSponsorCardPage(
   request: Request,
   env: SponsorCardEnv,
-  sponsorId: string
+  sponsorId: string,
+  lang: Lang = DEFAULT_LANG
 ): Promise<Response> {
+  const error = (status: number, title: string, body: string) =>
+    renderErrorPage(
+      status,
+      title,
+      body,
+      withLangPrefix(lang, '/events'),
+      msg(lang, 'footer.browse'),
+      { lang }
+    );
   if (await isPublicReadLimited(request, env, 'sponsor-card')) {
-    return renderErrorPage(429, 'Too many requests', 'Give it a minute and try again.');
+    return error(429, msg(lang, 'sponsorCard.limitTitle'), msg(lang, 'sponsorCard.limitBody'));
   }
   const notFound = () =>
-    renderErrorPage(404, 'Sponsor not found', 'This sponsor is not on show right now.');
+    error(404, msg(lang, 'sponsorCard.notFoundTitle'), msg(lang, 'sponsorCard.notFoundBody'));
   if (!env.DB || !/^[A-Za-z0-9_-]{1,128}$/.test(sponsorId)) return notFound();
 
   let row: {
@@ -56,15 +69,18 @@ export async function handleSponsorCardPage(
       .bind(sponsorId)
       .first();
   } catch {
-    return renderErrorPage(503, 'Something went wrong', 'Try again in a moment.');
+    return error(503, msg(lang, 'sponsorCard.errorTitle'), msg(lang, 'sponsorCard.errorBody'));
   }
   if (!row) return notFound();
 
   return html(
-    renderSponsorCardPage({
-      ...row,
-      website_url: publicWebsiteUrl(row.website_url),
-      has_logo: Number(row.has_logo) === 1,
-    })
+    renderSponsorCardPage(
+      {
+        ...row,
+        website_url: publicWebsiteUrl(row.website_url),
+        has_logo: Number(row.has_logo) === 1,
+      },
+      lang
+    )
   );
 }
