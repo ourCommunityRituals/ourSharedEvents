@@ -1,0 +1,38 @@
+info:
+  name: "Leagues | brand | another brand cannot read the league"
+  type: http
+  seq: 110
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/competitions/{{leagueId}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{ciBrandClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{ciBrandClientSecret}}"
+    - name: X-Test-No-Auth
+      value: "1"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: before-request
+      code: |-
+        // OSE-1800: the CI service actor (a brand admin of ci-brand, never platform).
+        // Inert until the owner creates the Access service token and adds its secrets.
+        if (!bru.getEnvVar('ciBrandClientId') || !bru.getEnvVar('ciBrandClientSecret')) {
+          console.log('NOT RUN (OSE-1800 setup pending): no CI brand service token configured');
+          bru.runner.skipRequest();
+        }
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('leagues brand: 404, the same as a missing league', function () { expect(res.getStatus()).to.eql(404); expect(b.code).to.eql('NOT_FOUND'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

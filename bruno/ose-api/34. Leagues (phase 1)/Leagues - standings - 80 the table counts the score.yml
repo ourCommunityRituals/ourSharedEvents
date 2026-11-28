@@ -1,0 +1,34 @@
+info:
+  name: "Leagues | standings | the table counts the score"
+  type: http
+  seq: 80
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/competitions/{{leagueId}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        const s = b.standings || [];
+        test('leagues standings: 200, four teams, one win at the top', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(s.length).to.eql(4);
+          expect(s[0]).to.include({ rank: 1, played: 1, won: 1, points: 1, diff: 7 });
+        });
+        test('leagues standings: the photo key never leaves', function () { expect(JSON.stringify(b)).to.not.include('evidence'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

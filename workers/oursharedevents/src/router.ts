@@ -79,6 +79,11 @@
  *                                  fragment and stays in memory. no-store, no referrer, never
  *                                  framed; no count, no cookie; rate-limited. An unknown or
  *                                  closed event is one 404.
+ *   GET /competitions/:id        → a league's public schedule and standings (leagues phase 1, OSE-527):
+ *                                  the name as one <h1>, the next night's matches, the table,
+ *                                  every round with its scores. Only a started or finished
+ *                                  competition; a draft or unknown id is one 404. Team labels and
+ *                                  scores only, never a person; no cookie; rate-limited.
  *   GET /brands/:brand/calendar.ics → a brand's public events as one calendar feed (OSE-2013):
  *                                  the rows GET /api/v2/events?brand= lists, through the public
  *                                  projection; rate-limited; 404 for an unknown or invalid brand
@@ -135,6 +140,20 @@
  *   GET    /api/v2/admin/addons?brand_id= → a brand's paid add-ons (platform only, OSE-2232)
  *   PUT    /api/v2/admin/addons → turn a brand's add-on on or off {brand_id, addon, on} (platform only, audited, OSE-2232)
  *   GET    /api/v2/admin/events/:id/poster-bundle  → poster bundle for draft/ready/live, no-store (auth)
+ *
+ *   Competitions: leagues, seasons and their matches (leagues phase 1, OSE-525/526/527/529):
+ *   GET    /api/v2/admin/competitions → the caller's brands' competitions (auth)
+ *   POST   /api/v2/admin/competitions → make one, with its round-robin stage (auth, audited)
+ *   GET    /api/v2/admin/competitions/:id → it, its teams, matches, scores and computed table (auth)
+ *   PUT    /api/v2/admin/competitions/:id → name, sport, dates, ruleset, status; finished makes every score final (auth, audited)
+ *   POST   /api/v2/admin/competitions/:id/entries → add a team entry: a public label and a seed, no person (auth, audited)
+ *   PUT    /api/v2/admin/competitions/:id/entries/:entryId → rename, reseed or withdraw a team (auth, audited)
+ *   POST   /api/v2/admin/competitions/:id/schedule → the round robin on the given nights, courts and times; scored rounds stay (auth, audited)
+ *   POST   /api/v2/admin/competitions/:id/fixtures → add one match by hand (auth, audited)
+ *   PUT    /api/v2/admin/competitions/:id/fixtures/:fixtureId → move, swap or postpone a match (auth, audited)
+ *   PUT    /api/v2/admin/competitions/:id/fixtures/:fixtureId/result → the host's score, confirmed at once (auth, audited)
+ *   DELETE /api/v2/admin/competitions/:id/fixtures/:fixtureId/result → take a mistaken score back (auth, audited)
+ *   GET    /api/v2/admin/competitions/:id/score-screen → the host's one-handed score screen, HTML, no-store + noindex (auth)
  *
  *   POST /api/v2/events/:id/forms/register      → submit registration (public)
  *   POST /api/v2/events/:id/forms/checkin        → increment check-in (public)
@@ -398,6 +417,21 @@ import {
   type PagesEnv,
 } from './handlers/pages';
 import { handleBoothPage } from './handlers/booth-page';
+import {
+  handleCreateCompetition,
+  handleCreateEntry,
+  handleCreateFixture,
+  handleDeleteResult,
+  handleGenerateSchedule,
+  handleGetCompetition,
+  handleListCompetitions,
+  handlePutResult,
+  handleUpdateCompetition,
+  handleUpdateEntry,
+  handleUpdateFixture,
+} from './handlers/competitions';
+import { handleCompetitionPage } from './handlers/competition-page';
+import { handleScoreScreen } from './handlers/competition-score-screen';
 import { handleBoothListPage } from './handlers/booth-list-page';
 import { handleAdminBoothCounts } from './handlers/booth-counts';
 import { handleBriefingPage } from './handlers/briefing';
@@ -1938,6 +1972,122 @@ export async function route(
     return res;
   }
 
+  // ── Admin competition routes (leagues phase 1; auth-gated, brand-scoped, audited) ──
+  //
+  // The collection routes scope their own SQL by the caller's brands; every
+  // by-id route sits behind guardAdminObjectScope (above), which 404s a
+  // competition outside the caller's brands. Each handler then reads an entry
+  // or a match only with the path competition as a bound predicate.
+  if (pathname === '/api/v2/admin/competitions' && (method === 'GET' || method === 'POST')) {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) {
+      if (method === 'POST') _audit(reqId, 'CREATE_COMPETITION', 'denied', 'competition');
+      return deny;
+    }
+    if (method === 'GET') return handleListCompetitions(request, env);
+    const response = await handleCreateCompetition(request, env);
+    _audit(
+      reqId,
+      'CREATE_COMPETITION',
+      _auditOutcome(response),
+      'competition',
+      await _createdId(response)
+    );
+    return response;
+  }
+
+  // One regex per route, written out, so the brand matrix and the write guard
+  // read each route out of this file. The first group is always the competition.
+  type CompetitionRoute = {
+    re: RegExp;
+    method: string;
+    action: string | null;
+    run: (cid: string, sub: string) => Promise<Response>;
+  };
+  const competitionRoutes: CompetitionRoute[] = [
+    {
+      re: /^\/api\/v2\/admin\/competitions\/([^/]+)$/,
+      method: 'GET',
+      action: null,
+      run: (cid) => handleGetCompetition(request, env, cid),
+    },
+    {
+      re: /^\/api\/v2\/admin\/competitions\/([^/]+)$/,
+      method: 'PUT',
+      action: 'UPDATE_COMPETITION',
+      run: (cid) => handleUpdateCompetition(request, env, cid),
+    },
+    {
+      re: /^\/api\/v2\/admin\/competitions\/([^/]+)\/score-screen$/,
+      method: 'GET',
+      action: null,
+      run: (cid) => handleScoreScreen(request, env, cid),
+    },
+    {
+      re: /^\/api\/v2\/admin\/competitions\/([^/]+)\/entries$/,
+      method: 'POST',
+      action: 'CREATE_COMPETITION_ENTRY',
+      run: (cid) => handleCreateEntry(request, env, cid),
+    },
+    {
+      re: /^\/api\/v2\/admin\/competitions\/([^/]+)\/entries\/([^/]+)$/,
+      method: 'PUT',
+      action: 'UPDATE_COMPETITION_ENTRY',
+      run: (cid, sub) => handleUpdateEntry(request, env, cid, sub),
+    },
+    {
+      re: /^\/api\/v2\/admin\/competitions\/([^/]+)\/schedule$/,
+      method: 'POST',
+      action: 'GENERATE_COMPETITION_SCHEDULE',
+      run: (cid) => handleGenerateSchedule(request, env, cid),
+    },
+    {
+      re: /^\/api\/v2\/admin\/competitions\/([^/]+)\/fixtures$/,
+      method: 'POST',
+      action: 'CREATE_FIXTURE',
+      run: (cid) => handleCreateFixture(request, env, cid),
+    },
+    {
+      re: /^\/api\/v2\/admin\/competitions\/([^/]+)\/fixtures\/([^/]+)$/,
+      method: 'PUT',
+      action: 'UPDATE_FIXTURE',
+      run: (cid, sub) => handleUpdateFixture(request, env, cid, sub),
+    },
+    {
+      re: /^\/api\/v2\/admin\/competitions\/([^/]+)\/fixtures\/([^/]+)\/result$/,
+      method: 'PUT',
+      action: 'ENTER_RESULT',
+      run: (cid, sub) => handlePutResult(request, env, cid, sub),
+    },
+    {
+      re: /^\/api\/v2\/admin\/competitions\/([^/]+)\/fixtures\/([^/]+)\/result$/,
+      method: 'DELETE',
+      action: 'REMOVE_RESULT',
+      run: (cid, sub) => handleDeleteResult(request, env, cid, sub),
+    },
+  ];
+  const adminCompetitionSub = pathname.match(/^\/api\/v2\/admin\/competitions\/(.+)$/);
+  if (adminCompetitionSub) {
+    for (const route of competitionRoutes) {
+      if (route.method !== method) continue;
+      const m = pathname.match(route.re);
+      if (!m) continue;
+      const cid = m[1];
+      const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+      const deny = await requireAdmin(request, env, reqId);
+      if (deny) {
+        if (route.action) _audit(reqId, route.action, 'denied', 'competition', cid);
+        return deny;
+      }
+      const response = await route.run(cid, m[2] ?? '');
+      // A read is not audited; every write is, against the competition, so the
+      // row carries the competition's brand.
+      if (route.action) _audit(reqId, route.action, _auditOutcome(response), 'competition', cid);
+      return response;
+    }
+  }
+
   // ── Admin campaign routes (showcase S14; auth-gated, brand-scoped, audited) ──
   //
   // A campaign is a brand's named group of sponsor placements. The collection
@@ -3178,6 +3328,17 @@ export async function route(
       return renderErrorPage(429, 'Too many requests', 'Give it a minute and try again.');
     }
     return handleBoothPage(request, env, boothPageMatch[1], boothPageMatch[2]);
+  }
+
+  // ── A league's schedule and standings (leagues phase 1, OSE-527) ─────────
+  // Public, no cookie, rate-limited in its own scope; past the limit, the house
+  // page. Not on the language layer: under /es/ it is the ordinary 404.
+  const competitionPageMatch = pathname.match(/^\/competitions\/([^/]{1,200})$/);
+  if (competitionPageMatch && method === 'GET') {
+    if (await isPublicReadLimited(request, env, 'competition-page')) {
+      return renderErrorPage(429, 'Too many requests', 'Give it a minute and try again.');
+    }
+    return handleCompetitionPage(request, env, competitionPageMatch[1]);
   }
 
   // ── A fair's stalls (OSE-1998, OSE ADR-034) — /events/<id>/booths ─────────

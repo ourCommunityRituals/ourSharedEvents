@@ -1,0 +1,28 @@
+info:
+  name: Leagues (phase 1)
+  type: folder
+request: {}
+docs: |-
+  The staging layer of leagues phase 1 (OSE-525 data model, OSE-526 round robin,
+  OSE-527 public schedule and standings, OSE-529 host score entry): a brand's
+  competition, its team entries (public labels, never a person), the round robin
+  on real league nights, the host's score, the computed table and the public page.
+
+  Fixture: bruno/fixtures/lakeside-league-competition-seed.sql makes five unlisted
+  league nights of the practice brand lakeside-league (stand-in names) and the
+  practice league cmp_1a6e51de0c1b00000000000000000001 with six invented teams and
+  rounds 1 and 2 scored (seq 100 reads its public page). It also removes the
+  league this folder made on an earlier pass, so a run leaves one at most.
+
+  The key actor reads and writes every brand (scope mode all). The folder makes
+  "CI league (synthetic)" on lakeside-league (seq 10), adds four teams, refuses a
+  person field and a contact-shaped label (seq 30, 31), schedules three rounds on
+  nights 3 to 5 with two courts from 19:00 (seq 40), checks a draft is not public
+  and takes no score (seq 50, 51), starts it (seq 60), enters a score and refuses
+  a draw (seq 70, 71), reads the table (seq 80) and the public page (seq 90).
+  Seq 110 checks another brand's admin cannot read it (skipped until the CI brand
+  token exists, OSE-1800).
+
+  The requests run in `seq` order.
+
+  Mock-layer twin: workers/oursharedevents/tests/competitions.spec.ts.

@@ -2189,6 +2189,9 @@ export async function handleDeleteEvent(
       delChild('DELETE FROM shortlinks            WHERE event_id = ?'),
       delChild('DELETE FROM event_codes           WHERE event_id = ?'),
       delChild('DELETE FROM share_opens_daily     WHERE event_id = ?'),
+      // A league match played on this night is kept, with no night (migration
+      // 0125): the host places it on another night. Its score, if any, stays.
+      delChild('UPDATE fixtures SET event_id = NULL WHERE event_id = ?'),
       env.DB.prepare('DELETE FROM events WHERE id = ?').bind(eventId),
     ]);
   } catch (err) {

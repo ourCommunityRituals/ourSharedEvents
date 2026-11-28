@@ -814,6 +814,13 @@
       "testCount": 22
     },
     {
+      "file": "workers/oursharedevents/tests/competitions.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 34
+    },
+    {
       "file": "workers/oursharedevents/tests/constraints.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
