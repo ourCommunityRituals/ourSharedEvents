@@ -49,8 +49,8 @@ const ALLOWED: Record<string, Record<string, number>> = {
   // decision 13, owner 2026-11-26) the one call for a new visitor at /q/crowd/:eventId, the
   // Online Pick's way in. Still on /q, so AGENTS.md invariant 4's words are unchanged.
   'handlers/qr-scan.ts': { setAnonCookie: 3 },
-  // Forms routes (register, check-in, survey, email sign-up): the import and five call sites.
-  'handlers/forms.ts': { setAnonCookie: 6 },
+  // Forms routes (register, check-in, survey, email sign-up): the import and four call sites.
+  'handlers/forms.ts': { setAnonCookie: 5 },
 };
 
 // The cookie's lifetime is part of the owner's ruling (AGENTS.md invariant 4: one year).
@@ -178,5 +178,5 @@ test('born red: one more site in an allowed file is caught', () => {
   const real = readTree(SRC);
   const m = new Map(real);
   m.set('handlers/forms.ts', (real.get('handlers/forms.ts') || '') + '\nsetAnonCookie(res, id);\n');
-  expect(scan(m).join('\n')).toContain('handlers/forms.ts: 7 x setAnonCookie (allowed 6)');
+  expect(scan(m).join('\n')).toContain('handlers/forms.ts: 6 x setAnonCookie (allowed 5)');
 });

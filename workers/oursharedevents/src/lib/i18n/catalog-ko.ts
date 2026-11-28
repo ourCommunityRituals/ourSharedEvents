@@ -481,4 +481,17 @@ export const ko: Record<MessageKey, string> = {
   'sponsorCard.limitBody': '1분쯤 기다린 뒤 다시 해 보세요.',
   'sponsorCard.errorTitle': '문제가 생겼어요',
   'sponsorCard.errorBody': '잠시 뒤 다시 해 보세요.',
+  // Stamp passport and partner links (owner 2026-11-28).
+  'passport.label': '스탬프 여권',
+  'passport.scanHere': '이 장소의 코드를 스캔해 스탬프를 모으세요.',
+  'passport.saved': '이 장소의 스탬프를 저장했어요.',
+  'passport.count': '스탬프 {total}개 중 {have}개를 모았어요.',
+  'passport.done': '카드 완성! 경품 테이블에서 이 화면을 보여 주세요.',
+  'passport.private': '스탬프는 이 휴대폰에만 남아요. 저희는 절대 보지 않아요.',
+  'passport.clear': '내 스탬프 지우기',
+  'passport.stamped': '스탬프 완료',
+  'passport.noScript': '이 휴대폰에 스탬프를 남기려면 JavaScript를 켜 주세요.',
+  'partners.coHostedWith': '공동 주최: {names}',
+  'partners.with': '함께하는 곳: {names}',
+  'partners.publicBody': '{name} (공공기관)',
 };

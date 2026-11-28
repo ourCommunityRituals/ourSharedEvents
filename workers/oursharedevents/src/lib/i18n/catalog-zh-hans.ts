@@ -470,4 +470,17 @@ export const zh_hans: Record<MessageKey, string> = {
   'sponsorCard.limitBody': '请等一分钟再试。',
   'sponsorCard.errorTitle': '出了点问题',
   'sponsorCard.errorBody': '请稍后再试。',
+  // Stamp passport and partner links (owner 2026-11-28).
+  'passport.label': '集章护照',
+  'passport.scanHere': '扫描此站点的二维码，领取它的印章。',
+  'passport.saved': '此站点的印章已保存。',
+  'passport.count': '你已集齐 {have} / {total} 个印章。',
+  'passport.done': '集章完成！请到奖品台出示此页面。',
+  'passport.private': '印章只保存在这部手机上，我们永远看不到。',
+  'passport.clear': '清除我的印章',
+  'passport.stamped': '已盖章',
+  'passport.noScript': '请开启 JavaScript，才能在此手机上保存印章。',
+  'partners.coHostedWith': '与 {names} 联合主办',
+  'partners.with': '合作方：{names}',
+  'partners.publicBody': '{name}（公共机构）',
 };

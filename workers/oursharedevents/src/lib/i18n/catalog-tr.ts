@@ -490,4 +490,17 @@ export const tr: Record<MessageKey, string> = {
   'sponsorCard.limitBody': 'Bir dakika bekleyip yeniden deneyin.',
   'sponsorCard.errorTitle': 'Bir sorun oldu',
   'sponsorCard.errorBody': 'Biraz sonra yeniden deneyin.',
+  // Stamp passport and partner links (owner 2026-11-28).
+  'passport.label': 'Damga pasaportu',
+  'passport.scanHere': 'Damgasını almak için bu durağın kodunu tarayın.',
+  'passport.saved': 'Bu durağın damgası kaydedildi.',
+  'passport.count': '{total} damgadan {have} tanesi sizde.',
+  'passport.done': 'Kart tamam! Bu ekranı ödül masasında gösterin.',
+  'passport.private': 'Damgalarınız bu telefonda kalır. Biz onları hiç görmeyiz.',
+  'passport.clear': 'Damgalarımı sil',
+  'passport.stamped': 'Damgalandı',
+  'passport.noScript': "Damgaları bu telefonda tutmak için JavaScript'i açın.",
+  'partners.coHostedWith': '{names} ile ortak düzenleniyor',
+  'partners.with': '{names} ile birlikte',
+  'partners.publicBody': '{name} (kamu kurumu)',
 };

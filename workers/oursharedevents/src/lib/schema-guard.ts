@@ -24,8 +24,8 @@
  * scripts/check-schema-guard.mjs.
  */
 
-/** Highest migration in migrations/ — currently 0127_event_type_buckets.sql */
-export const REQUIRED_DB_MIGRATION = 127;
+/** Highest migration in migrations/ — currently 0128_event_partners.sql */
+export const REQUIRED_DB_MIGRATION = 128;
 
 /** Highest migration in migrations-forms/ — currently 0018_registration_email_encrypted.sql */
 export const REQUIRED_FORMS_MIGRATION = 18;

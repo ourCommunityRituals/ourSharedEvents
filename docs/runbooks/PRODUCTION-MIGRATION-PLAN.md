@@ -2,7 +2,7 @@
 
 Written 2026-10-07 for the first production deploy (launch 2026-10-24).
 
-Covers: main 0078–0127, forms 0015–0018.
+Covers: main 0078–0128, forms 0015–0018.
 
 This is a plan to read, not a script to run. **You do not apply these by hand.** The
 `T1 Deploy → Production` job applies them, in order, before it deploys the Worker.
@@ -11,7 +11,7 @@ This is a plan to read, not a script to run. **You do not apply these by hand.**
 
 | Database                          | Production is at | This build needs | To apply |
 | --------------------------------- | ---------------- | ---------------- | -------- |
-| Main (`ocr-db-production`)        | 77               | 127              | 50       |
+| Main (`ocr-db-production`)        | 77               | 128              | 51       |
 | Forms (`ocr-forms-db-production`) | 14 (see note)    | 18               | 4        |
 
 - The main level was read on 2026-10-01 and again in the two days before this was written.
@@ -128,7 +128,7 @@ its counts were not taken first. They were read on staging the next day (run 436
 events, 60 of them with no place at all, 3 of those on the public list. Its per-status breakdown was
 replaced by one count on 2026-11-15 so the file fits the strict rule.
 
-## Main database, 0078 to 0127
+## Main database, 0078 to 0128
 
 "Rows" answers: does it write or remove rows that already exist?
 
@@ -184,6 +184,7 @@ replaced by one count on 2026-11-15 so the file fits the strict rule.
 | `0125_competitions.sql`                                   | Adds the leagues tables `competitions`, `competition_stages`, `competition_entries`, `fixtures` and `fixture_results`, with four indexes (leagues phase 1). A team is a public label, never a person. Writes no row.                                                                                                                                                                                                                                                                                               | No   |
 | `0126_competition_rules_and_lineups.sql`                  | Adds the column `rules` to `competitions` and `team_size` to `competition_entries`, both nullable, and the table `fixture_lineups` (positions A to D per frame, never a name), with no index (leagues slice 2). Writes no row.                                                                                                                                                                                                                                                                                     | No   |
 | `0127_event_type_buckets.sql`                             | Adds `event_type_bucket` (the 9 plain buckets the landing and the Create Event picker show), `event_type_registry.bucket_code` and one index, 25 new types, and the `licensed_gathering` template for the four types that can need a licence (tier 2, not offered yet). Rewrites rows: sets `bucket_code` on every type, the display `name` of 17 types (plain names, owner 2026-11-28) and every template's `max_clearance_tier` (the same recompute as 0115). Ids, `uec_code` and `category_code` are unchanged. | Yes  |
+| `0128_event_partners.sql`                                 | Adds `event_partners` (a partner link between another brand and one event: the brand, the name the page shows, co-host or partner, and each side's yes or no) and one index (owner 2026-11-28). Writes no row.                                                                                                                                                                                                                                                                                                     | No   |
 
 ## Forms database, 0015 to 0018
 
@@ -451,7 +452,7 @@ The deploy job does the first three itself and goes red if any fails.
 
    Both say `No migrations to apply`.
 
-2. **The level.** Expected: `0127_event_type_buckets.sql` and `127`;
+2. **The level.** Expected: `0128_event_partners.sql` and `128`;
    then `0018_registration_email_encrypted.sql` and `18`.
 
    ```bash

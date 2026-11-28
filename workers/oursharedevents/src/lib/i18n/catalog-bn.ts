@@ -478,4 +478,17 @@ export const bn: Record<MessageKey, string> = {
   'sponsorCard.limitBody': 'এক মিনিট অপেক্ষা করে আবার চেষ্টা করুন।',
   'sponsorCard.errorTitle': 'কিছু ভুল হয়েছে',
   'sponsorCard.errorBody': 'একটু পরে আবার চেষ্টা করুন।',
+  // Stamp passport and partner links (owner 2026-11-28).
+  'passport.label': 'স্ট্যাম্প পাসপোর্ট',
+  'passport.scanHere': 'এই স্টপের কোড স্ক্যান করে এর স্ট্যাম্প নিন।',
+  'passport.saved': 'এই স্টপের স্ট্যাম্প সংরক্ষিত হয়েছে।',
+  'passport.count': 'আপনার কাছে {total}টির মধ্যে {have}টি স্ট্যাম্প আছে।',
+  'passport.done': 'কার্ড পূর্ণ! পুরস্কারের টেবিলে এই স্ক্রিনটি দেখান।',
+  'passport.private': 'আপনার স্ট্যাম্প এই ফোনেই থাকে। আমরা কখনো দেখি না।',
+  'passport.clear': 'আমার স্ট্যাম্প মুছুন',
+  'passport.stamped': 'স্ট্যাম্প দেওয়া হয়েছে',
+  'passport.noScript': 'এই ফোনে স্ট্যাম্প রাখতে JavaScript চালু করুন।',
+  'partners.coHostedWith': '{names}-এর সঙ্গে যৌথ আয়োজন',
+  'partners.with': '{names}-এর সঙ্গে',
+  'partners.publicBody': '{name} (সরকারি সংস্থা)',
 };

@@ -42,6 +42,7 @@ import {
   renderSponsorStrip,
   type BoothPageSponsor,
 } from './booth-page-render';
+import { passportScript, renderPassportCard, renderPassportMark } from './passport';
 
 export interface BoothListPageInput {
   event: { id: string; title: string; slug: string | null };
@@ -52,6 +53,8 @@ export interface BoothListPageInput {
   sponsors: BoothPageSponsor[];
   /** The fair is open by link but off the map: ask search engines to skip it. */
   noindex: boolean;
+  /** The fair's stamp passport is on: show the card and a mark per stamped stop. */
+  passport?: boolean;
 }
 
 /** The page's own CSS: layout only, no colour. Under the 400-character inline budget. */
@@ -90,16 +93,18 @@ export function groupBoothsByCategory(booths: PublicBooth[]): BoothGroup[] {
   }));
 }
 
-function renderRow(eventId: string, booth: PublicBooth): string {
+function renderRow(eventId: string, booth: PublicBooth, passport: boolean): string {
   return `<li><a class="detail-card bl-row" href="${esc(boothPagePath(eventId, booth.number))}" data-testid="booth-list-row">
           <span class="detail-card-text">
             <span class="detail-card-label" data-testid="booth-list-row-number">Stall ${esc(booth.number)}</span>
-            <span class="detail-card-main" data-testid="booth-list-row-name">${esc(booth.name)}</span>
+            <span class="detail-card-main" data-testid="booth-list-row-name">${esc(booth.name)}</span>${
+              passport ? renderPassportMark(booth.number) : ''
+            }
           </span>
         </a></li>`;
 }
 
-function renderGroup(eventId: string, group: BoothGroup): string {
+function renderGroup(eventId: string, group: BoothGroup, passport = false): string {
   const headingId = `booth-group-${group.category}`;
   const listId = `booth-list-${group.category}`;
   // Owner 2026-11-22: every list of cards shows five at a time, with "Click for
@@ -117,7 +122,7 @@ function renderGroup(eventId: string, group: BoothGroup): string {
   return `<section class="bl-group" aria-labelledby="${headingId}" data-testid="booth-list-group" data-category="${group.category}">
         <h2 class="section-title" id="${headingId}" data-testid="booth-list-group-title">${esc(group.label)}</h2>
         <ul class="detail-list bl-list" id="${listId}">
-        ${group.booths.map((b) => renderRow(eventId, b)).join('\n        ')}
+        ${group.booths.map((b) => renderRow(eventId, b, passport)).join('\n        ')}
         </ul>${pager}
       </section>`;
 }
@@ -137,7 +142,17 @@ export function renderBoothListPage(input: BoothListPageInput): string {
     main: `${renderFairHeading(event.title, input.when)}
       ${renderSponsorStrip(input.sponsors)}
       <h1 class="bl-title" id="booth-list-title" data-testid="booth-list-title">Stalls</h1>
-      ${groups.map((g) => renderGroup(event.id, g)).join('\n      ')}
+      ${
+        input.passport
+          ? renderPassportCard({
+              eventId: event.id,
+              stops: input.booths.map((b) => b.number),
+              stop: null,
+            })
+          : ''
+      }
+      ${groups.map((g) => renderGroup(event.id, g, input.passport === true)).join('\n      ')}
+      ${input.passport ? passportScript() : ''}
       ${groups.some((g) => g.booths.length > PAGE_SIZE) ? cardPagerScript() : ''}
       <a class="btn btn-primary btn-block bp-gap" href="${esc(eventPath)}" data-testid="booth-list-event-link">See the fair: ${eventTitle}</a>
       ${renderBackButton({ fallbackHref: eventPath, testid: 'booth-list-back', className: 'btn btn-secondary btn-block' })}`,

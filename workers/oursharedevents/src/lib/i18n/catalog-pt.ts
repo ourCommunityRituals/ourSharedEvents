@@ -492,4 +492,17 @@ export const pt: Record<MessageKey, string> = {
   'sponsorCard.limitBody': 'Espere um minuto e tente de novo.',
   'sponsorCard.errorTitle': 'Algo deu errado',
   'sponsorCard.errorBody': 'Tente de novo em instantes.',
+  // Stamp passport and partner links (owner 2026-11-28).
+  'passport.label': 'Passaporte de carimbos',
+  'passport.scanHere': 'Escaneie o código desta parada para ganhar o carimbo.',
+  'passport.saved': 'Carimbo salvo para esta parada.',
+  'passport.count': 'Você tem {have} de {total} carimbos.',
+  'passport.done': 'Cartão completo! Mostre esta tela na mesa de prêmios.',
+  'passport.private': 'Seus carimbos ficam neste celular. Nós nunca os vemos.',
+  'passport.clear': 'Apagar meus carimbos',
+  'passport.stamped': 'Carimbado',
+  'passport.noScript': 'Ative o JavaScript para guardar carimbos neste celular.',
+  'partners.coHostedWith': 'Organizado em conjunto com {names}',
+  'partners.with': 'Com {names}',
+  'partners.publicBody': '{name} (órgão público)',
 };

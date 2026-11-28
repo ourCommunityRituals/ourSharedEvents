@@ -120,6 +120,26 @@ export function usesSponsors(settings: EventSettings): boolean {
   return settings.useSponsors === true;
 }
 
+// Stamp passport (owner, 2026-11-28). `passport`: a walk, market or fair whose
+// stops (booths) each stamp a card kept on the visitor's own phone. Opt-in like
+// useSponsors: absent, unreadable or anything but a JSON `true` means off. The
+// switch changes only where a stop's code lands (the stop's page, which saves
+// the stamp in the phone's storage) and what the stop pages show. Nothing about
+// a stamp is sent to or stored by the Worker: lib/passport.ts holds the page
+// script, and its tests pin that it makes no request and sets no cookie.
+export const PASSPORT_KEY = 'passport';
+
+/** SQL boolean (on the events table, optional alias): the event's stops stamp a passport. */
+export function passportOnSql(alias = ''): string {
+  const col = alias ? `${alias}.settings_json` : 'settings_json';
+  return `(CASE WHEN json_valid(${col}) THEN json_type(${col}, '$.${PASSPORT_KEY}') = 'true' ELSE 0 END)`;
+}
+
+/** Do this event's stops stamp a passport? Absent or unreadable means no. */
+export function usesPassport(settings: EventSettings): boolean {
+  return settings.passport === true;
+}
+
 /**
  * The settings a copy of an event starts with ("Repeat this event"). What the
  * organizer set up carries over. Two keys belong to one event and do not:
@@ -182,6 +202,7 @@ export type EventSettings = Partial<Record<EventSettingKey, boolean>> & {
   mapDefault?: true;
   /** OSE-1900: the event chose to have sponsors. Absent means OFF (opt-in). */
   useSponsors?: boolean;
+  passport?: boolean;
   displayPanes?: DisplayPane[];
   displayDwellSeconds?: number;
   leagueLinks?: LeagueLinks;
@@ -194,6 +215,7 @@ export type EventSettings = Partial<Record<EventSettingKey, boolean>> & {
 export type EventSettingsPatch = Partial<Record<EventSettingKey, boolean>> & {
   /** OSE-1900: true or false only. There is no null: off is the stored `false`. */
   useSponsors?: boolean;
+  passport?: boolean;
   displayPanes?: DisplayPane[] | null;
   displayDwellSeconds?: number | null;
   leagueLinks?: Partial<Record<LeagueLinkKind, string | null>> | null;
@@ -260,6 +282,9 @@ export function parseEventSettings(raw: unknown): EventSettings {
     } else if (k === USE_SPONSORS_KEY) {
       // Opt-in: only a real boolean is kept, and only `true` turns it on.
       if (typeof v === 'boolean') out.useSponsors = v;
+    } else if (k === PASSPORT_KEY) {
+      // Opt-in, like useSponsors: only a real boolean is kept.
+      if (typeof v === 'boolean') out.passport = v;
     } else if (k === 'displayPanes') {
       const panes = cleanPanes(v);
       if (panes) out.displayPanes = panes;
@@ -348,6 +373,10 @@ export function validateSettingsPatch(
       if (typeof v !== 'boolean')
         return { ok: false, error: `settings.${k} must be true or false` };
       out.useSponsors = v;
+    } else if (k === PASSPORT_KEY) {
+      if (typeof v !== 'boolean')
+        return { ok: false, error: `settings.${k} must be true or false` };
+      out.passport = v;
     } else if (k === 'displayPanes') {
       if (v === null) {
         out.displayPanes = null;

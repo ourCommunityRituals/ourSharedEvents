@@ -1,0 +1,30 @@
+info:
+  name: "Partner links | list | the organizer sees the link and both answers"
+  type: http
+  seq: 30
+
+# Mock-layer twin: workers/oursharedevents/tests/event-partners-route.spec.ts.
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/{{partnerEventId}}/partners"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const p = ((res.getBody() || {}).partners || []);
+        test('Partner links list: one link, not on', function () { expect(res.getStatus()).to.eql(200); expect(p.length).to.eql(1); expect(p[0].on).to.eql(false); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

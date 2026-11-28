@@ -1,0 +1,40 @@
+info:
+  name: "Partner links | invite | the organizer invites a public body; it is a co-host, not yet on"
+  type: http
+  seq: 20
+
+# Mock-layer twin: workers/oursharedevents/tests/event-partners-route.spec.ts.
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{partnerEventId}}/partners"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"partner_brand_id\": \"fernbrook-parks\", \"partner_name\": \"Fernbrook Park District\", \"kind\": \"partner\", \"is_public_body\": true}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = (res.getBody() || {}).partner || {};
+        test('Partner links invite: 201', function () { expect(res.getStatus()).to.eql(201); });
+        test('Partner links invite: a public body is a co-host, offered, not answered, not on', function () {
+          expect(b.kind).to.eql('co_host'); expect(b.is_public_body).to.eql(true);
+          expect(b.organizer_accepted).to.eql(true); expect(b.partner_accepted).to.eql(null); expect(b.on).to.eql(false);
+        });
+        bru.setVar('partnerLinkId', b.id || 'missing-link');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

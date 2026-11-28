@@ -17,10 +17,11 @@
 
 import { html, renderErrorPage, formatEventWhen } from './pages';
 import { canRender, parseEventState } from '../domain/event-state';
-import { fetchPublicBoothByNumber } from '../lib/public-booths';
+import { fetchPublicBoothByNumber, readPublicBoothsOf } from '../lib/public-booths';
 import { BOOTH_NUMBER_MAX } from '../lib/event-booths';
 import { renderBoothPage, type BoothPageSponsor } from '../lib/booth-page-render';
 import { PLACEMENT_ON_SHOW_SQL } from '../lib/sponsor-card';
+import { passportOnSql } from '../lib/event-settings';
 
 export interface BoothPageEnv {
   DB?: D1Database;
@@ -79,6 +80,8 @@ export interface FairRow {
   start_date: string | null;
   starts_at: string | null;
   timezone: string | null;
+  /** 1 when the fair's stamp passport is on (lib/event-settings.ts passportOnSql). */
+  passport?: number | null;
 }
 
 /**
@@ -136,7 +139,8 @@ export async function readPublicFair(
   let fair: FairRow | null;
   try {
     fair = await env.DB.prepare(
-      `SELECT id, brand_id, title, slug, status, is_published, start_date, starts_at, timezone
+      `SELECT id, brand_id, title, slug, status, is_published, start_date, starts_at, timezone,
+              ${passportOnSql()} AS passport
          FROM events WHERE id = ? LIMIT 1`
     )
       .bind(eventId)
@@ -186,6 +190,16 @@ export async function handleBoothPage(
   if (!booth) return boothNotFound();
 
   const sponsors = await fetchFairSponsors(db, fair.id);
+  // Stamp passport (lib/passport.ts): the card needs every stop in use. A read
+  // that fails leaves the stall page as it was, with no card.
+  let passportStops: string[] | null = null;
+  if (fair.passport === 1) {
+    try {
+      passportStops = (await readPublicBoothsOf(db, fair.id, fair.brand_id)).map((b) => b.number);
+    } catch {
+      passportStops = null;
+    }
+  }
   // Open by link but off the map, as the fair's own page is: not indexed.
   const noindex = fair.is_published !== 1;
   return fairPageResponse(
@@ -195,6 +209,7 @@ export async function handleBoothPage(
       booth,
       sponsors,
       noindex,
+      passportStops,
     }),
     noindex
   );

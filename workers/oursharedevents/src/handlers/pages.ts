@@ -8,6 +8,7 @@
  *   Replace the embedded strings with a fetch() call to Firebase Hosting URL.
  */
 
+import { partnerOnSql, renderPartnerLine, type PartnerOnShow } from '../lib/event-partners';
 import { ICON_SLIDER_SCRIPT, renderIconSlider } from '../lib/category-slider.js';
 import { BUSINESS_KINDS, BUSINESS_KIND_ICONS } from '../lib/business-kinds.js';
 import { fetchNextEventsAtVenue, MAX_NEXT_AT_VENUE, type NextEventRow } from '../lib/next-at-venue';
@@ -1078,6 +1079,8 @@ interface EventPageSocialData {
   walkInCount?: number;
   surveyCount: number;
   emailCount: number;
+  /** Partner links on show (both sides accept; lib/event-partners.ts). */
+  partners?: PartnerOnShow[];
 }
 
 /**
@@ -1570,7 +1573,7 @@ ${SPONSOR_LIST_CSS}
       <h1 id="event-title" data-testid="event-title">${isolateTyped(lang, title)}</h1>
       ${renderEventTypeMeta(row, 'event-type', lang)}
       ${startHuman ? `<p class="ose-meta" data-testid="event-when">${esc(startHuman)}${countdown.html}</p>${countdown.script}` : ''}
-      ${renderTrustLine(row, 'event-trust', lang)}
+      ${renderTrustLine(row, 'event-trust', lang)}${social?.partners?.length ? renderPartnerLine(social.partners, 'event-partners', lang) : ''}
     </header>
     ${social ? renderSponsorStrip('pre-sponsor-strip', social.sponsors, msg(lang, 'sponsors.supportedBy'), lang) : ''}
 
@@ -1796,7 +1799,7 @@ ${SPONSOR_LIST_CSS}
       <h1 id="event-title" data-testid="event-title-live">${isolateTyped(lang, title)}</h1>
       ${renderEventTypeMeta(row, 'event-type-live', lang)}
       ${liveWhen ? `<p class="ose-meta" data-testid="event-when-live">${esc(liveWhen)}</p>` : ''}
-      ${renderTrustLine(row, 'event-trust-live', lang)}
+      ${renderTrustLine(row, 'event-trust-live', lang)}${social?.partners?.length ? renderPartnerLine(social.partners, 'event-partners-live', lang) : ''}
     </header>
     ${social ? renderSponsorStrip('live-sponsor-strip', social.sponsors, msg(lang, 'sponsors.supportedBy'), lang) : ''}
 
@@ -2259,6 +2262,8 @@ export async function fetchEventPageSocialData(
     emailCount: 0,
   };
 
+  // Partner links on show (owner 2026-11-28): read beside the statements below.
+  const partnersP = readPartnersOnShow(env, eventId);
   const [sponsorsResult, regResult, checkinResult, surveyResult, emailResult, walkInResult] =
     await Promise.allSettled([
       env.DB
@@ -2355,7 +2360,35 @@ export async function fetchEventPageSocialData(
     walkInCount: walkInResult.status === 'fulfilled' ? (walkInResult.value?.walk_in_count ?? 0) : 0,
     surveyCount: surveyResult.status === 'fulfilled' ? (surveyResult.value?.cnt ?? 0) : 0,
     emailCount: emailResult.status === 'fulfilled' ? (emailResult.value?.cnt ?? 0) : 0,
+    partners: await partnersP,
   };
+}
+
+/**
+ * Partner links on show (owner 2026-11-28, lib/event-partners.ts): both sides
+ * accept. A group's name and kind only. Fails to [], so a database behind
+ * migration 0128 loses only this line.
+ */
+async function readPartnersOnShow(env: PublicEventEnv, eventId: string): Promise<PartnerOnShow[]> {
+  if (!env.DB) return [];
+  try {
+    const rs = await env.DB.prepare(
+      `SELECT p.partner_name AS name, p.kind AS kind, p.is_public_body AS is_public_body
+         FROM event_partners p
+        WHERE p.event_id = ? AND ${partnerOnSql('p')}
+        ORDER BY p.created_at, p.id
+        LIMIT 12`
+    )
+      .bind(eventId)
+      .all<{ name: string; kind: string; is_public_body: number }>();
+    return (rs.results ?? []).map((r) => ({
+      name: String(r.name),
+      kind: r.kind === 'co_host' ? ('co_host' as const) : ('partner' as const),
+      is_public_body: Number(r.is_public_body) === 1,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 /**

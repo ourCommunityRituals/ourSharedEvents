@@ -497,4 +497,17 @@ export const it: Record<MessageKey, string> = {
   'sponsorCard.limitBody': 'Aspetta un minuto e riprova.',
   'sponsorCard.errorTitle': 'Qualcosa è andato storto',
   'sponsorCard.errorBody': 'Riprova tra un momento.',
+  // Stamp passport and partner links (owner 2026-11-28).
+  'passport.label': 'Passaporto dei timbri',
+  'passport.scanHere': 'Scansiona il codice di questa tappa per ottenere il suo timbro.',
+  'passport.saved': 'Timbro salvato per questa tappa.',
+  'passport.count': 'Hai {have} timbri su {total}.',
+  'passport.done': 'Carta completa! Mostra questa schermata al tavolo dei premi.',
+  'passport.private': 'I tuoi timbri restano su questo telefono. Non li vediamo mai.',
+  'passport.clear': 'Cancella i miei timbri',
+  'passport.stamped': 'Timbrato',
+  'passport.noScript': 'Attiva JavaScript per conservare i timbri su questo telefono.',
+  'partners.coHostedWith': 'Organizzato insieme a {names}',
+  'partners.with': 'Con {names}',
+  'partners.publicBody': '{name} (ente pubblico)',
 };
