@@ -70,7 +70,7 @@ const GOOD_GH = () => ({
   [`api repos/${REPO}/environments/main-automation/deployment-branch-policies`]: j({
     branch_policies: [{ id: 11, name: 'main', type: 'branch' }],
   }),
-  'secret list': { stdout: 'CLAUDE_CODE_OAUTH_TOKEN\t2026-10-12\n' },
+  'secret list': { stdout: 'LINEAR_API_KEY\t2026-10-12\n' },
   'api user': j({ login: 'agent', id: 2 }),
   [`api repos/${REPO}/collaborators`]: j([
     { login: 'agent', permissions: { admin: false, push: true } },
@@ -347,6 +347,13 @@ describe('verify-hardening: GitHub plane (fixture)', () => {
       g((m) => (m['secret list'] = { stdout: 'CLOUDFLARE_API_TOKEN_OSE\t2026\nADMIN_KEY\t2026\n' }))
         .G5
     ).toBe('FAIL');
+  });
+
+  it('G7 warns while a stored Claude key is left behind (OSE-1109)', () => {
+    expect(
+      g((m) => (m['secret list'] = { stdout: 'CLAUDE_CODE_OAUTH_TOKEN\t2026\n' })).G7
+    ).toBe('WARN');
+    expect(g((m) => (m['secret list'] = { stdout: 'ANTHROPIC_API_KEY\t2026\n' })).G7).toBe('WARN');
   });
 
   it('G6 fails when the agent identity is an admin', () => {

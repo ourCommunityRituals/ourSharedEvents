@@ -3,12 +3,12 @@
  *
  * Behavioral where it can be: the two shell steps that decide the reviewer and
  * the auth are extracted from the workflow and run with bash for every input
- * combination, and the `anthropic_api_key` expression is evaluated for every
- * secret combination. Structural for the triggers (`if:`), which only GitHub
- * evaluates.
+ * combination. Structural for the triggers (`if:`) and for the Claude sign-in
+ * (workload identity federation, OSE-1109: no stored Claude key anywhere),
+ * which only GitHub evaluates.
  */
 
-const { readFileSync, mkdtempSync, rmSync } = require('fs');
+const { readFileSync, readdirSync, mkdtempSync, rmSync } = require('fs');
 const { spawnSync } = require('child_process');
 const { tmpdir } = require('os');
 const { join } = require('path');
@@ -22,8 +22,6 @@ const { review, respond } = wf.jobs;
 // pairs read as secrets to the S0 detect-secrets gate.
 const YES = 'true';
 const NO = 'false';
-const FAKE_TOKEN = 'fake-oauth';
-const FAKE_API = 'fake-api';
 
 const step = (job, id) => job.steps.find((s) => s.id === id);
 const actionSteps = (job) =>
@@ -60,15 +58,8 @@ function runStep(s, env) {
   }
 }
 
-/** Evaluate a `${{ … }}` secrets expression with GitHub's &&/|| operand semantics (same as JS). */
-function evalExpr(expr, secrets) {
-  const body = expr.replace(/^\$\{\{\s*|\s*\}\}$/g, '');
-  const js = body
-    .replace(/secrets\.([A-Z_]+)/g, (_, k) => JSON.stringify(secrets[k] || ''))
-    .replace(/'/g, '"')
-    .replace(/==/g, '===');
-  return Function(`"use strict"; return (${js});`)();
-}
+const WF_DIR = join(__dirname, '..', '..', '.github', 'workflows');
+const STORED_CLAUDE_CRED = /secrets\.(ANTHROPIC_API_KEY|CLAUDE_CODE_OAUTH_TOKEN)\b/;
 
 describe('claude-review.yml reviewer switch', () => {
   it('review runs on pull_request only; respond is the only comment consumer', () => {
@@ -80,28 +71,23 @@ describe('claude-review.yml reviewer switch', () => {
   const pick = step(review, 'check-key');
   const cases = [
     [
-      'claude + token',
-      { PR_REVIEWER: 'claude', HAS_OAUTH: YES, HAS_API_KEY: NO },
+      'claude + federation set up',
+      { PR_REVIEWER: 'claude', HAS_RULE: YES },
       { skip: 'false' },
     ],
     [
-      'claude + api key only',
-      { PR_REVIEWER: 'claude', HAS_OAUTH: NO, HAS_API_KEY: YES },
-      { skip: 'false' },
-    ],
-    [
-      'claude + no credential',
-      { PR_REVIEWER: 'claude', HAS_OAUTH: NO, HAS_API_KEY: NO },
+      'claude + federation not set up',
+      { PR_REVIEWER: 'claude', HAS_RULE: NO },
       { skip: 'true' },
     ],
     [
-      'copilot (credentials ignored)',
-      { PR_REVIEWER: 'copilot', HAS_OAUTH: YES, HAS_API_KEY: YES },
+      'copilot (sign-in ignored)',
+      { PR_REVIEWER: 'copilot', HAS_RULE: YES },
       { skip: 'true', copilot: 'true' },
     ],
     [
       'unknown value falls back to claude',
-      { PR_REVIEWER: 'Copilot ', HAS_OAUTH: YES, HAS_API_KEY: NO },
+      { PR_REVIEWER: 'Copilot ', HAS_RULE: YES },
       { skip: 'false' },
     ],
   ];
@@ -113,8 +99,7 @@ describe('claude-review.yml reviewer switch', () => {
   it('unknown PR_REVIEWER warns visibly', () => {
     const { stdout } = runStep(pick, {
       PR_REVIEWER: 'gpt',
-      HAS_OAUTH: YES,
-      HAS_API_KEY: NO,
+      HAS_RULE: YES,
     });
     expect(stdout).toContain('::warning title=Unknown PR_REVIEWER');
   });
@@ -130,31 +115,53 @@ describe('claude-review.yml reviewer switch', () => {
     expect(req.run).toContain('copilot-pull-request-reviewer[bot]');
   });
 
-  it('respond auth step: either credential is enough', () => {
+  it('respond auth step: runs only when federation is set up', () => {
     const s = step(respond, 'check-key');
-    expect(runStep(s, { HAS_OAUTH: YES, HAS_API_KEY: NO }).out).toEqual({ skip: 'false' });
-    expect(runStep(s, { HAS_OAUTH: NO, HAS_API_KEY: YES }).out).toEqual({ skip: 'false' });
-    expect(runStep(s, { HAS_OAUTH: NO, HAS_API_KEY: NO }).out).toEqual({ skip: 'true' });
+    expect(runStep(s, { HAS_RULE: YES }).out).toEqual({ skip: 'false' });
+    expect(runStep(s, { HAS_RULE: NO }).out).toEqual({ skip: 'true' });
   });
 
+  it('the auth checks read the federation variables, not secrets', () => {
+    expect(pick.env.HAS_RULE).toBe(
+      "${{ vars.ANTHROPIC_WIF_RULE_PR != '' && vars.ANTHROPIC_ORGANIZATION_ID != '' }}"
+    );
+    expect(step(respond, 'check-key').env.HAS_RULE).toBe(
+      "${{ vars.ANTHROPIC_WIF_RULE_MAIN != '' && vars.ANTHROPIC_ORGANIZATION_ID != '' }}"
+    );
+  });
+
+  // OSE-1109: sign in by workload identity federation. A stored key or
+  // subscription token would also silently win over federation.
+  const canaryWf = yaml.load(readFileSync(join(WF_DIR, 'review-canary.yml'), 'utf-8'));
   describe.each([
-    ['review', review],
-    ['respond', respond],
-  ])('%s action: subscription token wins over the API key', (_, job) => {
+    ['review', review, 'PR'],
+    ['respond', respond, 'MAIN'],
+    ['review-canary check', canaryWf.jobs.check, 'MAIN'],
+  ])('%s action signs in by federation', (_, job, rule) => {
     const steps = actionSteps(job);
     it('has exactly one claude-code-action step', () => expect(steps).toHaveLength(1));
     const w = steps[0].with;
-    it.each([
-      ['both set', { CLAUDE_CODE_OAUTH_TOKEN: FAKE_TOKEN, ANTHROPIC_API_KEY: FAKE_API }, ''],
-      ['token only', { CLAUDE_CODE_OAUTH_TOKEN: FAKE_TOKEN }, ''],
-      ['api key only', { ANTHROPIC_API_KEY: FAKE_API }, FAKE_API],
-      ['neither', {}, ''],
-    ])('%s', (__, secrets, apiKey) => {
-      expect(evalExpr(w.claude_code_oauth_token, secrets)).toBe(
-        secrets.CLAUDE_CODE_OAUTH_TOKEN || ''
-      );
-      expect(evalExpr(w.anthropic_api_key, secrets)).toBe(apiKey);
+    it(`uses the ${rule} rule and the organization from repository variables`, () => {
+      expect(w.anthropic_federation_rule_id).toBe(`\${{ vars.ANTHROPIC_WIF_RULE_${rule} }}`);
+      expect(w.anthropic_organization_id).toBe('${{ vars.ANTHROPIC_ORGANIZATION_ID }}');
     });
+    it('passes no stored Claude credential', () => {
+      expect(w.anthropic_api_key).toBeUndefined();
+      expect(w.claude_code_oauth_token).toBeUndefined();
+    });
+    it('the job may fetch an OIDC token, and passes its own github_token', () => {
+      expect(job.permissions['id-token']).toBe('write');
+      // Without its own token the action trades the OIDC token for a Claude
+      // GitHub App token that `permissions:` does not bound.
+      expect(w.github_token).toBe('${{ github.token }}');
+    });
+  });
+
+  it('no workflow in this repo reads a stored Claude credential', () => {
+    const hits = readdirSync(WF_DIR)
+      .filter((f) => /\.ya?ml$/.test(f))
+      .filter((f) => STORED_CLAUDE_CRED.test(readFileSync(join(WF_DIR, f), 'utf-8')));
+    expect(hits).toEqual([]);
   });
 });
 

@@ -8,7 +8,7 @@
 #
 # Weekly and by hand only. claude-code-action does not run on `push`, and a
 # pull_request trigger would hand the workflow to PR code. A red run means PR
-# reviews cannot be trusted until it is green again. A missing credential is a
+# reviews cannot be trusted until it is green again. Missing sign-in settings are a
 # failure here, not a skip: this workflow's job is to say whether the reviewer
 # works.
 #
@@ -42,6 +42,11 @@ jobs:
     name: 'Reviewer finds the known bugs'
     runs-on: ubuntu-24.04
     timeout-minutes: 15 # [Claude] ceiling: 10 turns on five short files; no run to measure yet
+    # id-token: write is for Claude API sign-in only (workload identity
+    # federation, OSE-1109). Runs on main, so the main-branch rule applies.
+    permissions:
+      contents: read
+      id-token: write
     defaults:
       run:
         shell: bash
@@ -72,11 +77,10 @@ jobs:
 
       - name: Check auth
         env:
-          HAS_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
-          HAS_API_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+          HAS_RULE: ${{ vars.ANTHROPIC_WIF_RULE_MAIN != '' && vars.ANTHROPIC_ORGANIZATION_ID != '' }}
         run: |
-          if [ "$HAS_OAUTH" != "true" ] && [ "$HAS_API_KEY" != "true" ]; then
-            echo "::error title=Review check cannot run::Neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY is set, so PRs get no automated review."
+          if [ "$HAS_RULE" != "true" ]; then
+            echo "::error title=Review check cannot run::ANTHROPIC_WIF_RULE_MAIN or ANTHROPIC_ORGANIZATION_ID is not set, so PRs get no automated review."
             exit 1
           fi
 
@@ -99,9 +103,9 @@ jobs:
         id: reviewer
         uses: anthropics/claude-code-action@f431adaf77e0fecf918431e75a2b5b45b85af002 # v1
         with:
-          # Same auth order as claude-review.yml: subscription first, API key only without it.
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          anthropic_api_key: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN == '' && secrets.ANTHROPIC_API_KEY || '' }}
+          # Workload identity federation, as in claude-review.yml. No stored key.
+          anthropic_federation_rule_id: ${{ vars.ANTHROPIC_WIF_RULE_MAIN }}
+          anthropic_organization_id: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
           github_token: ${{ github.token }}
           prompt: |
             Review these five files as if each were a new file added in a pull request,
