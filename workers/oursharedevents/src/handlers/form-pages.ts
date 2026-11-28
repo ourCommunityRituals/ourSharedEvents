@@ -182,6 +182,7 @@ const FORM_CSS = `
   body { line-height: 1.4; }
   header { background: var(--surface); color: var(--text); border-bottom: 1px solid var(--border); padding: 1rem 1.5rem; text-align: center; }
   header h1 { overflow-wrap: anywhere; font-size: 1.1rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
+  header h1 .ose-tagline { display: block; font-size: .75rem; font-weight: 400; text-transform: none; letter-spacing: 0; }
   header .event-name { font-size: 1.4rem; font-weight: 700; margin-top: .25rem; overflow-wrap: anywhere; }
   main { max-width: 480px; margin: 0 auto; padding: 1.5rem 1rem; }
   .form-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; }
@@ -892,7 +893,7 @@ function formPage(
     <div class="form-topbar" data-testid="form-topbar">
     ${renderLanguageMenu({ lang, path: menuPath, nonce })}
     </div>
-    <h1>OurSharedEvents</h1>
+    <h1>OurSharedEvents<span class="ose-tagline" data-testid="brand-tagline">${msg(lang, 'brand.tagline')}</span></h1>
     <div class="event-name" data-testid="form-event-name">${isolateTyped(lang, eventName)}</div>
   </header>
   <!-- OSE-222: sponsor logo strip — hidden by default. Populated on

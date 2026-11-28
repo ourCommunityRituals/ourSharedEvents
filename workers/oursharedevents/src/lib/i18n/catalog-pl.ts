@@ -463,6 +463,7 @@ export const pl: Record<MessageKey, string> = {
   'form.privacy.details': 'Szczegóły prywatności',
   'form.privacy.englishNote': 'To jest tłumaczenie. Oficjalny jest tekst po angielsku.',
   // MACHINE DRAFT, awaiting the native read (OSE-1968).
+  'brand.tagline': 'Wydarzenia Twojej okolicy',
   'privacy.summary.register': 'Twoje imię i e-mail są usuwane dzień po wydarzeniu.',
   'privacy.summary.survey': 'Z komentarzy usuwamy dane osobowe w ciągu 24 godzin.',
   'privacy.summary.email': 'Twój e-mail jest usuwany po 30 dniach.',

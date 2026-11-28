@@ -493,6 +493,9 @@ const en = {
   'form.privacy.details': 'Privacy details',
   // Shown only on a page that is not in English, above the official English text.
   'form.privacy.englishNote': 'This is a translation. The English text is the official one.',
+  // The short line under the OurSharedEvents name in a page header (owner
+  // 2026-11-28: the name stays one name; the line is in the reader's language).
+  'brand.tagline': "Your community's events",
   // The privacy notice under each form (owner 2026-11-28: in the page's
   // language; the English text stays the official one and shows under it).
   'privacy.summary.register': 'Your name and email are cleared the day after the event.',
@@ -994,6 +997,7 @@ const es: Record<MessageKey, string> = {
   'form.next.browse': 'Ver qué más se acerca',
   'form.privacy.details': 'Detalles de privacidad',
   'form.privacy.englishNote': 'Esto es una traducción. El texto en inglés es el oficial.',
+  'brand.tagline': 'Eventos de tu comunidad',
   'privacy.summary.register': 'Tu nombre y tu correo se borran el día después del evento.',
   'privacy.summary.survey': 'Los comentarios se limpian de datos personales en 24 horas.',
   'privacy.summary.email': 'Tu correo se borra a los 30 días.',

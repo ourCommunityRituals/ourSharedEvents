@@ -466,6 +466,7 @@ export const ar: Record<MessageKey, string> = {
   'form.privacy.details': 'تفاصيل الخصوصية',
   'form.privacy.englishNote': 'هذه ترجمة. النص الإنجليزي هو النص الرسمي.',
   // MACHINE DRAFT, awaiting the native read (OSE-1968).
+  'brand.tagline': 'فعاليات مجتمعك',
   'privacy.summary.register': 'يُحذف اسمك وبريدك الإلكتروني في اليوم التالي للفعالية.',
   'privacy.summary.survey': 'تُزال البيانات الشخصية من التعليقات خلال 24 ساعة.',
   'privacy.summary.email': 'يُحذف بريدك الإلكتروني بعد 30 يومًا.',
