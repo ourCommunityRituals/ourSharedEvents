@@ -354,6 +354,12 @@ const SIGNED_LINK_PRODUCTS: readonly SignedLinkProduct[] = [
   },
   {
     method: 'POST',
+    path: /^\/api\/v2\/admin\/brands\/[^/]+\/family-report\/mint-link$/,
+    jsonFields: ['token', 'path'],
+    why: 'A parent company asks for a link to its family report, to send a corporate sponsor; the answer is that link (the token, and the page path that carries it). Admin only, brand in scope, rate-limited, audited (MINT_FAMILY_REPORT_LINK, OSE-2241).',
+  },
+  {
+    method: 'POST',
     path: /^\/api\/v2\/admin\/sponsors\/[^/]+\/home-link$/,
     jsonFields: ['url'],
     why: "The organizer asks for a sponsor's page link to send on; the answer is that link. Admin only, rate-limited, audited (MINT_SPONSOR_HOME_LINK).",
