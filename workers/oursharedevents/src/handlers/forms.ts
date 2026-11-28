@@ -583,7 +583,9 @@ export async function handleFormEmailSignup(
         duplicate: true,
         latencyMs: Date.now() - start,
       });
-      const res = jsonResponse({ ok: true, id: existing.id as string, duplicate: true }, request);
+      // Same answer as a new sign-up, key for key: whether an address is
+      // already on the list is never shown to the caller.
+      const res = jsonResponse({ ok: true, id: existing.id as string }, request);
       return isNew ? setAnonCookie(res, cookieValue) : res;
     }
 

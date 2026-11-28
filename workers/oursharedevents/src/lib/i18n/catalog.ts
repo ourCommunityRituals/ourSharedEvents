@@ -471,7 +471,6 @@ const en = {
   'form.email.label': 'Your email',
   'form.email.placeholder': 'you@example.com',
   'form.email.submit': 'Sign me up',
-  'form.email.already': "You're already signed up!",
   'form.email.done': "You're on the list!",
   'form.error.invalidEventId':
     "This event link doesn't look right. Try the original link or contact the host.",
@@ -929,7 +928,6 @@ const es: Record<MessageKey, string> = {
   'form.email.label': 'Tu correo electrónico',
   'form.email.placeholder': 'tu@ejemplo.com',
   'form.email.submit': 'Suscribirme',
-  'form.email.already': '¡Ya estabas suscrito!',
   'form.email.done': '¡Ya estás en la lista!',
   'form.error.invalidEventId':
     'Este enlace del evento no parece correcto. Prueba el enlace original o contacta al organizador.',
