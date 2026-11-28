@@ -65,6 +65,8 @@ describe('the language chip | shape', () => {
       const img = chip?.querySelector('img');
       expect(img?.getAttribute('src')).toBe(`/flags/${lang}.svg`);
       expect(img?.getAttribute('alt')).toBe('');
+      // On screen, so it loads with the page, not on a later scroll or tap.
+      expect(img?.hasAttribute('loading')).toBe(false);
       const name = chip?.querySelector('span[lang]');
       expect(name?.getAttribute('lang')).toBe(lang);
       expect(name?.textContent).toBe(LANGUAGE_NAMES[lang]);
@@ -108,6 +110,8 @@ describe('the language chip | shape', () => {
         expect(img?.getAttribute('width')).toBe('21');
         expect(img?.getAttribute('height')).toBe('14');
         expect(img?.getAttribute('class')).toBe('ose-lang-flag');
+        // Inside the closed card: fetched only once the card is opened.
+        expect(img?.getAttribute('loading')).toBe('lazy');
       }
       // The page's own language is the chip, never a link to itself.
       expect(doc.querySelector(`[data-testid="language-switch-${lang}"]`)).toBeNull();

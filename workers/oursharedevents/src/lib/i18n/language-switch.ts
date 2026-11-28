@@ -53,10 +53,13 @@ export interface LanguageSwitchOptions {
   query?: string;
 }
 
-/** A flag or letter badge: a picture with no text (alt=""), so a link's
- * accessible name stays the language's name alone. */
-function flag(lang: Lang): string {
-  return `<img class="ose-lang-flag" src="${languageFlagPath(lang)}" alt="" width="21" height="14" loading="lazy">`;
+/**
+ * A flag or letter badge: a picture with no text (alt=""), so a link's
+ * accessible name stays the language's name alone. The chip's flag is on screen
+ * and loads with the page; the card's flags wait until the card is opened.
+ */
+function flag(lang: Lang, lazy: boolean): string {
+  return `<img class="ose-lang-flag" src="${languageFlagPath(lang)}" alt="" width="21" height="14"${lazy ? ' loading="lazy"' : ''}>`;
 }
 
 /** One leading slash, then anything but a second slash or a backslash. */
@@ -78,13 +81,13 @@ export function renderLanguageSwitch(opts: LanguageSwitchOptions): string {
       const textLang = name === LANGUAGE_NAMES[l] ? l : opts.lang;
       // Every value is escaped (esc) or a code from the fixed LANGUAGES list.
       // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format
-      return `<li><a lang="${textLang}" hreflang="${l}" data-testid="language-switch-${l}" href="${esc(withLangPrefix(l, opts.path) + query)}">${flag(l)}${esc(name)}</a></li>`;
+      return `<li><a lang="${textLang}" hreflang="${l}" data-testid="language-switch-${l}" href="${esc(withLangPrefix(l, opts.path) + query)}">${flag(l, true)}${esc(name)}</a></li>`;
     })
     .join('\n        ');
   // The chip names the page's language in that language ("Español").
   return `<nav class="ose-lang" data-testid="language-switch" aria-label="${label}">
       <details data-testid="language-switch-choice">
-        <summary class="ose-lang-chip" aria-label="${label}: ${esc(LANGUAGE_NAMES[opts.lang])}" data-testid="language-switch-chip">${flag(opts.lang)}<span lang="${opts.lang}">${esc(LANGUAGE_NAMES[opts.lang])}</span><span class="ose-lang-caret" aria-hidden="true">▾</span></summary>
+        <summary class="ose-lang-chip" aria-label="${label}: ${esc(LANGUAGE_NAMES[opts.lang])}" data-testid="language-switch-chip">${flag(opts.lang, false)}<span lang="${opts.lang}">${esc(LANGUAGE_NAMES[opts.lang])}</span><span class="ose-lang-caret" aria-hidden="true">▾</span></summary>
         <ul class="ose-lang-card" data-testid="language-switch-card">
         ${links}
         </ul>
