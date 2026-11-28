@@ -150,7 +150,7 @@ const PRIVACY_POLICY_HTML = `<!DOCTYPE html>
     <p>
       OurSharedEvents is not directed to children under 13, and we do not knowingly collect personal
       data from them. We do not offer a parental-consent process. Family events can still use
-      OurSharedEvents for event details and anonymous counts. You must be 16 or older to register,
+      OurSharedEvents for event details and anonymous counts. You must be 18 or older to register,
       sign up or fill in a survey. If you think a child under 13 has given
       us personal data, email <a href="mailto:privacy@oursharedevents.com">privacy@oursharedevents.com</a>
       and we will delete it.

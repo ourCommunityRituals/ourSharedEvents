@@ -87,6 +87,6 @@ describe('privacy page covers everyone whose data we hold', () => {
   });
 
   test('states the minimum age to submit a form', async () => {
-    expect(await pageText()).toContain('You must be 16 or older to register');
+    expect(await pageText()).toContain('You must be 18 or older to register');
   });
 });
