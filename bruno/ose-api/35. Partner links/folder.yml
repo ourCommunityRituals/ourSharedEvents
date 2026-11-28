@@ -1,0 +1,22 @@
+info:
+  name: Partner links
+  type: folder
+request: {}
+docs: |-
+  Partner links between groups on one event (owner 2026-11-28, migration 0128,
+  workers/oursharedevents/src/handlers/event-partners.ts). The organizer invites
+  another brand as partner or co-host; a public body is always a co-host. The
+  partner brand accepts or declines. Only while both accept does the event page
+  name the partner, and only then can the partner read the event's floored
+  scan total.
+
+  The usual staging actor plays the organizer (seq 20 to 30 and 50). The CI
+  brand actor (ci-brand only, OSE-1800) checks the other half from outside: a
+  link offered to another brand is not in its partner list, cannot be answered
+  and its counts cannot be read (seq 40 to 42, all 404). Until that token is
+  set, those three log NOT RUN and record no pass. The accept path, the page
+  line and the counts are held at the mock layer
+  (tests/event-partners-route.spec.ts), where three brands exist.
+
+  No fixture. The folder makes one synthetic, unlisted event (seq 10) and
+  deletes it at the end (seq 900); its links go with it (ON DELETE CASCADE).

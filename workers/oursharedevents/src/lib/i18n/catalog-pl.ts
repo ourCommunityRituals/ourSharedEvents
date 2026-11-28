@@ -472,4 +472,7 @@ export const pl: Record<MessageKey, string> = {
   'passport.clear': 'Usuń moje pieczątki',
   'passport.stamped': 'Podstemplowano',
   'passport.noScript': 'Włącz JavaScript, aby zapisywać pieczątki w tym telefonie.',
+  'partners.coHostedWith': 'Współorganizator: {names}',
+  'partners.with': 'Razem z: {names}',
+  'partners.publicBody': '{name} (instytucja publiczna)',
 };

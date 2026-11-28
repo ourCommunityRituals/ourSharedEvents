@@ -505,6 +505,9 @@ const en = {
   'passport.clear': 'Clear my stamps',
   'passport.stamped': 'Stamped',
   'passport.noScript': 'Turn on JavaScript to keep stamps on this phone.',
+  'partners.coHostedWith': 'Co-hosted with {names}',
+  'partners.with': 'With {names}',
+  'partners.publicBody': '{name} (public body)',
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -970,6 +973,9 @@ const es: Record<MessageKey, string> = {
   'passport.clear': 'Borrar mis sellos',
   'passport.stamped': 'Sellado',
   'passport.noScript': 'Activa JavaScript para guardar sellos en este teléfono.',
+  'partners.coHostedWith': 'Coorganizado con {names}',
+  'partners.with': 'Con {names}',
+  'partners.publicBody': '{name} (organismo público)',
 };
 
 /** One catalog per language. A language still being written may omit keys. */

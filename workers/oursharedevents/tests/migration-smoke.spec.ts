@@ -59,6 +59,7 @@ const DB_TABLES = [
   'corridors', // 0010
   'event_booths', // 0109 (OSE-1998 — a booth is part of a fair; no person field)
   'event_codes', // 0096 (OSE-1684 — one short code per event, every screen)
+  'event_partners', // 0128 (partner links between groups on one event; a group name, never a person)
   'event_series', // 0033 (OSE-272 SharedReport pipeline)
   'event_templates', // 0014
   'event_type_category_registry', // 0076 (OSE-1344 — Category → Type picker lookup)

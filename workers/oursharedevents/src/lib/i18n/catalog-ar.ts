@@ -474,4 +474,7 @@ export const ar: Record<MessageKey, string> = {
   'passport.clear': 'امسح أختامي',
   'passport.stamped': 'مختوم',
   'passport.noScript': 'شغّل جافاسكريبت لحفظ الأختام على هذا الهاتف.',
+  'partners.coHostedWith': 'بالتعاون مع {names}',
+  'partners.with': 'مع {names}',
+  'partners.publicBody': '{name} (جهة عامة)',
 };

@@ -21,6 +21,7 @@ export const NODE_SPECS = [
   'tests/booth-counts.spec.ts',
   // Stamp passport (owner 2026-11-28): setting, card and the no-request script (pure lib)
   'tests/passport.spec.ts',
+  'tests/event-partners.spec.ts',
   // OSE-2004 — no stall leaves for BigQuery (row guard + exporter sources)
   'tests/booth-export-boundary.spec.ts',
   // OSE-2004 — the worked example in docs/features/FAIR-REPORTING.md, computed

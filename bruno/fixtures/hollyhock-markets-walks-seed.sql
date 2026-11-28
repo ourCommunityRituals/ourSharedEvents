@@ -543,3 +543,16 @@ INSERT INTO sponsor_placement (id, sponsor_business_id, event_id, tier, source, 
   ('spl_fbp_chamber_fbp_concerts', 'sb_fbp_chamber', 'fbp-concerts', 'gold', 'organizer', 1, 1, 1),
   ('spl_fbp_tansy_fbp_art_in_park', 'sb_fbp_tansy', 'fbp-art-in-park', 'gold', 'organizer', 1, 1, 1)
 ON CONFLICT(id) DO UPDATE SET tier = excluded.tier, source = 'organizer', is_active = 1, sponsor_accepted = 1, organizer_accepted = 1;
+
+-- Partner links between groups (owner 2026-11-28, migration 0128). Two are on
+-- (both sides accept): the park district co-hosts the art walk as a public
+-- body, and the art collective partners the restaurant week. One waits for an
+-- answer, so a tester of the chamber can accept or decline it in the admin.
+INSERT INTO event_partners (id, event_id, partner_brand_id, partner_name, kind, is_public_body, organizer_accepted, partner_accepted) VALUES
+  ('hha-epl-1', 'tac-art-walk', 'fernbrook-parks', 'Fernbrook Park District', 'co_host', 1, 1, 1),
+  ('hha-epl-2', 'hha-restaurant-week', 'tansy-collective', 'Tansy Arts Collective', 'partner', 0, 1, 1),
+  ('hha-epl-3', 'fbh-house-walk', 'hollyhock-chamber', 'Hollyhock Avenue Chamber', 'partner', 0, 1, NULL)
+ON CONFLICT (id) DO UPDATE SET
+  partner_name = excluded.partner_name, kind = excluded.kind, is_public_body = excluded.is_public_body,
+  organizer_accepted = excluded.organizer_accepted, partner_accepted = excluded.partner_accepted,
+  updated_at = datetime('now');

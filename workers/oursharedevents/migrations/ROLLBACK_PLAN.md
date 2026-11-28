@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0126; the entries below do not cover every migration after 0083, see the note at 0104)
+- `DB` — main / anonymous public surface (highest migration: 0128; the entries below do not cover every migration after 0083, see the note at 0104)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -110,6 +110,15 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0128: event_partners (partner links between groups on one event, owner
+-- 2026-11-28). Additive: one table, one index. THE ROLLBACK IS: revert the
+-- Worker and LEAVE THE TABLE. The older Worker never reads it: no partner line
+-- on the event page and no partner routes. Rows left behind hold no person: a
+-- brand id, a group's display name and two yes/no answers.
+--
+-- Surgical reverse, only if the table itself must go (every link is lost):
+DROP TABLE IF EXISTS event_partners;
+
 -- 0126: competitions.rules, competition_entries.team_size and the new table
 -- fixture_lineups (leagues slice 2). Additive: two nullable columns and one
 -- table, no index. THE ROLLBACK IS: revert the Worker and LEAVE THEM. The older
