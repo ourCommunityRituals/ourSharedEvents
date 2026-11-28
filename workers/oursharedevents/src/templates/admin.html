@@ -932,31 +932,6 @@
           padding-top: 0.75rem;
         }
       }
-      /* Owner 2026-11-27: adding a sponsor is two short screens. */
-      /* No scrolling (owner 2026-11-27): a level is one row, name then chips. */
-      .spon-levels .spon-level { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 0.375rem 0.75rem; }
-      .spon-levels .spon-level > .spon-level-name { margin: 0; }
-      .spon-levels .spon-level > .spon-level-name { white-space: nowrap; }
-      .spon-levels .wizard-chip { padding: 0 0.75rem; }
-      .spon-levels .spon-level .wizard-chips { flex-wrap: nowrap; }
-      body.sponsor-focus #spon-summary { display: none; }
-      .spon-form-wrap:not(.is-editing) .form-actions { flex-wrap: nowrap; }
-      .spon-form-wrap:not(.is-editing) .form-actions > .btn { flex: 1 1 0; min-width: 0; padding-left: 0.5rem; padding-right: 0.5rem; }
-      .spon-form-wrap:not(.is-editing) .form-actions > .create-btn { flex-grow: 2; }
-      .spon-step-caption { margin: 0 0 0.75rem; color: var(--text-muted); }
-      .spon-step-caption strong { color: var(--text); }
-      .spon-form-wrap:not(.is-editing)[data-spon-at='1'] .spon-step[data-spon-step='2'],
-      .spon-form-wrap:not(.is-editing)[data-spon-at='2'] .spon-step[data-spon-step='1'] { display: none; }
-      .spon-form-wrap.is-editing .spon-step-caption { display: none; }
-      .spon-form-wrap .form-actions { flex-wrap: wrap; align-items: center; }
-      .spon-form-wrap .form-actions > .create-msg { flex: 1 1 100%; order: 3; }
-      .spon-form-wrap .form-actions > .create-msg:empty { display: none; }
-      .spon-levels { display: grid; gap: 0.5rem; margin-bottom: 0.25rem; }
-      .spon-level { padding: 0.625rem 0.75rem; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface); }
-      .spon-level-name { margin: 0 0 0.375rem; font-weight: 700; }
-      /* Opened from the front door: the sponsor form alone, not the whole dashboard. */
-      body.sponsor-focus #main-content > :not(#sponsors-card) { display: none !important; }
-      body.sponsor-focus #sponsors-card .card-header .card-action, body.sponsor-focus #spon-switch, body.sponsor-focus #sponsors-list { display: none !important; }
       .spon-form-wrap {
         background: var(--surface-hover);
         border-radius: 6px;
@@ -1364,63 +1339,6 @@
       .wizard-progress-step.completed .step-number { background: var(--success); border-color: var(--success); color: var(--bg); }
       .wizard-step { display: none; }
       .wizard-step.active { display: block; }
-      /* Owner 2026-11-27: two short screens; tap chips, fold the extras. */
-      .wizard-field-label { font-size: 1rem; font-weight: 700; color: var(--text); margin: 0 0 0.5rem; }
-      .wizard-step > .wizard-field-label { margin-top: 1.25rem; }
-      .wizard-chips { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-      .wizard-chip { min-height: 44px; padding: 0 1rem; border: 2px solid var(--border-strong); border-radius: 999px; background: var(--surface); color: var(--text); font-family: inherit; font-size: 1rem; cursor: pointer; }
-      .wizard-chip[aria-pressed='true'] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); font-weight: 700; }
-      .wizard-fold { margin-top: 0.75rem; border-top: 1px solid var(--border); }
-      .wizard-fold > summary { color: var(--accent-text); font-weight: 600; justify-content: space-between; }
-      .wizard-fold > summary::after { content: '\25B8'; margin-left: 0.5rem; }
-      .wizard-fold[open] > summary::after { content: '\25BE'; }
-      .wizard-fold > summary::-webkit-details-marker { display: none; }
-      .wizard-fold > summary { list-style: none; }
-      .wizard-fold[open] { padding-bottom: 0.75rem; }
-      /* Owner 2026-11-27: no scrolling. Step 1 packs two boxes to a row. */
-      .launch-wizard .create-form.wizard-compact, .launch-wizard .wizard-compact .type-picker { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.625rem; }
-      .wizard-compact .wizard-field-label { margin: 0.25rem 0 0; }
-      .wizard-compact .wizard-chips { flex-wrap: nowrap; }
-      .wizard-compact .wizard-chip { flex: 1 1 0; padding: 0 0.5rem; }
-      .launch-wizard .wizard-compact label { margin-bottom: 0.25rem; }
-      /* Deeper Dive (owner 2026-11-27): one arrow, one label, a short paragraph behind it. */
-      .deeper-dive > summary { list-style: none; display: inline-flex; align-items: center; gap: 0.375rem; min-height: 44px; cursor: pointer; color: var(--accent-text); font-size: 0.9375rem; font-weight: 600; }
-      .deeper-dive > summary::-webkit-details-marker { display: none; }
-      .deeper-dive > summary:focus-visible, .wizard-fold > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
-      .deeper-dive > summary::before { content: '\25B8'; font-size: 1.125rem; line-height: 1; }
-      .deeper-dive[open] > summary::before { content: '\25BE'; }
-      .deeper-dive > p { margin: 0 0 0.5rem; padding: 0.75rem; background: var(--surface-hover); border: 1px solid var(--border-strong); border-radius: 8px; font-size: 0.9375rem; line-height: 1.5; color: var(--text); font-weight: 400; }
-      .deeper-dive.needs-you > summary { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); box-shadow: inset 0 0 0 2px var(--accent); border-radius: 8px; padding: 0 0.75rem; }
-      .wizard-label-row { display: flex; flex-wrap: wrap; align-items: center; column-gap: 0.75rem; }
-      .wizard-label-row .deeper-dive { font-weight: 400; }
-      .wizard-label-row .deeper-dive > summary { color: var(--accent-text); }
-      .wizard-label-row .deeper-dive[open] { flex-basis: 100%; }
-      /* Step 2: card titles only; the Deeper Dive explains them. */
-      #wizard-step-2 .wizard-card-desc { display: none; }
-      #wizard-step-2 .wizard-signup-grid { margin-bottom: 0; }
-      /* When an arrow hides something you need, it lights up (owner 2026-11-27). */
-      .wizard-fold.needs-you > summary { color: var(--accent-text); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); border-radius: 8px; padding: 0 0.75rem; box-shadow: inset 0 0 0 2px var(--accent); }
-      .wizard-fold.needs-you > summary::after { font-size: 1.25rem; }
-      /* The share screen: Publish in the bar; Done is the quiet choice until it is live. */
-      .launch-wizard .wizard-go-live { margin-bottom: 0.75rem; padding: 0; background: none; border: 0; }
-      .wizard-go-live > p { margin: 0; }
-      .wizard-go-live > .create-msg:empty { display: none; }
-      #wizard-step-3 .wizard-summary { padding: 0.75rem; margin-bottom: 0.5rem; }
-      #wizard-map-note { font-size: 0.875rem; margin-bottom: 0.5rem; }
-      .wizard-checklist li { display: flex; flex-wrap: wrap; align-items: center; column-gap: 0.5rem; }
-      .wizard-checklist li > .wizard-copy-btn { display: inline-flex; min-height: 48px; padding: 0.25rem 0.75rem; margin-left: auto; }
-      .launch-wizard[data-live='0'] #wizard-finish-btn { order: 1; margin-left: 0; background: var(--surface); color: var(--text); border: 1px solid var(--border-strong); font-size: 1rem; font-weight: 600; }
-      /* Share tiles: two across on a phone, title and buttons only. */
-      .wizard-step .wizard-links-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .wizard-links-grid .wizard-card-desc, .wizard-links-grid .wizard-card-url { display: none; }
-      .wizard-links-grid .wizard-link-card { padding: 0.75rem; }
-      .wizard-links-grid .wizard-link-card img { width: 88px; height: 88px; }
-      .wizard-links-grid .wizard-link-card { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 0.5rem; }
-      .wizard-links-grid .wizard-copy-btn { min-width: 0; width: 100%; padding: 0.5rem 0.25rem; font-size: 0.9375rem; }
-      /* Saved: the share screen shows the real links, so the draft preview and caption step aside. */
-      .launch-wizard[data-step='3'] .wizard-preview, .launch-wizard[data-step='3'] .wizard-step-caption { display: none; }
-      #wizard-step-2 .wizard-signup-grid, #wizard-step-2 .wizard-publish .wizard-signup-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      #wizard-step-2 .wizard-publish { margin-top: 0; padding-top: 0; border-top: 0; }
       .wizard-step-help { font-size: 0.9375rem; line-height: 1.5; color: var(--text-muted); margin-bottom: 1rem; }
       /* A step's question is its largest text. */
       .wizard-step-help.wizard-question { font-size: 1.125rem; font-weight: 700; line-height: 1.35; color: var(--text); margin: 0 0 0.75rem; }
@@ -1447,7 +1365,6 @@
       .create-slot-chip { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: 0.8125rem; line-height: 1.4; }
       .create-slot-chip--typed { border-color: var(--success); color: var(--success); font-weight: 600; }
       .wizard-publish { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }
-      .wizard-publish-note { margin: 0.75rem 0 0; font-size: 0.9375rem; line-height: 1.5; color: var(--text-muted); }
       /* OSE-1314: one card per row on phones; side by side from 640px. */
       .wizard-template-grid, .wizard-signup-grid, .wizard-links-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; margin-bottom: 1rem; }
       @media (min-width: 640px) {
@@ -1506,19 +1423,6 @@
         .wizard-nav > .create-btn { flex-grow: 2; margin-left: 0; }
         .wizard-preview { padding-bottom: 1.25rem; }
         .wizard-go-live .create-btn, .wizard-go-live .wizard-back-btn { width: 100%; }
-        /* No scrolling: the caption names the step, so the rail goes; links lose their codes (the poster has them). */
-        .wizard-progress { display: none; }
-        /* The preview waits for step 2 on a phone, folded to one line. */
-        .launch-wizard[data-step='1'] .wizard-preview { display: none; }
-        .launch-wizard h2 { display: inline-block; margin: 0 0.5rem 0.5rem 0; font-size: 1.375rem; }
-        .wizard-step-caption { display: inline-block; margin: 0 0 0.5rem; font-size: 0.9375rem; }
-        .wizard-nav { margin-top: 0.75rem; }
-        .wizard-links-grid .wizard-link-card img, .wizard-links-grid [id^='wizardQr'] { display: none; }
-        .wizard-step-help.wizard-question { font-size: 1.0625rem; }
-        * + .wizard-step-help.wizard-question { margin-top: 1rem; }
-        .wizard-publish-option, .wizard-signup-option { padding: 0.75rem; }
-        body.wizard-active .admin-header .tier-badge, body.wizard-active .admin-header .phase-badge,
-        body.sponsor-focus .admin-header .tier-badge, body.sponsor-focus .admin-header .phase-badge { display: none; }
       }
       @media (max-width: 480px) {
         .path-chooser-options { grid-template-columns: 1fr; }
