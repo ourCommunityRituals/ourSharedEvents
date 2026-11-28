@@ -241,7 +241,9 @@ describe('admin | Create Sponsor form order and sections (OSE-1434)', () => {
   const details = (doc: Document) =>
     doc.querySelector('[data-testid="spon-card-details"]') as HTMLDetailsElement;
 
-  test('fields run Name → Tier → Event → Image → logos → Website, then the poster header and the card section', async () => {
+  // Owner 2026-11-27: two screens. Step 1 is who (name, logo); step 2 is the
+  // level and the event, then the optional extras.
+  test('fields run Name → Image → logos, then Tier → Event → Website, the poster header and the card section', async () => {
     const { doc } = await mountCard();
     const form = doc.getElementById('spon-create-form')!;
     const order = Array.from(form.querySelectorAll('input:not([type="hidden"]), select')).map(
@@ -249,11 +251,11 @@ describe('admin | Create Sponsor form order and sections (OSE-1434)', () => {
     );
     expect(order).toEqual([
       'spon-name',
-      'spon-tier',
-      'spon-event',
       'spon-image-choice',
       'spon-logo',
       'spon-sidebar-logo',
+      'spon-tier',
+      'spon-event',
       'spon-website',
       // OSE-1826: the poster header's two fields, in their own collapsed section.
       'spon-header-image',

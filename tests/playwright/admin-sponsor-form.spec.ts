@@ -121,72 +121,89 @@ test.beforeAll(async ({ request }) => {
   eventId = (await createLiveEvent(request, ADMIN_BEARER, eventTitle)).id;
 });
 
-test('the form reads Name → Tier → Event → Image → Website, with the card details collapsed', async ({
+test('adding a sponsor is two short steps: who it is, then how often it shows', async ({
   page,
 }) => {
   const problems = watchForBreakage(page);
   await openSponsorForm(page);
 
-  const ids = ['spon-name', 'spon-tier', 'spon-event', 'spon-image-choice', 'spon-website'];
-  const tops: number[] = [];
-  for (const id of ids) {
-    const el = page.getByTestId(id);
-    await expectPhoneWorkable(el, id);
-    tops.push(await topOf(el));
-  }
-  const sorted = [...tops].sort((a, b) => a - b);
-  expect(tops, `on-screen order of ${ids.join(', ')}`).toEqual(sorted);
-  expect(new Set(tops).size, 'each field on its own row at phone width').toBe(ids.length);
-
-  // The logo fields wait for "Our own logo".
+  // Step 1 (owner 2026-11-27): the name, the kind of business and the logo.
+  await expect(page.getByTestId('sponsor-step-caption')).toHaveText(/Step 1 of 2/);
+  await expectPhoneWorkable(page.getByTestId('spon-name'), 'spon-name');
+  await expectPhoneWorkable(page.getByTestId('spon-image-default'), 'spon-image-default');
+  await expect(page.getByTestId('spon-image-default')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('spon-image-choice')).toHaveValue('default');
   await expect(page.getByTestId('spon-logo')).toBeHidden();
   await expect(page.getByTestId('spon-sidebar-logo')).toBeHidden();
-  await expect(page.getByTestId('spon-image-choice').locator('option:checked')).toHaveText(
-    'Standard image (OurSharedEvents mark)'
-  );
+  await expect(page.getByTestId('spon-tier-picker')).toBeHidden();
+  await expect(page.getByTestId('sponsor-submit')).toBeHidden();
 
-  // The card details: below Website, collapsed, fields out of sight.
-  const details = page.getByTestId('spon-card-details');
-  const summary = page.getByTestId('spon-card-details-summary');
-  await expect(summary).toHaveText(/Public card details/);
-  expect(await topOf(summary)).toBeGreaterThan(tops[tops.length - 1]);
-  expect(await details.evaluate((d) => (d as HTMLDetailsElement).open)).toBe(false);
-  for (const id of ['spon-display-name', 'spon-address', 'spon-phone', 'spon-email']) {
-    await expect(page.getByTestId(id), `${id} should be collapsed`).toBeHidden();
+  // Next asks for a name first.
+  await page.getByTestId('sponsor-next').click();
+  await expect(page.getByTestId('spon-name')).toBeFocused();
+  await expect(page.getByTestId('spon-name')).toHaveAttribute('aria-invalid', 'true');
+  await page.getByTestId('spon-name').fill('Two Step Bakery');
+  await page.getByTestId('sponsor-next').click();
+
+  // Step 2: the level, the event, then the extras folded.
+  await expect(page.getByTestId('sponsor-step-caption')).toHaveText(/Step 2 of 2/);
+  await expect(page.getByTestId('spon-name')).toBeHidden();
+  for (const id of ['spon-tier-title', 'spon-tier-gold', 'spon-tier-primary', 'spon-event']) {
+    await expectPhoneWorkable(page.getByTestId(id), id);
   }
-  const sBox = await summary.boundingBox();
-  expect(sBox!.height, 'summary height').toBeGreaterThanOrEqual(MIN_TOUCH_TARGET_PX);
+  const tops = [
+    await topOf(page.getByTestId('spon-tier-picker')),
+    await topOf(page.getByTestId('spon-event')),
+    await topOf(page.getByTestId('spon-more-details')),
+  ];
+  expect(tops, 'level, then event, then the extras').toEqual([...tops].sort((x, y) => x - y));
+  expect(
+    await page.getByTestId('spon-more-details').evaluate((d) => (d as HTMLDetailsElement).open)
+  ).toBe(false);
+  for (const id of [
+    'spon-website',
+    'spon-display-name',
+    'spon-address',
+    'spon-phone',
+    'spon-email',
+  ]) {
+    await expect(page.getByTestId(id), `${id} should be folded`).toBeHidden();
+  }
+  await page.getByTestId('spon-tier-gold').click();
+  await expect(page.getByTestId('spon-tier')).toHaveValue('gold');
+  await expect(page.getByTestId('spon-tier-gold')).toHaveAttribute('aria-pressed', 'true');
 
-  await expectAxeClean(page, 'default');
+  await expectAxeClean(page, 'step 2');
+  await page.getByTestId('sponsor-back').click();
+  await expect(page.getByTestId('spon-name')).toHaveValue('Two Step Bakery');
   expect(problems, problems.join('\n')).toEqual([]);
 });
 
-test('"Our own logo" reveals two phone-workable logo fields and says so', async ({ page }) => {
+test('"Add their logo" reveals two phone-workable logo fields and says so', async ({ page }) => {
   const problems = watchForBreakage(page);
   await openSponsorForm(page);
 
   const hint = page.getByTestId('spon-image-choice-hint');
   await expect(hint).toHaveAttribute('aria-live', 'polite');
-  await page.getByTestId('spon-image-choice').selectOption('own');
+  await page.getByTestId('spon-image-own').click();
 
+  await expect(page.getByTestId('spon-image-choice')).toHaveValue('own');
   await expect(hint).toHaveText(/wide logo and a square logo below/i);
   await expect(page.getByLabel('Wide logo (top banner)')).toBeVisible();
   await expect(page.getByLabel('Square logo (side rail)')).toBeVisible();
   await expectPhoneWorkable(page.getByTestId('spon-logo'), 'spon-logo');
   await expectPhoneWorkable(page.getByTestId('spon-sidebar-logo'), 'spon-sidebar-logo');
 
-  // Revealed between Image and Website, in that order.
-  const image = await topOf(page.getByTestId('spon-image-choice'));
+  // Revealed under the logo buttons, wide first.
+  const pick = await topOf(page.getByTestId('spon-image-picker'));
   const wide = await topOf(page.getByTestId('spon-logo'));
   const square = await topOf(page.getByTestId('spon-sidebar-logo'));
-  const site = await topOf(page.getByTestId('spon-website'));
-  expect(image).toBeLessThan(wide);
+  expect(pick).toBeLessThan(wide);
   expect(wide).toBeLessThan(square);
-  expect(square).toBeLessThan(site);
 
   await expectAxeClean(page, 'own logo');
 
-  await page.getByTestId('spon-image-choice').selectOption('default');
+  await page.getByTestId('spon-image-default').click();
   await expect(page.getByTestId('spon-logo')).toBeHidden();
   await expect(hint).not.toHaveText(/below/i);
   expect(problems, problems.join('\n')).toEqual([]);
@@ -195,6 +212,9 @@ test('"Our own logo" reveals two phone-workable logo fields and says so', async 
 test('the card details open to four phone-workable fields', async ({ page }) => {
   const problems = watchForBreakage(page);
   await openSponsorForm(page);
+  await page.getByTestId('spon-name').fill('Card Detail Co');
+  await page.getByTestId('sponsor-next').click();
+  await page.getByTestId('spon-more-details').locator('summary').first().click();
 
   await page.getByTestId('spon-card-details-summary').click();
   expect(
@@ -219,11 +239,13 @@ test('a sponsor saved through the form round-trips, and Edit reopens its card de
 
   const name = `Form Check Bakery ${Date.now().toString(36)}`;
   await page.getByTestId('spon-name').fill(name);
-  await page.getByTestId('spon-tier').selectOption('gold');
-  await page.getByTestId('spon-event').selectOption(eventId);
-  await page.getByTestId('spon-image-choice').selectOption('own');
+  await page.getByTestId('spon-image-own').click();
   await page.getByTestId('spon-logo').fill('https://cdn.example.com/wide.png');
   await page.getByTestId('spon-sidebar-logo').fill('https://cdn.example.com/square.png');
+  await page.getByTestId('sponsor-next').click();
+  await page.getByTestId('spon-tier-gold').click();
+  await page.getByTestId('spon-event').selectOption(eventId);
+  await page.getByTestId('spon-more-details').locator('summary').first().click();
   await page.getByTestId('spon-website').fill('https://bakery.example.com');
   await page.getByTestId('spon-card-details-summary').click();
   await page.getByTestId('spon-display-name').fill('Form Check Bakery');
@@ -277,14 +299,16 @@ test('errors land on a visible field: tier first, then a rejected card field ope
   await openSponsorForm(page);
 
   await page.getByTestId('spon-name').fill(`Bad Email Co ${Date.now().toString(36)}`);
+  await page.getByTestId('sponsor-next').click();
   await page.getByTestId('sponsor-submit').click();
-  await expect(page.getByTestId('sponsor-form-msg')).toHaveText(/choose a tier/i);
-  await expect(page.getByTestId('spon-tier')).toBeFocused();
+  await expect(page.getByTestId('sponsor-form-msg')).toHaveText(/choose how often it shows/i);
+  await expect(page.getByTestId('spon-tier-title')).toBeFocused();
   await expect(page.getByTestId('spon-tier')).toHaveAttribute('aria-invalid', 'true');
 
   // Type an address the server rejects, then collapse the section again: the
   // server's answer must reopen it and focus the field, not focus a hidden one.
-  await page.getByTestId('spon-tier').selectOption('silver');
+  await page.getByTestId('spon-tier-silver').click();
+  await page.getByTestId('spon-more-details').locator('summary').first().click();
   await page.getByTestId('spon-card-details-summary').click();
   await page.getByTestId('spon-email').fill('not an email');
   await page.getByTestId('spon-card-details-summary').click();

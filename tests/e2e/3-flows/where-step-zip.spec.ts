@@ -61,6 +61,8 @@ for (const size of SIZES) {
   test.describe(`W1 the Where step at ${size.name} width`, () => {
     test('three boxes, each a full-size target with 16px text', async ({ page }) => {
       await openWizard(page, size);
+      // Owner 2026-11-27: the address and ZIP sit in step 1's "More details" fold.
+      await page.getByTestId('wizard-more-details').locator('summary').click();
       for (const id of ['wizard-event-venue', 'wizard-event-address', 'wizard-event-zip']) {
         const box = page.getByTestId(id);
         await expect(box, id).toBeVisible();
@@ -81,6 +83,7 @@ for (const size of SIZES) {
       await openWizard(page, size);
       await page.getByTestId('wizard-event-name').fill('OSE-2095 Playwright Where Step');
       await page.getByTestId('wizard-event-venue').fill('Eagles Hall');
+      await page.getByTestId('wizard-more-details').locator('summary').click();
       const asked = page.waitForResponse(
         (r) => r.url().endsWith('/api/v2/admin/zip-suggest') && r.request().method() === 'POST'
       );
@@ -112,8 +115,7 @@ for (const size of SIZES) {
       await page.getByTestId('wizard-event-date').fill(start);
       await page.getByTestId('wizard-next-btn').click();
       await expect(page.getByTestId('wizard-step-2')).toBeVisible();
-      await page.getByTestId('wizard-next-btn').click();
-      await page.getByTestId('wizard-next-btn').click();
+      await page.getByTestId('wizard-save-draft-btn').click();
       await expect.poll(() => sent, { message: 'the create was sent' }).not.toBeNull();
       expect(sent).toMatchObject({
         location: 'Eagles Hall',

@@ -1,5 +1,6 @@
 /**
- * Wizard step 4 — "Your TV screen" (2026-10-02). The light version of the TV
+ * The wizard's share screen — "Your TV screen" (2026-10-02; folded on the
+ * share screen since 2026-11-27). The light version of the TV
  * display card: screens on/off and one speed, with a demo that cycles through
  * the picked screens. Saves through the same PUT { settings } as the card.
  * Runs the section's real script from the admin.html Text import in jsdom with
@@ -14,9 +15,9 @@ import ADMIN_HTML from '../src/templates/admin.html';
 const EVT = 'evt_wizard_tv';
 
 function step4Markup(html: string): string {
-  const start = html.indexOf('<div class="wizard-step" id="wizard-step-4"');
-  const end = html.indexOf('<!-- Step 5', start);
-  expect(start, 'wizard step 4 markup').toBeGreaterThan(-1);
+  const start = html.indexOf('<div class="wizard-step" id="wizard-step-3"');
+  const end = html.indexOf('<div class="create-msg" id="wizard-msg"', start);
+  expect(start, 'wizard share screen markup').toBeGreaterThan(-1);
   expect(end).toBeGreaterThan(start);
   return html.slice(start, end);
 }
@@ -72,7 +73,7 @@ function mount(opts: { save?: Reply } = {}) {
   }) as unknown as typeof fetch;
   w.eval(scriptWith(ADMIN_HTML, "'ose:wizard-created', function"));
   const doc = w.document;
-  doc.getElementById('wizard-step-4')!.classList.add('active');
+  doc.getElementById('wizard-step-3')!.classList.add('active');
   const $ = <T extends HTMLElement>(id: string) => doc.querySelector<T>(`[data-testid="${id}"]`)!;
   const box = (pane: string) =>
     doc.querySelector<HTMLInputElement>(`[data-testid="wizard-tv-screen"][data-pane="${pane}"]`)!;
@@ -140,24 +141,24 @@ describe('wizard TV section: the one-line summary', () => {
     expect(timers.size).toBe(0);
   });
 
-  test('leaving step 4 stops the demo at once, even with one screen', () => {
+  test('leaving the share screen stops the demo at once, even with one screen', () => {
     const { w, $, box, change, created, timers } = mount();
     created();
     change(box('upcoming'), false);
     change(box('sponsors'), false);
     $<HTMLButtonElement>('wizard-tv-demo-toggle').click();
     expect($('wizard-tv-demo').hidden).toBe(false);
-    w.dispatchEvent(new w.CustomEvent('ose:wizard-step', { detail: { step: 5 } }));
+    w.dispatchEvent(new w.CustomEvent('ose:wizard-step', { detail: { step: 1 } }));
     expect($('wizard-tv-demo').hidden).toBe(true);
     expect($('wizard-tv-demo-toggle').textContent).toBe('Show me');
     expect(timers.size).toBe(0);
   });
 
-  test('the demo stops when the wizard leaves step 4', () => {
+  test('the demo stops when the wizard leaves the share screen', () => {
     const { doc, $, created, tick, timers } = mount();
     created();
     $<HTMLButtonElement>('wizard-tv-demo-toggle').click();
-    doc.getElementById('wizard-step-4')!.classList.remove('active');
+    doc.getElementById('wizard-step-3')!.classList.remove('active');
     tick();
     expect($('wizard-tv-demo').hidden).toBe(true);
     expect(timers.size).toBe(0);
@@ -290,7 +291,7 @@ describe('wizard TV section: saving', () => {
   });
 });
 
-describe('wizard step 4 controls are finger-sized', () => {
+describe('share screen controls are finger-sized', () => {
   test('Copy, Preview and Show me share a 48px-tall target', () => {
     const rule = /\.wizard-copy-btn \{([^}]*)\}/.exec(ADMIN_HTML)?.[1] ?? '';
     expect(rule).toContain('min-height: 48px');
@@ -298,7 +299,7 @@ describe('wizard step 4 controls are finger-sized', () => {
   });
 });
 
-describe('wizard step 4 links point at the new event', () => {
+describe('share screen links point at the new event', () => {
   const loadLinks = scriptWith(ADMIN_HTML, 'async function loadLinks()');
   test("the poster and TV links are the event's own addresses (OSE-1684)", () => {
     expect(loadLinks).toContain("origin + '/events/' + id + '/poster'");
@@ -311,7 +312,7 @@ describe('wizard step 4 links point at the new event', () => {
 });
 
 describe('the saved wizard is a loop: publish, go back, change, publish again', () => {
-  test('step 5 Back returns to step 4, and publish / undo repeat as often as needed', async () => {
+  test('the share screen publishes, keeps the TV editable, and publish / undo repeat as often as needed', async () => {
     const dom = new JSDOM(ADMIN_HTML, {
       runScripts: 'outside-only',
       url: 'https://admin.test/admin',
@@ -359,11 +360,10 @@ describe('the saved wizard is a loop: publish, go back, change, publish again', 
     (byId('wizard-event-venue') as HTMLInputElement).value = 'Eagles Hall';
     byId('wizard-event-name').dispatchEvent(new w.Event('input'));
     byId('wizard-next-btn').click();
-    byId('wizard-next-btn').click();
-    byId('wizard-next-btn').click();
+    byId('wizard-save-draft-btn').click();
     await flush();
     expect(doc.getElementById('wizard-msg')!.textContent).toBe('');
-    expect(active()).toBe('wizard-step-4');
+    expect(active()).toBe('wizard-step-3');
     expect(doc.querySelector('[data-testid="wizard-tv-summary"]')!.textContent).toContain(
       'This event'
     );
@@ -381,15 +381,15 @@ describe('the saved wizard is a loop: publish, go back, change, publish again', 
     pv.click();
     expect(pv.textContent).toBe('Preview');
 
-    byId('wizard-next-btn').click();
-    expect(active()).toBe('wizard-step-5');
+    // Publish sits in the bottom bar of the share screen.
+    expect(byId('wizard-go-live-btn').hidden).toBe(false);
     byId('wizard-go-live-btn').click();
     await flush();
 
-    // Back to step 4 after publishing, change the TV, forward again.
-    expect(byId('wizardBackBtn').hidden).toBe(false);
-    byId('wizardBackBtn').click();
-    expect(active()).toBe('wizard-step-4');
+    // Published: the bar keeps Done, Undo is on the screen, and the TV
+    // settings on the same screen still save.
+    expect(active()).toBe('wizard-step-3');
+    expect(byId('wizard-go-live-btn').hidden).toBe(true);
     expect(byId('wizardBackBtn').hidden).toBe(true);
     const slow = byId('wizard-tv-speed-30') as HTMLInputElement;
     slow.checked = true;
@@ -403,9 +403,6 @@ describe('the saved wizard is a loop: publish, go back, change, publish again', 
         },
       },
     ]);
-    byId('wizard-next-btn').click();
-    expect(active()).toBe('wizard-step-5');
-
     // Undo and publish again, twice over.
     for (let i = 0; i < 2; i++) {
       byId('wizard-undo-live-btn').click();
@@ -496,7 +493,7 @@ describe('publish grace window: the organiser is told when it lists', () => {
 
   test('the wizard and the status panel both add the note to their Published message', () => {
     expect(ADMIN_HTML).toContain(
-      "'Your event is published. The links on the previous step work now.' + (window.graceNote ? window.graceNote(r.listedFrom, wiz.published !== false, !wiz.publishedChosen) : '')"
+      "'Your event is published. Your links work now.' + (window.graceNote ? window.graceNote(r.listedFrom, wiz.published !== false, !wiz.publishedChosen) : '')"
     );
     expect(ADMIN_HTML).toContain(
       "'Published — the public page, poster and display are on.' + window.graceNote(result.listedFrom, Number(e.is_published) !== 0, Number(e.map_default) === 1)"
