@@ -31,7 +31,7 @@ describe('OSE-1760 catalog | the language list', () => {
 
   it('isLang accepts the listed tags and nothing else', () => {
     expect(isLang('es')).toBe(true);
-    expect(isLang('fr')).toBe(false);
+    expect(isLang('nl')).toBe(false);
     expect(isLang(undefined)).toBe(false);
     expect(isLang('')).toBe(false);
   });

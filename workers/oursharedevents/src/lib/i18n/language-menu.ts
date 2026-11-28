@@ -36,6 +36,7 @@ import { escapeHtml as esc } from '../html-escape';
 import { msg } from './catalog';
 import { LANGUAGES, LANGUAGE_NAMES, LANGUAGE_SWITCH_NAMES } from './languages';
 import type { LanguageSwitchOptions } from './language-switch';
+import { languageFlagPath } from './language-flags';
 import { withLangPrefix } from './path-prefix';
 
 /** Colors are tokens from /ui.css; targets 48 px, text 16 px (design system). */
@@ -56,6 +57,7 @@ export const LANGUAGE_MENU_CSS = `
     .ose-langmenu-item { display: flex; align-items: center; gap: 0.5rem; box-sizing: border-box; min-height: 48px; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; text-decoration: none; }
     .ose-langmenu-current { background: var(--accent); color: var(--on-accent); }
     .ose-langmenu-check { display: inline-block; width: 1.25em; }
+    .ose-langmenu-flag { flex: 0 0 auto; border-radius: 2px; }
     .ose-langmenu-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; box-sizing: border-box; min-height: 48px; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; }
     .ose-langmenu-sub[open] > .ose-langmenu-row .ose-langmenu-caret { transform: rotate(90deg); }
     [dir="rtl"] .ose-langmenu-sub[open] > .ose-langmenu-row .ose-langmenu-caret { transform: rotate(-90deg); }
@@ -82,14 +84,17 @@ function languageList(opts: LanguageSwitchOptions, phone: boolean): string {
     const name = LANGUAGE_SWITCH_NAMES[opts.lang][l];
     // Its own name ("Español") is in that language; any other is in the page's.
     const textLang = name === LANGUAGE_NAMES[l] ? l : opts.lang;
+    // The flag or letter badge is a picture with no text, so the item's text
+    // stays its name alone (alt="" for a screen reader, which reads the name).
+    const flag = `<img class="ose-langmenu-flag" src="${languageFlagPath(l)}" alt="" width="21" height="14" loading="lazy">`;
     if (l === opts.lang) {
       // Every value is escaped (esc) or a code from the fixed LANGUAGES list.
       // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format
-      return `<li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="${textLang}" ${testId}><span class="ose-langmenu-check" aria-hidden="true">✓</span>${esc(name)}</span></li>`;
+      return `<li><span class="ose-langmenu-item ose-langmenu-current" aria-current="true" lang="${textLang}" ${testId}><span class="ose-langmenu-check" aria-hidden="true">✓</span>${flag}${esc(name)}</span></li>`;
     }
     // Every value is escaped (esc) or a code from the fixed LANGUAGES list.
     // nosemgrep: javascript.express.security.injection.raw-html-format.raw-html-format
-    return `<li><a class="ose-langmenu-item" lang="${textLang}" hreflang="${l}" ${testId} href="${esc(withLangPrefix(l, opts.path) + query)}"><span class="ose-langmenu-check" aria-hidden="true"></span>${esc(name)}</a></li>`;
+    return `<li><a class="ose-langmenu-item" lang="${textLang}" hreflang="${l}" ${testId} href="${esc(withLangPrefix(l, opts.path) + query)}"><span class="ose-langmenu-check" aria-hidden="true"></span>${flag}${esc(name)}</a></li>`;
   }).join('');
   return `<ul class="ose-langmenu-list" aria-label="${label}">${items}</ul>`;
 }

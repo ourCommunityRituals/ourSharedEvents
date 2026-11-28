@@ -230,6 +230,7 @@ export const PAGE_SURFACES: Readonly<Record<string, PageSurface>> = {
   '/.well-known/jwks.json': notPage('Workload identity, JSON.', '/.well-known/jwks.json'),
   'const:EVENT_DEFAULT_THUMB_PATH': notPage('Default event image.', '/event-default-thumb.svg'),
   'const:SPONSOR_DEFAULT_LOGO_PATH': notPage('Default sponsor image.', '/sponsor-default-logo.svg'),
+  '/flags/*': notPage('The flag or letter badge beside a language name.', '/flags/fr.svg'),
 };
 
 /**

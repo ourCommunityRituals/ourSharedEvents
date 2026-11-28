@@ -20,6 +20,7 @@ import {
   parseLangPrefix,
   withLangPrefix,
 } from '../src/lib/i18n/path-prefix';
+import { LANGUAGES } from '../src/lib/i18n/languages';
 import { renderLanguageSwitch } from '../src/lib/i18n/language-switch';
 
 describe('OSE-1761 parseLangPrefix | what is a prefix', () => {
@@ -42,8 +43,8 @@ describe('OSE-1761 parseLangPrefix | what is a prefix', () => {
   });
 
   it('an unsupported or unlisted language is not a prefix', () => {
-    expect(parseLangPrefix('/fr/events/abc')).toBeNull();
-    expect(parseLangPrefix('/zh-hans/events/abc')).toBeNull();
+    expect(parseLangPrefix('/nl/events/abc')).toBeNull();
+    expect(parseLangPrefix('/zh-cn/events/abc')).toBeNull();
     expect(parseLangPrefix('/xx/events/abc')).toBeNull();
   });
 
@@ -221,8 +222,10 @@ describe('OSE-1761 languageAlternates', () => {
     expect(languageAlternates('https://oursharedevents.com', '/events/abc/spring')).toEqual([
       { hreflang: 'en', href: 'https://oursharedevents.com/events/abc/spring' },
       { hreflang: 'es', href: 'https://oursharedevents.com/es/events/abc/spring' },
-      { hreflang: 'pl', href: 'https://oursharedevents.com/pl/events/abc/spring' },
-      { hreflang: 'ar', href: 'https://oursharedevents.com/ar/events/abc/spring' },
+      ...LANGUAGES.filter((l) => l !== 'en' && l !== 'es').map((l) => ({
+        hreflang: l,
+        href: `https://oursharedevents.com/${l}/events/abc/spring`,
+      })),
       { hreflang: 'x-default', href: 'https://oursharedevents.com/events/abc/spring' },
     ]);
   });

@@ -14,6 +14,7 @@
  * and a case here fails.
  */
 import { describe, it, expect } from 'vitest';
+import type { Lang } from '../src/lib/i18n/languages';
 import { CATALOG, fmt, fmtCount, msg, type MessageKey } from '../src/lib/i18n/catalog';
 import {
   DIRECTION,
@@ -32,8 +33,31 @@ import { renderLanguageSwitch } from '../src/lib/i18n/language-switch';
 import { formatHumanDate } from '../src/lib/event-datetime';
 
 describe('the language list and the chosen values', () => {
-  it('is English, Spanish, Polish, Arabic, in that order', () => {
-    expect([...LANGUAGES]).toEqual(['en', 'es', 'pl', 'ar']);
+  it('is the 22 languages, in the owner’s order (2026-11-28)', () => {
+    expect([...LANGUAGES]).toEqual([
+      'en',
+      'es',
+      'zh-hans',
+      'zh-hant',
+      'hi',
+      'ar',
+      'pt',
+      'bn',
+      'ru',
+      'ja',
+      'fr',
+      'de',
+      'ur',
+      'id',
+      'ko',
+      'vi',
+      'tr',
+      'it',
+      'tl',
+      'pl',
+      'uk',
+      'fa',
+    ]);
     expect(isLang('pl')).toBe(true);
     expect(isLang('ar')).toBe(true);
     expect(isLang('ar-PS')).toBe(false);
@@ -41,21 +65,107 @@ describe('the language list and the chosen values', () => {
   });
 
   it('pins the direction, locale, og:locale and own name of each language', () => {
-    expect(DIRECTION).toEqual({ en: 'ltr', es: 'ltr', pl: 'ltr', ar: 'rtl' });
-    expect(INTL_LOCALE).toEqual({ en: 'en-US', es: 'es-US', pl: 'pl-PL', ar: 'ar-u-nu-latn' });
-    expect(OG_LOCALE).toEqual({ en: 'en_US', es: 'es_US', pl: 'pl_PL', ar: 'ar_AR' });
-    expect(LANGUAGE_NAMES).toEqual({ en: 'English', es: 'Español', pl: 'Polski', ar: 'العربية' });
+    const RTL = ['ar', 'ur', 'fa'];
+    expect(DIRECTION).toEqual(
+      Object.fromEntries(LANGUAGES.map((l) => [l, RTL.includes(l) ? 'rtl' : 'ltr']))
+    );
+    expect(INTL_LOCALE).toEqual({
+      en: 'en-US',
+      es: 'es-US',
+      'zh-hans': 'zh-Hans-CN',
+      'zh-hant': 'zh-Hant-TW',
+      hi: 'hi-IN',
+      ar: 'ar-u-nu-latn',
+      pt: 'pt-BR',
+      bn: 'bn-BD-u-nu-latn',
+      ru: 'ru-RU',
+      ja: 'ja-JP',
+      fr: 'fr-FR',
+      de: 'de-DE',
+      ur: 'ur-PK-u-nu-latn',
+      id: 'id-ID',
+      ko: 'ko-KR',
+      vi: 'vi-VN',
+      tr: 'tr-TR',
+      it: 'it-IT',
+      tl: 'fil-PH',
+      pl: 'pl-PL',
+      uk: 'uk-UA',
+      fa: 'fa-IR-u-nu-latn',
+    });
+    expect(OG_LOCALE).toEqual({
+      en: 'en_US',
+      es: 'es_US',
+      'zh-hans': 'zh_CN',
+      'zh-hant': 'zh_TW',
+      hi: 'hi_IN',
+      ar: 'ar_AR',
+      pt: 'pt_BR',
+      bn: 'bn_BD',
+      ru: 'ru_RU',
+      ja: 'ja_JP',
+      fr: 'fr_FR',
+      de: 'de_DE',
+      ur: 'ur_PK',
+      id: 'id_ID',
+      ko: 'ko_KR',
+      vi: 'vi_VN',
+      tr: 'tr_TR',
+      it: 'it_IT',
+      tl: 'tl_PH',
+      pl: 'pl_PL',
+      uk: 'uk_UA',
+      fa: 'fa_IR',
+    });
+    expect(LANGUAGE_NAMES).toEqual({
+      en: 'English',
+      es: 'Español',
+      'zh-hans': '简体中文',
+      'zh-hant': '繁體中文',
+      hi: 'हिन्दी',
+      ar: 'العربية',
+      pt: 'Português',
+      bn: 'বাংলা',
+      ru: 'Русский',
+      ja: '日本語',
+      fr: 'Français',
+      de: 'Deutsch',
+      ur: 'اردو',
+      id: 'Bahasa Indonesia',
+      ko: '한국어',
+      vi: 'Tiếng Việt',
+      tr: 'Türkçe',
+      it: 'Italiano',
+      tl: 'Tagalog',
+      pl: 'Polski',
+      uk: 'Українська',
+      fa: 'فارسی',
+    });
   });
 
   it('names every language the page’s way, and each by its own name on the English page', () => {
-    expect(LANGUAGE_SWITCH_NAMES).toEqual({
-      en: { en: 'English', es: 'Español', pl: 'Polski', ar: 'العربية' },
-      es: { en: 'Inglés', es: 'Español', pl: 'Polaco', ar: 'Árabe' },
-      pl: { en: 'Angielski', es: 'Hiszpański', pl: 'Polski', ar: 'Arabski' },
-      ar: { en: 'الإنجليزية', es: 'الإسبانية', pl: 'البولندية', ar: 'العربية' },
+    const pick = (row: Lang) => {
+      const { en, es, pl, ar } = LANGUAGE_SWITCH_NAMES[row];
+      return { en, es, pl, ar };
+    };
+    expect(pick('en')).toEqual({ en: 'English', es: 'Español', pl: 'Polski', ar: 'العربية' });
+    expect(pick('es')).toEqual({ en: 'Inglés', es: 'Español', pl: 'Polaco', ar: 'Árabe' });
+    expect(pick('pl')).toEqual({ en: 'Angielski', es: 'Hiszpański', pl: 'Polski', ar: 'Arabski' });
+    expect(pick('ar')).toEqual({
+      en: 'الإنجليزية',
+      es: 'الإسبانية',
+      pl: 'البولندية',
+      ar: 'العربية',
     });
-    for (const lang of LANGUAGES) {
-      expect(LANGUAGE_SWITCH_NAMES[lang][lang], lang).toBe(LANGUAGE_NAMES[lang]);
+    // Every page names every language; its own row's diagonal and the English
+    // row are the own names; no other cell is empty or an own name copied in.
+    expect(LANGUAGE_SWITCH_NAMES.en).toEqual(LANGUAGE_NAMES);
+    for (const page of LANGUAGES) {
+      expect(Object.keys(LANGUAGE_SWITCH_NAMES[page]).sort(), page).toEqual([...LANGUAGES].sort());
+      expect(LANGUAGE_SWITCH_NAMES[page][page], page).toBe(LANGUAGE_NAMES[page]);
+      for (const l of LANGUAGES) {
+        expect(LANGUAGE_SWITCH_NAMES[page][l].trim(), `${page}.${l}`).not.toBe('');
+      }
     }
   });
 
@@ -130,9 +240,18 @@ describe('Accept-Language', () => {
     ['ar-PS', 'ar'],
     ['ar-JO,ar;q=0.9,en;q=0.8', 'ar'],
     ['en;q=0.5,ar;q=0.9', 'ar'],
-    ['fr,pl;q=0.3', 'pl'],
+    ['nl,pl;q=0.3', 'pl'],
+    ['fr-CA,fr;q=0.9', 'fr'],
+    ['zh-Hant', 'zh-hant'],
+    ['zh-TW,zh;q=0.9', 'zh-hant'],
+    ['zh-HK', 'zh-hant'],
+    ['zh-CN,zh;q=0.9', 'zh-hans'],
+    ['zh', 'zh-hans'],
+    ['fil-PH', 'tl'],
+    ['pt-PT', 'pt'],
     ['ar;q=0', 'en'],
-    ['he,fa', 'en'],
+    ['he,fa', 'fa'],
+    ['he,sw', 'en'],
   ] as const)('%s -> %s', (header, lang) => {
     expect(resolveLanguage(header)).toBe(lang);
   });
@@ -169,19 +288,30 @@ describe('isolateTyped (<bdi>)', () => {
   });
 });
 
-describe('the Polish and Arabic catalogs', () => {
+// Words that are the same as the English, by language: a unit, a slot pair,
+// or a word the language borrowed. Anything else the same is English left over.
+const SAME_AS_ENGLISH: Partial<Record<Lang, MessageKey[]>> = {
+  es: ['err.status', 'map.miles', 'map.openNamed'],
+  hi: ['map.openNamed'],
+  pt: ['map.miles'],
+  bn: ['map.openNamed'],
+  fr: ['countdown.minute', 'countdown.minutes', 'map.miles'],
+  de: ['map.openNamed'],
+  ko: ['map.openNamed'],
+  it: ['map.miles', 'map.openNamed'],
+  pl: ['menu.label', 'mode.online', 'area.online', 'provenance.demoChip'],
+};
+
+describe('every catalog but English', () => {
   const KEYS = Object.keys(CATALOG.en) as MessageKey[];
   const slots = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
 
-  for (const lang of ['pl', 'ar'] as const) {
+  for (const lang of LANGUAGES.filter((l) => l !== 'en')) {
     it(`${lang} has every key, none empty, none left in English`, () => {
       const missing = KEYS.filter((k) => !CATALOG[lang][k]?.trim());
       expect(missing).toEqual([]);
       const same = KEYS.filter((k) => CATALOG[lang][k] === CATALOG.en[k]);
-      // Words that are the same in Polish and English; nothing in Arabic.
-      expect(same).toEqual(
-        lang === 'pl' ? ['menu.label', 'mode.online', 'area.online', 'provenance.demoChip'] : []
-      );
+      expect(same).toEqual(SAME_AS_ENGLISH[lang] ?? []);
     });
 
     it(`${lang} keeps every {slot} of the English, no more, no fewer`, () => {
@@ -203,44 +333,50 @@ describe('the Polish and Arabic catalogs', () => {
       for (const n of [0, 1, 2, 5, 11, 22, 100]) {
         const text = fmtCount(lang, n, keys);
         expect(text, `${lang} ${n}`).toContain(String(n));
-        expect(text).toBe(fmt(lang, n === 1 ? keys.one : keys.other, { n }));
+        // The language's own plural rule picks the form (French says "0 événement").
+        const one = new Intl.PluralRules(INTL_LOCALE[lang]).select(n) === 'one';
+        expect(text).toBe(fmt(lang, one ? keys.one : keys.other, { n }));
       }
     });
   }
 
-  it('Arabic arrows point the reading way: on is ←, back is →', () => {
-    for (const k of KEYS) {
-      const en = CATALOG.en[k] as string;
-      const ar = CATALOG.ar[k] as string;
-      if (/→|&rarr;/.test(en)) expect(ar, k).toMatch(/←|&larr;/);
-      if (/&larr;/.test(en)) expect(ar, k).toMatch(/&rarr;/);
-      expect(ar, k).not.toMatch(/→/);
-    }
-  });
+  for (const rtl of ['ar', 'ur', 'fa'] as const) {
+    it(`${rtl}: arrows point the reading way: on is ←, back is →`, () => {
+      for (const k of KEYS) {
+        const en = CATALOG.en[k] as string;
+        const ar = CATALOG[rtl][k] as string;
+        if (/→|&rarr;/.test(en)) expect(ar, k).toMatch(/←|&larr;/);
+        if (/&larr;/.test(en)) expect(ar, k).toMatch(/&rarr;/);
+        expect(ar, k).not.toMatch(/→/);
+      }
+    });
 
-  it('Arabic has no Latin letters but the names it must keep', () => {
-    // OSE-1850: a product name (Google Calendar), the PCI DSS standard's name
-    // (owner 2026-11-28, the privacy notice), and the example address in an
-    // email field's placeholder, which is Latin by the nature of an address.
-    // Markup, slots and entities are allowed too. Each Latin word must sit
-    // inside one of these; the check lists the words that do not (nothing is
-    // stripped from the text, it is only read).
-    const NAMES =
-      /OurSharedEvents|Cloudflare Access|Apple|Outlook|Google|PCI DSS|\b[a-z]+@example\.com\b|<[^>]+>|\{\w+\}|&\w+;/g;
-    const latinOutsideNames = (text: string): string[] => {
-      const allowed = [...text.matchAll(NAMES)].map((m) => [m.index, m.index + m[0].length]);
-      return [...text.matchAll(/[A-Za-z]+/g)]
-        .filter((w) => !allowed.some(([a, b]) => w.index >= a && w.index + w[0].length <= b))
-        .map((w) => w[0]);
-    };
-    for (const k of KEYS) {
-      expect(latinOutsideNames(CATALOG.ar[k] as string), k).toEqual([]);
-    }
-  });
+    it(`${rtl}: no Latin letters but the names it must keep`, () => {
+      // OSE-1850: a product name (Google Calendar), the PCI DSS standard's name
+      // (owner 2026-11-28, the privacy notice), and the example address in an
+      // email field's placeholder, which is Latin by the nature of an address.
+      // Markup, slots and entities are allowed too. Each Latin word must sit
+      // inside one of these; the check lists the words that do not (nothing is
+      // stripped from the text, it is only read).
+      const NAMES =
+        /OurSharedEvents|Cloudflare Access|Apple|Outlook|Google|PCI DSS|\b[a-z]+@example\.com\b|<[^>]+>|\{\w+\}|&\w+;/g;
+      const latinOutsideNames = (text: string): string[] => {
+        const allowed = [...text.matchAll(NAMES)].map((m) => [m.index, m.index + m[0].length]);
+        return [...text.matchAll(/[A-Za-z]+/g)]
+          .filter((w) => !allowed.some(([a, b]) => w.index >= a && w.index + w[0].length <= b))
+          .map((w) => w[0]);
+      };
+      for (const k of KEYS) {
+        expect(latinOutsideNames(CATALOG[rtl][k] as string), `${rtl}.${k}`).toEqual([]);
+      }
+    });
+  }
 
-  it('both are marked as machine drafts awaiting a native read (OSE-1968)', async () => {
+  it('every translated catalog is marked as a machine draft awaiting a native read (OSE-1968)', async () => {
     const { readFileSync } = await import('node:fs');
-    for (const f of ['catalog-pl.ts', 'catalog-ar.ts']) {
+    for (const f of LANGUAGES.filter((l) => l !== 'en' && l !== 'es').map(
+      (l) => `catalog-${l}.ts`
+    )) {
       const src = readFileSync(new URL(`../src/lib/i18n/${f}`, import.meta.url), 'utf8');
       expect(src, f).toMatch(/MACHINE DRAFT/);
       expect(src, f).toMatch(/OSE-1968/);

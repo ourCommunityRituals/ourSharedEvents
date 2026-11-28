@@ -200,6 +200,7 @@
  *   GET    /sponsors/:id                       → public sponsor card: title, location, contact (0083)
  *   GET    /sponsor?t=<token>                  → the sponsor's own page (token-gated, read-limited)
  *   GET    /sponsor-default-logo.svg           → the OSE default sponsor image (0083)
+ *   GET    /flags/:lang.svg                    → the flag or letter badge beside a language's name
  *   GET    /event-default-thumb.svg            → the OSE default event card image
  *   POST   /api/v2/events/:id/sponsors/:sid/impression → log impression
  *   POST   /api/v2/events/:id/sponsors/:sid/click      → log click
@@ -319,6 +320,7 @@ import {
   type PublicReadLimitEnv,
 } from './lib/public-read-limit.js';
 import { SPONSOR_DEFAULT_LOGO_PATH, sponsorDefaultLogoResponse } from './lib/sponsor-card.js';
+import { flagLangFromPath, languageFlagResponse } from './lib/i18n/language-flags.js';
 import { EVENT_DEFAULT_THUMB_PATH, eventDefaultThumbResponse } from './lib/event-thumb.js';
 import { handleSponsorCardPage } from './handlers/sponsor-card.js';
 import {
@@ -980,6 +982,11 @@ export async function route(
   // OSE default sponsor image (0083) — static, same-origin, locked down.
   if (pathname === SPONSOR_DEFAULT_LOGO_PATH && method === 'GET') {
     return sponsorDefaultLogoResponse();
+  }
+  // The flag or letter badge beside a language's name — static, same-origin.
+  if (method === 'GET' && pathname.startsWith('/flags/')) {
+    const flagLang = flagLangFromPath(pathname);
+    if (flagLang) return languageFlagResponse(flagLang);
   }
 
   if (pathname === '/ui.css') {

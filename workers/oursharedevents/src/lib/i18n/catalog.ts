@@ -21,6 +21,24 @@
  */
 import { ar } from './catalog-ar';
 import { pl } from './catalog-pl';
+import { zh_hans } from './catalog-zh-hans';
+import { zh_hant } from './catalog-zh-hant';
+import { hi } from './catalog-hi';
+import { pt } from './catalog-pt';
+import { bn } from './catalog-bn';
+import { ru } from './catalog-ru';
+import { ja } from './catalog-ja';
+import { fr } from './catalog-fr';
+import { de } from './catalog-de';
+import { ur } from './catalog-ur';
+import { id } from './catalog-id';
+import { ko } from './catalog-ko';
+import { vi } from './catalog-vi';
+import { tr } from './catalog-tr';
+import { it } from './catalog-it';
+import { tl } from './catalog-tl';
+import { uk } from './catalog-uk';
+import { fa } from './catalog-fa';
 import { DEFAULT_LANG, INTL_LOCALE, LANGUAGES, type Lang } from './languages';
 
 const en = {
@@ -1045,8 +1063,26 @@ const es: Record<MessageKey, string> = {
 export const CATALOG: Record<Lang, Partial<Record<MessageKey, string>>> = {
   en,
   es,
-  pl,
+  'zh-hans': zh_hans,
+  'zh-hant': zh_hant,
+  hi,
   ar,
+  pt,
+  bn,
+  ru,
+  ja,
+  fr,
+  de,
+  ur,
+  id,
+  ko,
+  vi,
+  tr,
+  it,
+  tl,
+  pl,
+  uk,
+  fa,
 };
 
 /** The type names a WHAT link can carry; each has a `what.<type>` key. */

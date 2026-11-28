@@ -1969,6 +1969,13 @@
       "testCount": 23
     },
     {
+      "file": "workers/oursharedevents/tests/language-flags.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 6
+    },
+    {
       "file": "workers/oursharedevents/tests/language-layer-golden.spec.ts",
       "bucket": "node",
       "needsReview": false,

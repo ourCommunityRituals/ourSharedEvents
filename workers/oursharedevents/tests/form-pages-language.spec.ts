@@ -198,8 +198,18 @@ function readerText(d: Document): string {
 }
 
 /** A catalog value as the reader sees it (entities and tags gone). */
+// One parser for every value: a new JSDOM per value made the 22-language run
+// slow enough to time out.
+const PLAIN_P = new JSDOM('<p></p>').window.document.querySelector('p')!;
+const PLAIN_CACHE = new Map<string, string>();
 function plain(s: string): string {
-  return new JSDOM(`<p>${s}</p>`).window.document.querySelector('p')!.textContent ?? '';
+  let out = PLAIN_CACHE.get(s);
+  if (out === undefined) {
+    PLAIN_P.innerHTML = s;
+    out = PLAIN_P.textContent ?? '';
+    PLAIN_CACHE.set(s, out);
+  }
+  return out;
 }
 
 // ── The page is in its language ─────────────────────────────────────────────
@@ -216,6 +226,13 @@ describe('H1 | every form page, in every language, says what language it is in',
   }
 });
 
+// A word that is that language's own as well as English: "Menu" in French
+// ("Menu principal") and Portuguese.
+const SAME_WORD: Partial<Record<Lang, readonly MessageKey[]>> = {
+  fr: ['menu.label'],
+  pt: ['menu.label'],
+};
+
 describe('H2 | no English word a reader sees on a page in another language', () => {
   for (const lang of OTHERS) {
     for (const screen of SCREENS) {
@@ -224,6 +241,7 @@ describe('H2 | no English word a reader sees on a page in another language', () 
         for (const key of [...FORM_KEYS, ...SHELL_KEYS]) {
           const en = plain(msg('en', key));
           if (en === plain(msg(lang, key)) || key === 'form.privacy.englishNote') continue;
+          if (SAME_WORD[lang]?.includes(key)) continue;
           // A short word may sit inside another one (e.g. "Menu" in "Menú").
           const pattern = new RegExp(
             `(^|[^\\p{L}])${en.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^\\p{L}])`,
@@ -765,7 +783,9 @@ describe('H10 | the sponsor strip and the thanks, in the page language; names as
       );
       const names = Array.from(strip.querySelectorAll('.sponsor-name'));
       expect(names.map((n) => n.textContent)).toEqual(['TGI Fridays', 'Hilton Chicago/Oak Lawn']);
-      expect(names.every((n) => (n.querySelector('bdi') !== null) === (lang === 'ar'))).toBe(true);
+      expect(
+        names.every((n) => (n.querySelector('bdi') !== null) === (DIRECTION[lang] === 'rtl'))
+      ).toBe(true);
 
       void settle;
       // The thanks follows a confirmation (register), from the same fetched list.
@@ -781,9 +801,9 @@ describe('H10 | the sponsor strip and the thanks, in the page language; names as
       );
       const thanked = Array.from(thanks.querySelectorAll('.sponsor-name'));
       expect(thanked.map((n) => n.textContent)).toEqual(['TGI Fridays', 'Hilton Chicago/Oak Lawn']);
-      expect(thanked.every((n) => (n.querySelector('bdi') !== null) === (lang === 'ar'))).toBe(
-        true
-      );
+      expect(
+        thanked.every((n) => (n.querySelector('bdi') !== null) === (DIRECTION[lang] === 'rtl'))
+      ).toBe(true);
     });
   }
 

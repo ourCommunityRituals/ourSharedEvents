@@ -28,7 +28,7 @@ describe('OSE-1760 resolveLanguage | ordinary headers resolve as they always did
     'es-ES,es;q=0.9,en;q=0.8',
     'es-419,es;q=0.9,en;q=0.5',
     'ES',
-    'fr-FR,fr;q=0.9',
+    'nl-NL,nl;q=0.9',
     '',
   ];
   for (const header of ordinary) {
@@ -45,8 +45,8 @@ describe('OSE-1760 resolveLanguage | what it does better', () => {
   });
 
   it('the best language we render wins, even when it is not listed first', () => {
-    expect(resolveLanguage('fr, es;q=0.5')).toBe('es');
-    expect(oldPreferredLang('fr, es;q=0.5')).toBe('en'); // the old behavior, for the record
+    expect(resolveLanguage('nl, es;q=0.5')).toBe('es');
+    expect(oldPreferredLang('nl, es;q=0.5')).toBe('en'); // the old behavior, for the record
   });
 
   it('a tie keeps the order the browser listed', () => {
@@ -67,7 +67,7 @@ describe('OSE-1760 resolveLanguage | what it does better', () => {
   });
 
   it('a language we do not render, or a wildcard, falls back to English', () => {
-    expect(resolveLanguage('fr, de')).toBe('en');
+    expect(resolveLanguage('nl, sv')).toBe('en');
     expect(resolveLanguage('*')).toBe('en');
     expect(resolveLanguage('esperanto')).toBe('en'); // not Spanish
   });
@@ -77,7 +77,7 @@ describe('OSE-1760 resolveLanguage | what it does better', () => {
     expect(resolveLanguage('es;q=')).toBe('en');
     expect(resolveLanguage('es;q=2')).toBe('en');
     expect(resolveLanguage('es;q=abc, en;q=0.5')).toBe('en');
-    expect(resolveLanguage('fr;q=abc, es;q=0.1')).toBe('es');
+    expect(resolveLanguage('nl;q=abc, es;q=0.1')).toBe('es');
   });
 
   it('no header falls back to English', () => {
