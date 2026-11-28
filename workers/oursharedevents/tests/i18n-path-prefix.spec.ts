@@ -285,5 +285,7 @@ describe('the sponsor card joins the language layer (owner 2026-11-28)', () => {
     });
     expect(matchLanguagePage('/sponsors/')).toBeNull();
     expect(matchLanguagePage('/sponsors/a.b')).toBeNull();
+    // Anchored at the start too: a sponsor path inside another path is not the card.
+    expect(matchLanguagePage('/x/sponsors/abc')).toBeNull();
   });
 });

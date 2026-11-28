@@ -291,20 +291,26 @@ function englishLeft(lang: Lang, en: string[], other: string[]): string[] {
   return [...left].sort();
 }
 
-const RENDERS = new Map<string, string[]>();
+// Each test renders what it reads, inside the test, with a cache: not in a
+// beforeAll. Code run in a beforeAll is covered by no test, so under Stryker
+// every mutant on the render path would turn static and rerun every spec of its
+// group (the reason language-permutations.spec.ts is a main-pass skip).
+const RENDERS = new Map<string, Promise<string[]>>();
+const rendered = (lang: Lang, page: Page): Promise<string[]> => {
+  const key = `${lang}|${page}`;
+  if (!RENDERS.has(key)) RENDERS.set(key, render(lang, page).then(pieces));
+  return RENDERS.get(key)!;
+};
 
 describe('every page | no English of ours left in another language', () => {
-  beforeAll(async () => {
-    for (const lang of LANGUAGES) {
-      for (const page of PAGES) RENDERS.set(`${lang}|${page}`, pieces(await render(lang, page)));
-    }
-    // Every page in all 22 languages: about 8 s alone, longer on a busy CI shard.
-  }, 90_000);
-
   for (const lang of LANGUAGES.filter((l) => l !== DEFAULT_LANG)) {
     for (const page of PAGES) {
-      it(`${lang} ${page}`, () => {
-        const left = englishLeft(lang, RENDERS.get(`en|${page}`)!, RENDERS.get(`${lang}|${page}`)!);
+      it(`${lang} ${page}`, async () => {
+        const left = englishLeft(
+          lang,
+          await rendered(DEFAULT_LANG, page),
+          await rendered(lang, page)
+        );
         expect(left, `${lang} ${page}: English left on the page`).toEqual([]);
       });
     }

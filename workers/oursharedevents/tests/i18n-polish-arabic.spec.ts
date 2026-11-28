@@ -20,6 +20,7 @@ import {
   DIRECTION,
   INTL_LOCALE,
   LANGUAGES,
+  LANGUAGE_MARK,
   LANGUAGE_NAMES,
   LANGUAGE_SWITCH_NAMES,
   OG_LOCALE,
@@ -381,5 +382,36 @@ describe('every catalog but English', () => {
       expect(src, f).toMatch(/MACHINE DRAFT/);
       expect(src, f).toMatch(/OSE-1968/);
     }
+  });
+});
+
+describe('the picture beside each language name (owner 2026-11-28)', () => {
+  it('is one country flag per language, or a letter badge for Arabic, Russian and Persian', () => {
+    const flag = (country: string) => ({ kind: 'flag', country });
+    const badge = (letters: string) => ({ kind: 'badge', letters });
+    expect(LANGUAGE_MARK).toEqual({
+      en: flag('us'),
+      es: flag('mx'),
+      'zh-hans': flag('cn'),
+      'zh-hant': flag('tw'),
+      hi: flag('in'),
+      ar: badge('AR'),
+      pt: flag('br'),
+      bn: flag('bd'),
+      ru: badge('RU'),
+      ja: flag('jp'),
+      fr: flag('fr'),
+      de: flag('de'),
+      ur: flag('pk'),
+      id: flag('id'),
+      ko: flag('kr'),
+      vi: flag('vn'),
+      tr: flag('tr'),
+      it: flag('it'),
+      tl: flag('ph'),
+      pl: flag('pl'),
+      uk: flag('ua'),
+      fa: badge('FA'),
+    });
   });
 });

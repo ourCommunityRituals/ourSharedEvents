@@ -124,3 +124,19 @@ describe('OSE-1760 resolveLanguage | untrusted input never throws and is bounded
     expect(Date.now() - t).toBeLessThan(250);
   });
 });
+
+describe('regional and older tags name a listed language (owner 2026-11-28)', () => {
+  it.each([
+    ['zh', 'zh-hans'],
+    ['zh-CN', 'zh-hans'],
+    ['zh-SG', 'zh-hans'],
+    ['zh-MY', 'zh-hans'],
+    ['zh-TW', 'zh-hant'],
+    ['zh-HK', 'zh-hant'],
+    ['zh-MO', 'zh-hant'],
+    ['fil', 'tl'],
+    ['fil-PH', 'tl'],
+  ])('%s is %s', (header, lang) => {
+    expect(resolveLanguage(header)).toBe(lang);
+  });
+});
