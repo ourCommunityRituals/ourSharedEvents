@@ -56,7 +56,6 @@ jobs:
           egress-policy: block
           allowed-endpoints: >
             api.anthropic.com:443
-            statsig.anthropic.com:443
             claude.ai:443
             downloads.claude.ai:443
             storage.googleapis.com:443
