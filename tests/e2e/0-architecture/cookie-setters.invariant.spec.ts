@@ -48,7 +48,6 @@ const ALLOWED: Record<string, Record<string, number>> = {
   // /q: the import, the one call for a new visitor at the vote code, and (OSE ADR-040
   // decision 13, owner 2026-11-26) the one call for a new visitor at /q/crowd/:eventId, the
   // Online Pick's way in. Still on /q, so AGENTS.md invariant 4's words are unchanged.
-  // Owner ruling 2026-11-28 (OSE-2246, ADR-040 decision 13, D4): this ceiling of 3 is kept.
   'handlers/qr-scan.ts': { setAnonCookie: 3 },
   // Forms routes (register, check-in, survey, email sign-up): the import and four call sites.
   'handlers/forms.ts': { setAnonCookie: 5 },
