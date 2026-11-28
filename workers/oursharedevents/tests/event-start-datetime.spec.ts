@@ -240,7 +240,7 @@ describe('OSE-1313 public surfaces render the event zone', () => {
     await seedPublic(id, '2099-10-24T23:00:00Z', 'America/Chicago');
     const res = await SELF.fetch(`https://t.test/events/${id}`, {
       // A viewer in Tokyo: nothing about the request can move the rendered zone.
-      headers: { 'Accept-Language': 'ja-JP', 'CF-Timezone': 'Asia/Tokyo' },
+      headers: { 'Accept-Language': 'nl-NL', 'CF-Timezone': 'Asia/Tokyo' },
     });
     expect(res.status).toBe(200);
     const html = await res.text();
