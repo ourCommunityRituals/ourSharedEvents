@@ -1423,6 +1423,13 @@
       "testCount": 24
     },
     {
+      "file": "workers/oursharedevents/tests/event-type-names.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 10
+    },
+    {
       "file": "workers/oursharedevents/tests/event-type-reachability.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
