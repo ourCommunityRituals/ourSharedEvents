@@ -131,6 +131,13 @@ rm -rf "$TARGET_PARENT/ui"
 cp -r "$WS_CACHE/packages/ui" "$TARGET_PARENT/ui"
 echo "[stage] @ocr/ui available at $TARGET_PARENT/ui (hub $REF)"
 
+# @ocr/signals (shared observability, level 1: logs). Required: src/lib/log-redact.ts
+# re-exports it, so the Worker does not build without it.
+[ -f "$WS_CACHE/packages/signals/package.json" ] || fail "pinned hub has no @ocr/signals" "hub commit $REF has no packages/signals/package.json — bump .ocr-hub-ref to a hub commit that carries @ocr/signals (hub #98 or later)."
+rm -rf "$TARGET_PARENT/signals"
+cp -r "$WS_CACHE/packages/signals" "$TARGET_PARENT/signals"
+echo "[stage] @ocr/signals available at $TARGET_PARENT/signals (hub $REF)"
+
 if [ -d "$WS_CACHE/packages/flags" ]; then
   rm -rf "$TARGET_PARENT/flags"
   cp -r "$WS_CACHE/packages/flags" "$TARGET_PARENT/flags"
