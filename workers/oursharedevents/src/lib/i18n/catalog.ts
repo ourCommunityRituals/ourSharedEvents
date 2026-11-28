@@ -521,7 +521,7 @@ const en = {
   'privacy.purpose.register':
     'We collect your name and, if you choose, your email, so the organizer can reach you if this event changes.',
   'privacy.purpose.checkin':
-    'We record an <strong>anonymous count only</strong> — no personal data is stored.',
+    'We record an <strong>anonymous count only</strong>, never your name. A random id in a cookie on this device counts you once.',
   'privacy.purpose.survey':
     'We collect your ratings and optional comments to improve future events.',
   'privacy.purpose.email':
@@ -558,6 +558,20 @@ const en = {
   'sponsorCard.limitBody': 'Give it a minute and try again.',
   'sponsorCard.errorTitle': 'Something went wrong',
   'sponsorCard.errorBody': 'Try again in a moment.',
+  // Stamp passport (owner, 2026-11-28): the card a walk or market keeps on the
+  // visitor's phone. {have} and {total} are filled on the phone, never sent.
+  'passport.label': 'Stamp passport',
+  'passport.scanHere': "Scan this stop's code to collect its stamp.",
+  'passport.saved': 'Stamp saved for this stop.',
+  'passport.count': 'You have {have} of {total} stamps.',
+  'passport.done': 'Card complete! Show this screen at the prize table.',
+  'passport.private': 'Your stamps stay on this phone. We never see them.',
+  'passport.clear': 'Clear my stamps',
+  'passport.stamped': 'Stamped',
+  'passport.noScript': 'Turn on JavaScript to keep stamps on this phone.',
+  'partners.coHostedWith': 'Co-hosted with {names}',
+  'partners.with': 'With {names}',
+  'partners.publicBody': '{name} (public body)',
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -1055,6 +1069,18 @@ const es: Record<MessageKey, string> = {
   'sponsorCard.limitBody': 'Espera un minuto e inténtalo de nuevo.',
   'sponsorCard.errorTitle': 'Algo falló',
   'sponsorCard.errorBody': 'Inténtalo de nuevo en un momento.',
+  'passport.label': 'Pasaporte de sellos',
+  'passport.scanHere': 'Escanea el código de esta parada para ganar su sello.',
+  'passport.saved': 'Sello guardado para esta parada.',
+  'passport.count': 'Tienes {have} de {total} sellos.',
+  'passport.done': '¡Tarjeta completa! Muestra esta pantalla en la mesa de premios.',
+  'passport.private': 'Tus sellos se quedan en este teléfono. Nunca los vemos.',
+  'passport.clear': 'Borrar mis sellos',
+  'passport.stamped': 'Sellado',
+  'passport.noScript': 'Activa JavaScript para guardar sellos en este teléfono.',
+  'partners.coHostedWith': 'Coorganizado con {names}',
+  'partners.with': 'Con {names}',
+  'partners.publicBody': '{name} (organismo público)',
 };
 
 /** One catalog per language. A language still being written may omit keys. */

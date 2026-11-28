@@ -841,3 +841,68 @@ describe('Scenario 9: Existing routes unaffected', () => {
     expect(cors.headers.get('Access-Control-Allow-Methods')).toContain('POST');
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SCENARIO 4b: Email signup — a repeat address takes the same path as a new one
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Scenario 4b: Email signup runs the same statements for a new and a repeat address', () => {
+  /** FORMS_DB that records the shape of every statement the handler prepares. */
+  function recordingEnv(log: string[]): FormsEnv {
+    const real = formsDb();
+    const db = new Proxy(real, {
+      get(target, prop, receiver) {
+        if (prop === 'prepare') {
+          return (sql: string) => {
+            log.push(sql.replace(/\s+/g, ' ').trim());
+            return target.prepare(sql);
+          };
+        }
+        const v = Reflect.get(target, prop, receiver);
+        return typeof v === 'function' ? v.bind(target) : v;
+      },
+    });
+    return { ...formsEnv(), FORMS_DB: db } as FormsEnv;
+  }
+
+  test('new address and repeat address prepare the same statements, in order', async () => {
+    const EVENT = 'evt-email-same-path';
+    await handleFormEmailSignup(postReq({ email: 'erin@example.com' }), formsEnv(), EVENT);
+
+    const repeatLog: string[] = [];
+    const rRepeat = await handleFormEmailSignup(
+      postReq({ email: 'erin@example.com' }),
+      recordingEnv(repeatLog),
+      EVENT
+    );
+    const newLog: string[] = [];
+    const rNew = await handleFormEmailSignup(
+      postReq({ email: 'frank@example.com' }),
+      recordingEnv(newLog),
+      EVENT
+    );
+
+    expect(rRepeat.status).toBe(200);
+    expect(rNew.status).toBe(200);
+    expect(newLog.length).toBeGreaterThan(0);
+    expect(repeatLog).toEqual(newLog);
+
+    // Still one row per address.
+    const rows = await formsDb()
+      .prepare('SELECT COUNT(*) AS n FROM email_signups WHERE event_id = ?')
+      .bind(EVENT)
+      .first<{ n: number }>();
+    expect(rows?.n).toBe(2);
+  });
+
+  test('a repeat address gets back the id of its first sign-up', async () => {
+    const EVENT = 'evt-email-same-id';
+    const b1 = await (
+      await handleFormEmailSignup(postReq({ email: 'gail@example.com' }), formsEnv(), EVENT)
+    ).json<{ id: string }>();
+    const b2 = await (
+      await handleFormEmailSignup(postReq({ email: 'GAIL@example.com' }), formsEnv(), EVENT)
+    ).json<{ id: string }>();
+    expect(b2.id).toBe(b1.id);
+  });
+});

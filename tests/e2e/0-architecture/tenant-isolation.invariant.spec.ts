@@ -114,6 +114,16 @@ const FAMILY_REPORT_SCOPE =
 
 const BRAND_SCOPE_EXEMPT_LIST: ReadonlyArray<readonly [string, string]> = [
   [
+    'handlers/event-partners.ts > handleListPartnerLinks: FROM event_partners p JOIN events e ON e.id = p.event_id',
+    // Owner 2026-11-28, migration 0128. The rows are the links offered TO the
+    // caller's brands: the statement binds p.partner_brand_id IN (the caller's
+    // brands from resolveAdminBrandScopeAsync) and p.organizer_accepted = 1. The
+    // joined event belongs to the inviting brand by design; only its title and
+    // start date are read. tests/event-partners-route.spec.ts holds that an
+    // outside brand's list is empty.
+    'Partner links: scoped by the link partner brand, not the event brand (the invite is the consent).',
+  ],
+  [
     'lib/family-report.ts > buildFamilyReport: FROM events e LEFT JOIN venues v ON v.id = e.host_venue_id',
     FAMILY_REPORT_SCOPE,
   ],

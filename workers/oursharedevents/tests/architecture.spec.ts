@@ -180,6 +180,19 @@ describe('L1: handlers/data-subject.ts — cross-binding scope guard (invariant 
   });
 });
 
+describe('L1: handlers/data-subject-export.ts — read-only, forms database only (invariant #1)', () => {
+  test('never the main DB, never a write except its audit row', () => {
+    expectPass('L1.data-subject-export-scope', () => {
+      const content = getSource('src/handlers/data-subject-export.ts');
+      expect(content).not.toMatch(/env\.DB\b/);
+      expect(content).not.toMatch(/\bDELETE\b|\bUPDATE\b/);
+      const inserts = content.match(/INSERT INTO \w+/g) ?? [];
+      expect(inserts).toEqual(['INSERT INTO pii_audit_log']);
+      expect(content).not.toMatch(/anonymous_id/);
+    });
+  });
+});
+
 describe('L1: broad reverse gate — no ungated handler touches FORMS_DB (invariant #1)', () => {
   // Authorised FORMS_DB handlers and their permitted access scope:
   //   forms.ts         — reads/writes form submissions (registration, checkin, survey, email)
@@ -214,6 +227,10 @@ describe('L1: broad reverse gate — no ungated handler touches FORMS_DB (invari
   //   subscribers.ts   — reads the landing-page email list (subscribers moved to
   //                      FORMS_DB in OSE-1661) for the platform-only, audited
   //                      admin list. requireAdmin + platform-only gated.
+  //   data-subject-export.ts — SELECTs one person's rows by email hash to answer
+  //                      an access request (GDPR Art. 15/20), and writes its
+  //                      pii_audit_log row. Never the main DB, never a DELETE
+  //                      (scope test below). requireAdmin + platform-only gated.
   // pages.ts also writes the landing-page subscribe row (handleSubscribe).
   // All other src/handlers/ files must never reference env.FORMS_DB.
   // This gate closes the gap where 9+ handler files were ungated.
@@ -229,6 +246,7 @@ describe('L1: broad reverse gate — no ungated handler touches FORMS_DB (invari
       'src/handlers/event-stats.ts',
       'src/handlers/dashboards.ts',
       'src/handlers/subscribers.ts',
+      'src/handlers/data-subject-export.ts',
     ];
     const sources: Record<string, string> = JSON.parse(tenv().TEST_SOURCE_FILES_JSON);
     let checked = 0;

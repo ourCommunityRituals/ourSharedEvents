@@ -487,4 +487,17 @@ export const ur: Record<MessageKey, string> = {
   'sponsorCard.limitBody': 'ایک منٹ انتظار کریں، پھر دوبارہ کوشش کریں۔',
   'sponsorCard.errorTitle': 'کچھ غلط ہو گیا',
   'sponsorCard.errorBody': 'تھوڑی دیر بعد دوبارہ کوشش کریں۔',
+  // Stamp passport and partner links (owner 2026-11-28).
+  'passport.label': 'اسٹیمپ پاسپورٹ',
+  'passport.scanHere': 'اس پڑاؤ کا کوڈ اسکین کریں اور اس کی مہر حاصل کریں۔',
+  'passport.saved': 'اس پڑاؤ کی مہر محفوظ ہو گئی۔',
+  'passport.count': 'آپ کے پاس {total} میں سے {have} مہریں ہیں۔',
+  'passport.done': 'کارڈ مکمل! انعام کی میز پر یہ اسکرین دکھائیں۔',
+  'passport.private': 'آپ کی مہریں اسی فون پر رہتی ہیں۔ ہم انہیں کبھی نہیں دیکھتے۔',
+  'passport.clear': 'میری مہریں مٹائیں',
+  'passport.stamped': 'مہر لگ گئی',
+  'passport.noScript': 'اس فون پر مہریں رکھنے کے لیے جاوا اسکرپٹ آن کریں۔',
+  'partners.coHostedWith': '{names} کے ساتھ مشترکہ میزبانی',
+  'partners.with': '{names} کے ساتھ',
+  'partners.publicBody': '{name} (سرکاری ادارہ)',
 };

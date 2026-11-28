@@ -486,4 +486,17 @@ export const uk: Record<MessageKey, string> = {
   'sponsorCard.limitBody': 'Зачекайте хвилину й спробуйте знову.',
   'sponsorCard.errorTitle': 'Щось пішло не так',
   'sponsorCard.errorBody': 'Спробуйте трохи згодом.',
+  // Stamp passport and partner links (owner 2026-11-28).
+  'passport.label': 'Паспорт зі штампами',
+  'passport.scanHere': 'Відскануйте код цієї зупинки, щоб отримати штамп.',
+  'passport.saved': 'Штамп цієї зупинки збережено.',
+  'passport.count': 'У вас {have} з {total} штампів.',
+  'passport.done': 'Картку заповнено! Покажіть цей екран біля столу з призами.',
+  'passport.private': 'Ваші штампи зберігаються лише на цьому телефоні. Ми їх не бачимо.',
+  'passport.clear': 'Видалити мої штампи',
+  'passport.stamped': 'Є штамп',
+  'passport.noScript': 'Увімкніть JavaScript, щоб зберігати штампи на цьому телефоні.',
+  'partners.coHostedWith': 'Спільно з {names}',
+  'partners.with': 'За участі: {names}',
+  'partners.publicBody': '{name} (державна установа)',
 };

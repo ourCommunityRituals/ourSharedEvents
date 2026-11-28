@@ -543,6 +543,7 @@ describe('All admin endpoints require authentication', () => {
     ['GET', '/api/v2/admin/audit-log'],
     ['POST', '/api/v2/admin/events/evt_authz_test/shared-report/mint-link'],
     ['POST', '/api/v2/admin/data-subject/erase'],
+    ['POST', '/api/v2/admin/data-subject/export'],
   ];
 
   for (const [method, path] of adminRoutes) {

@@ -486,4 +486,17 @@ export const ja: Record<MessageKey, string> = {
   'sponsorCard.limitBody': '1分ほど待ってから、もう一度お試しください。',
   'sponsorCard.errorTitle': '問題が起きました',
   'sponsorCard.errorBody': '少ししてからもう一度お試しください。',
+  // Stamp passport and partner links (owner 2026-11-28).
+  'passport.label': 'スタンプパスポート',
+  'passport.scanHere': 'このスポットのコードを読み取って、スタンプを集めましょう。',
+  'passport.saved': 'このスポットのスタンプを保存しました。',
+  'passport.count': 'スタンプ {have} / {total} 個',
+  'passport.done': 'カード完成！賞品テーブルでこの画面を見せてください。',
+  'passport.private': 'スタンプはこのスマホの中だけに保存され、私たちが見ることはありません。',
+  'passport.clear': 'スタンプを消す',
+  'passport.stamped': 'スタンプ済み',
+  'passport.noScript': 'このスマホにスタンプを保存するには JavaScript をオンにしてください。',
+  'partners.coHostedWith': '共催：{names}',
+  'partners.with': '協力：{names}',
+  'partners.publicBody': '{name}（公共機関）',
 };

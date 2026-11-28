@@ -120,6 +120,12 @@
  *   PUT    /api/v2/admin/events/:id/booths/:boothId → change a booth of this event (auth, audited)
  *   DELETE /api/v2/admin/events/:id/booths/:boothId → take a booth out of use; never removed, its placements stay (auth, audited)
  *   GET    /api/v2/admin/events/:id/booths/counts → scans per stall, per category, for placements with no stall, and the fair's total, each a FlooredCount from the floored poster-hour cells; any_withheld is a boolean (auth, plan-capped like the poster list, OSE-2004)
+ *   GET    /api/v2/admin/events/:id/partners → the event's partner links, each with both sides' answers (auth, owner 2026-11-28, migration 0128)
+ *   POST   /api/v2/admin/events/:id/partners → invite another brand as partner or co-host (a public body is always a co-host); a second invite re-offers (auth, audited)
+ *   POST   /api/v2/admin/events/:id/partners/:linkId/withdraw → the organizer ends a link (auth, audited)
+ *   GET    /api/v2/admin/partner-links → links offered to the caller's brands, with the event's title and date (auth, scoped by the link's partner brand)
+ *   POST   /api/v2/admin/partner-links/:linkId/respond → the partner accepts or declines; another brand's link is 404 (auth, audited)
+ *   GET    /api/v2/admin/partner-links/:linkId/counts → while both accept, the event's scan total as a FlooredCount, nothing else (auth)
  *   GET    /api/v2/admin/events/:id/votables → the event's vote set and its objects; no count, no T or V, no epoch (auth, OSE-2127, OSE ADR-040)
  *   POST   /api/v2/admin/events/:id/votables → make the event's one vote set, played by objects or teams (auth, audited)
  *   POST   /api/v2/admin/events/:id/votables/code → make the room's vote code, or return the one in use; its token is in no public answer (auth, audited, OSE-2140)
@@ -305,6 +311,7 @@
  *
  *   Data Subject Rights (OSE-203 / GDPR Art. 17 / CCPA §1798.105):
  *   POST /api/v2/admin/data-subject/erase → handleDataSubjectErase (auth required)
+ *   POST /api/v2/admin/data-subject/export → handleDataSubjectExport (auth required)
  *
  *   GET /.well-known/openid-configuration  → OIDC discovery (WIF)
  *   GET /.well-known/jwks.json             → WIF public key
@@ -438,6 +445,14 @@ import { handleCompetitionPage } from './handlers/competition-page';
 import { handleScoreScreen } from './handlers/competition-score-screen';
 import { handleBoothListPage } from './handlers/booth-list-page';
 import { handleAdminBoothCounts } from './handlers/booth-counts';
+import {
+  handleInviteEventPartner,
+  handleListEventPartners,
+  handleListPartnerLinks,
+  handlePartnerLinkCounts,
+  handleRespondPartnerLink,
+  handleWithdrawEventPartner,
+} from './handlers/event-partners';
 import { handleBriefingPage } from './handlers/briefing';
 import { handleDemoIndex, handleDemoSite } from './handlers/demo';
 import { handleBocceDemo } from './handlers/demo-bocce';
@@ -609,6 +624,7 @@ import {
   type UploadEnv,
 } from './handlers/upload';
 import { handleDataSubjectErase, type DataSubjectEnv } from './handlers/data-subject';
+import { handleDataSubjectExport } from './handlers/data-subject-export';
 import {
   handleAdminMintSharedReportLink,
   handleGetSharedReport,
@@ -1786,6 +1802,73 @@ export async function route(
     return ref.res;
   }
 
+  // /api/v2/admin/events/:id/partners — partner links (owner 2026-11-28,
+  // lib/event-partners.ts). The event in the path is brand-scoped by
+  // guardAdminObjectScope above; every write is audited against the event.
+  const adminEventPartnersMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/partners$/);
+  if (adminEventPartnersMatch && (method === 'GET' || method === 'POST')) {
+    const partnerEventId = adminEventPartnersMatch[1];
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const authRes = await requireAdmin(request, env, reqId);
+    if (authRes) {
+      if (method === 'POST') _audit(reqId, 'INVITE_PARTNER', 'denied', 'event', partnerEventId);
+      return authRes;
+    }
+    if (method === 'GET') return handleListEventPartners(request, env, partnerEventId);
+    const response = await handleInviteEventPartner(request, env, partnerEventId);
+    _audit(reqId, 'INVITE_PARTNER', _auditOutcome(response), 'event', partnerEventId);
+    return response;
+  }
+
+  const adminEventPartnerWithdrawMatch = pathname.match(
+    /^\/api\/v2\/admin\/events\/([^/]+)\/partners\/([^/]+)\/withdraw$/
+  );
+  if (adminEventPartnerWithdrawMatch && method === 'POST') {
+    const [, partnerEventId, linkId] = adminEventPartnerWithdrawMatch;
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const authRes = await requireAdmin(request, env, reqId);
+    if (authRes) {
+      _audit(reqId, 'WITHDRAW_PARTNER', 'denied', 'event', partnerEventId);
+      return authRes;
+    }
+    const response = await handleWithdrawEventPartner(request, env, partnerEventId, linkId);
+    _audit(reqId, 'WITHDRAW_PARTNER', _auditOutcome(response), 'event', partnerEventId);
+    return response;
+  }
+
+  // /api/v2/admin/partner-links — the partner's side. Not under /admin/events,
+  // so the handler scopes each link by its partner brand (out of scope = 404).
+  if (pathname === '/api/v2/admin/partner-links' && method === 'GET') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const authRes = await requireAdmin(request, env, reqId);
+    if (authRes) return authRes;
+    return handleListPartnerLinks(request, env);
+  }
+
+  const partnerLinkMatch = pathname.match(
+    /^\/api\/v2\/admin\/partner-links\/([^/]+)\/(respond|counts)$/
+  );
+  if (partnerLinkMatch) {
+    const [, linkId, what] = partnerLinkMatch;
+    if (what === 'respond' && method === 'POST') {
+      const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+      const authRes = await requireAdmin(request, env, reqId);
+      if (authRes) {
+        _audit(reqId, 'ANSWER_PARTNER', 'denied', 'partner_link', linkId);
+        return authRes;
+      }
+      const response = await handleRespondPartnerLink(request, env, linkId);
+      _audit(reqId, 'ANSWER_PARTNER', _auditOutcome(response), 'partner_link', linkId);
+      return response;
+    }
+    if (what === 'counts' && method === 'GET') {
+      const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+      const authRes = await requireAdmin(request, env, reqId);
+      if (authRes) return authRes;
+      return handlePartnerLinkCounts(request, env, linkId);
+    }
+  }
+
   // /api/v2/admin/events/:id/booths — a booth is part of a fair (OSE-1998, OSE ADR-034).
   // The event in the path is brand-scoped by guardAdminObjectScope above, and the
   // admin write guard has checked every write; the handler reads a booth only
@@ -2681,6 +2764,26 @@ export async function route(
     _audit(
       reqId,
       'DATA_SUBJECT_ERASE',
+      response.status < 400 ? 'success' : 'denied',
+      'data-subject'
+    );
+    return response;
+  }
+
+  // POST /api/v2/admin/data-subject/export — GDPR Art. 15 / Art. 20 access
+  if (pathname === '/api/v2/admin/data-subject/export' && method === 'POST') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'DATA_SUBJECT_EXPORT', 'denied', 'data-subject');
+      return deny;
+    }
+    const offPlatform = await _platformOnly(reqId);
+    if (offPlatform) return offPlatform;
+    const response = await handleDataSubjectExport(request, env);
+    _audit(
+      reqId,
+      'DATA_SUBJECT_EXPORT',
       response.status < 400 ? 'success' : 'denied',
       'data-subject'
     );

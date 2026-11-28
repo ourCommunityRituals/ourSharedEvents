@@ -492,4 +492,17 @@ export const id: Record<MessageKey, string> = {
   'sponsorCard.limitBody': 'Tunggu sebentar lalu coba lagi.',
   'sponsorCard.errorTitle': 'Ada masalah',
   'sponsorCard.errorBody': 'Coba lagi sebentar lagi.',
+  // Stamp passport and partner links (owner 2026-11-28).
+  'passport.label': 'Paspor stempel',
+  'passport.scanHere': 'Pindai kode di pos ini untuk mendapat stempelnya.',
+  'passport.saved': 'Stempel untuk pos ini sudah disimpan.',
+  'passport.count': 'Anda punya {have} dari {total} stempel.',
+  'passport.done': 'Kartu lengkap! Tunjukkan layar ini di meja hadiah.',
+  'passport.private': 'Stempel Anda tetap di ponsel ini. Kami tidak pernah melihatnya.',
+  'passport.clear': 'Hapus stempel saya',
+  'passport.stamped': 'Sudah distempel',
+  'passport.noScript': 'Nyalakan JavaScript untuk menyimpan stempel di ponsel ini.',
+  'partners.coHostedWith': 'Diselenggarakan bersama {names}',
+  'partners.with': 'Bersama {names}',
+  'partners.publicBody': '{name} (lembaga publik)',
 };

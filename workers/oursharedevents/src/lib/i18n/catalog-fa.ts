@@ -486,4 +486,17 @@ export const fa: Record<MessageKey, string> = {
   'sponsorCard.limitBody': 'یک دقیقه صبر کنید، سپس دوباره تلاش کنید.',
   'sponsorCard.errorTitle': 'مشکلی پیش آمد',
   'sponsorCard.errorBody': 'کمی بعد دوباره تلاش کنید.',
+  // Stamp passport and partner links (owner 2026-11-28).
+  'passport.label': 'گذرنامهٔ مهر',
+  'passport.scanHere': 'کد این ایستگاه را اسکن کنید تا مهرش را بگیرید.',
+  'passport.saved': 'مهر این ایستگاه ذخیره شد.',
+  'passport.count': '{have} مهر از {total} مهر را دارید.',
+  'passport.done': 'کارت کامل شد! این صفحه را سر میز جایزه نشان دهید.',
+  'passport.private': 'مهرهای شما فقط روی همین گوشی می‌ماند. ما هرگز آن‌ها را نمی‌بینیم.',
+  'passport.clear': 'پاک کردن مهرهای من',
+  'passport.stamped': 'مهر خورده',
+  'passport.noScript': 'برای نگه داشتن مهرها روی این گوشی، جاوااسکریپت را روشن کنید.',
+  'partners.coHostedWith': 'با همکاری {names}',
+  'partners.with': 'همراه با {names}',
+  'partners.publicBody': '{name} (نهاد عمومی)',
 };

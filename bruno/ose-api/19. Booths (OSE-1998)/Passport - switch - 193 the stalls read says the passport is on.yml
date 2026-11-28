@@ -1,0 +1,29 @@
+info:
+  name: "Passport | the stalls read says the passport is on"
+  type: http
+  seq: 193
+
+# Mock-layer twin: workers/oursharedevents/tests/passport-route.spec.ts.
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/admin/events/{{boothLiveFairId}}/booths"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('Passport switch: the stalls read carries passport true', function () { expect(res.getStatus()).to.eql(200); expect((res.getBody() || {}).passport).to.eql(true); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

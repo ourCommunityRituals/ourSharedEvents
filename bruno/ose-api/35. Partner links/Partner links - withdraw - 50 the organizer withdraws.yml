@@ -1,0 +1,34 @@
+info:
+  name: "Partner links | withdraw | the organizer ends the link"
+  type: http
+  seq: 50
+
+# Mock-layer twin: workers/oursharedevents/tests/event-partners-route.spec.ts.
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events/{{partnerEventId}}/partners/{{partnerLinkId}}/withdraw"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('Partner links withdraw: 200 and off', function () { expect(res.getStatus()).to.eql(200); expect((res.getBody() || {}).on).to.eql(false); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

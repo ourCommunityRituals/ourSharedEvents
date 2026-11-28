@@ -41,6 +41,9 @@
  */
 
 const COOKIE_NAME = 'ose_anon';
+
+/** The cookie's name, for notices that tell people about it (privacy page, form notice). */
+export const ANON_COOKIE_NAME: string = COOKIE_NAME;
 const MAX_AGE_SECONDS = 365 * 24 * 60 * 60; // 1 year
 
 /** HKDF `info` — names this one use of ANON_ID_HASH_PEPPER. Change = new signatures. */

@@ -495,4 +495,17 @@ export const tl: Record<MessageKey, string> = {
   'sponsorCard.limitBody': 'Maghintay ng isang minuto at subukan ulit.',
   'sponsorCard.errorTitle': 'Nagkaproblema',
   'sponsorCard.errorBody': 'Subukan ulit maya-maya.',
+  // Stamp passport and partner links (owner 2026-11-28).
+  'passport.label': 'Pasaporte ng tatak',
+  'passport.scanHere': 'I-scan ang code ng hintuang ito para makuha ang tatak nito.',
+  'passport.saved': 'Naitabi na ang tatak para sa hintuang ito.',
+  'passport.count': 'Mayroon kang {have} sa {total} na tatak.',
+  'passport.done': 'Kumpleto na ang kard! Ipakita ang screen na ito sa mesa ng premyo.',
+  'passport.private': 'Nananatili ang mga tatak mo sa teleponong ito. Hindi namin ito nakikita.',
+  'passport.clear': 'Burahin ang mga tatak ko',
+  'passport.stamped': 'May tatak na',
+  'passport.noScript': 'Buksan ang JavaScript para maitabi ang mga tatak sa teleponong ito.',
+  'partners.coHostedWith': 'Kasamang nag-host ang {names}',
+  'partners.with': 'Kasama ang {names}',
+  'partners.publicBody': '{name} (pampublikong ahensya)',
 };

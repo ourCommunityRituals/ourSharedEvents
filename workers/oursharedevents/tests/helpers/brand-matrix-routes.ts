@@ -534,6 +534,14 @@ export const ROUTE_EXEMPTIONS: Readonly<Record<string, string>> = {
     'Platform only (requirePlatformScope, OSE-2234): a brand never sets a room ceiling, its own venue or another, and gets the 404 of a route that does not exist. Held by tests/venues.spec.ts.',
   '/api/v2/admin/venues/:id/rollup':
     'A venue is not one of the matrix fixtures; its isolation is held by tests/venues.spec.ts (OSE-2221): only the owner brand reaches a venue by id, another brand gets the same 404 as an unknown venue, and a list shows a brand only the venues it owns or is listed at.',
+  '/api/v2/admin/events/:id/partners':
+    'A partner link is not one of the matrix fixtures; its isolation is held by tests/event-partners-route.spec.ts with three brands: a brand that does not own the event gets the same 404 as an unknown event on the list and on an invite.',
+  '/api/v2/admin/events/:id/partners/:id/withdraw':
+    'A partner link is not one of the matrix fixtures; held by tests/event-partners-route.spec.ts: a brand that does not own the event gets a 404 and the link stays as it was.',
+  '/api/v2/admin/partner-links':
+    "A partner link is not one of the matrix fixtures; held by tests/event-partners-route.spec.ts: a brand sees only the links that invite its own brands, and a third brand's list is empty.",
+  '/api/v2/admin/partner-links/:id/(respond|counts)':
+    'A partner link is not one of the matrix fixtures; held by tests/event-partners-route.spec.ts: only the invited brand answers a link or reads its floored total; any other brand, and the invited brand once the link is off, gets a 404.',
   '/admin': 'HTML shell; carries no rows. The data calls it makes are the routes above.',
   '/api/v2/admin/screens/logs':
     'HTML shell; carries no rows. Its data call is /api/v2/admin/audit-log?scope=brand, which is in the matrix.',
@@ -557,6 +565,8 @@ export const ROUTE_EXEMPTIONS: Readonly<Record<string, string>> = {
     'Tier application across every brand; key actor only (R-5), same spec.',
   '/api/v2/admin/data-subject/erase':
     'Platform-wide erase by hashed identifier; platform-only (AUD-3).',
+  '/api/v2/admin/data-subject/export':
+    'Platform-wide access request by hashed identifier; platform-only (AUD-3).',
   '/api/v2/admin/security/rate-limit-stats':
     'Platform telemetry (HMAC buckets); platform-only (AUD-3).',
   '/api/v2/admin/subscribers': 'Platform subscriber list; platform-only (AUD-3).',

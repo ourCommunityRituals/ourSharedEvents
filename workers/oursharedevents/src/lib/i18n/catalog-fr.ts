@@ -496,4 +496,17 @@ export const fr: Record<MessageKey, string> = {
   'sponsorCard.limitBody': 'Patientez une minute et réessayez.',
   'sponsorCard.errorTitle': 'Un problème est survenu',
   'sponsorCard.errorBody': 'Réessayez dans un instant.',
+  // Stamp passport and partner links (owner 2026-11-28).
+  'passport.label': 'Passeport à tampons',
+  'passport.scanHere': 'Scannez le code de cette étape pour obtenir son tampon.',
+  'passport.saved': 'Tampon enregistré pour cette étape.',
+  'passport.count': 'Vous avez {have} tampons sur {total}.',
+  'passport.done': 'Carte complète ! Montrez cet écran à la table des prix.',
+  'passport.private': 'Vos tampons restent sur ce téléphone. Nous ne les voyons jamais.',
+  'passport.clear': 'Effacer mes tampons',
+  'passport.stamped': 'Tamponné',
+  'passport.noScript': 'Activez JavaScript pour garder vos tampons sur ce téléphone.',
+  'partners.coHostedWith': 'Co-organisé avec {names}',
+  'partners.with': 'Avec {names}',
+  'partners.publicBody': '{name} (organisme public)',
 };

@@ -220,6 +220,13 @@ const LISTED: Listed[] = [
     body: { email: 'erase-me@example.com' },
   },
   {
+    name: 'data-subject-export.ts: export',
+    method: 'POST',
+    path: '/api/v2/admin/data-subject/export',
+    who: PLATFORM,
+    body: { email: 'export-me@example.com' },
+  },
+  {
     name: 'feature-flags.ts: global flag',
     method: 'PUT',
     path: `/api/v2/admin/flags/${FLAG}`,
