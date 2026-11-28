@@ -29,6 +29,14 @@ on:
         type: boolean
         default: false
 
+# Two merges seconds apart start two runs; both reset the one refresh branch.
+# Before this, the older run could land last, base the branch on an older main
+# and open a PR that conflicts with the refresh that just merged (PR 1617,
+# 28 Nov 2026). Only the newest run matters, so it replaces any older one.
+concurrency:
+  group: conformance-report
+  cancel-in-progress: true
+
 jobs:
   generate:
     timeout-minutes: 10 # [Claude] ceiling: ~3x the slowest of the last 25 runs (0.6 min)
@@ -155,6 +163,11 @@ jobs:
             echo "Conformance report unchanged — no refresh PR needed."
             exit 0
           fi
+          # Only the stamp (date, commit, run link) moved: nothing for a person to review.
+          if bash scripts/ci/conformance-stamp-only.sh "$RPT"; then
+            echo "Only the report's stamp changed — no refresh PR needed."
+            exit 0
+          fi
           # OSE-1151: fail loud and actionable, not with a bare git 403, when the PAT is
           # missing/mis-scoped — this exact failure mode (token present at the org level but
           # lacking write access to THIS repo) silently starved the refresh mechanism for
@@ -164,6 +177,14 @@ jobs:
             exit 1
           fi
           BRANCH=chore/conformance-refresh
+          # A newer merge landed while this run worked: its own run refreshes the
+          # report from the newer main, so this one must not reset the branch to an
+          # older base (that is how PR 1617 came to conflict with main).
+          MAIN_NOW=$(gh api "repos/${GITHUB_REPOSITORY}/commits/main" --jq .sha)
+          if [ "$MAIN_NOW" != "$GITHUB_SHA" ]; then
+            echo "main moved to ${MAIN_NOW} since this run started — leaving the refresh to the newer run."
+            exit 0
+          fi
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           # Create-or-update: reset the stable branch to this main commit + the fresh report,
