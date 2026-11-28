@@ -2248,31 +2248,26 @@ export async function fetchEventPageSocialData(
     emailCount: 0,
   };
 
-  const [
-    sponsorsResult,
-    regResult,
-    checkinResult,
-    surveyResult,
-    emailResult,
-    walkInResult,
-    partnersResult,
-  ] = await Promise.allSettled([
-    env.DB
-      ? env.DB.prepare(
-          // OSE-799 A2: reconstruct the public sponsor list from the split model —
-          // active placements on this event, joined to their business identity.
-          //
-          // OSE-2144, THE RECAP EXCEPTION (owner, 2026-11-18). Everywhere else a
-          // public sponsor read answers only while the event is live
-          // (eventLiveSql, domain/event-state.ts). This statement does not ask
-          // it, on purpose: the page gate in handleEventPage lets an archived
-          // event that was listed (is_published = 1) render its recap, and the
-          // recap keeps its sponsor strip as a thank-you. This is the one
-          // place that exception lives. Draft and ready events never reach a
-          // public render of it (the gate 404s them; the admin preview is
-          // behind requireAdmin). The strip shows names only once the event is
-          // not live, because the logo proxy is live-only and would 404.
-          `SELECT sb.id AS id, sb.name AS name, sb.website_url AS website_url,
+  // Partner links on show (owner 2026-11-28): read beside the statements below.
+  const partnersP = readPartnersOnShow(env, eventId);
+  const [sponsorsResult, regResult, checkinResult, surveyResult, emailResult, walkInResult] =
+    await Promise.allSettled([
+      env.DB
+        ? env.DB.prepare(
+            // OSE-799 A2: reconstruct the public sponsor list from the split model —
+            // active placements on this event, joined to their business identity.
+            //
+            // OSE-2144, THE RECAP EXCEPTION (owner, 2026-11-18). Everywhere else a
+            // public sponsor read answers only while the event is live
+            // (eventLiveSql, domain/event-state.ts). This statement does not ask
+            // it, on purpose: the page gate in handleEventPage lets an archived
+            // event that was listed (is_published = 1) render its recap, and the
+            // recap keeps its sponsor strip as a thank-you. This is the one
+            // place that exception lives. Draft and ready events never reach a
+            // public render of it (the gate 404s them; the admin preview is
+            // behind requireAdmin). The strip shows names only once the event is
+            // not live, because the logo proxy is live-only and would 404.
+            `SELECT sb.id AS id, sb.name AS name, sb.website_url AS website_url,
                     sb.display_name AS display_name, sb.address_line AS address_line,
                     -- The same pick as the logo proxy's ?slot=sidebar (compact,
                     -- else header), so the page asks only for art it will get:
@@ -2302,55 +2297,43 @@ export async function fetchEventPageSocialData(
                 AND sp.sponsor_accepted = 1
                 AND ${PLACEMENT_EVENT_USES_SPONSORS_SQL}
               ORDER BY sb.id ASC`
-        )
-          .bind(eventId)
-          .all<SponsorBasicRow>()
-      : Promise.resolve({ results: [] as SponsorBasicRow[] }),
+          )
+            .bind(eventId)
+            .all<SponsorBasicRow>()
+        : Promise.resolve({ results: [] as SponsorBasicRow[] }),
 
-    env.FORMS_DB
-      ? env.FORMS_DB.prepare(COUNT_EVENT_REGISTRATIONS_SQL).bind(eventId).first<{ cnt: number }>()
-      : Promise.resolve(null),
+      env.FORMS_DB
+        ? env.FORMS_DB.prepare(COUNT_EVENT_REGISTRATIONS_SQL).bind(eventId).first<{ cnt: number }>()
+        : Promise.resolve(null),
 
-    env.FORMS_DB
-      ? env.FORMS_DB.prepare(`SELECT total_count FROM checkin_counts WHERE event_id = ? LIMIT 1`)
-          .bind(eventId)
-          .first<{ total_count: number }>()
-      : Promise.resolve(null),
+      env.FORMS_DB
+        ? env.FORMS_DB.prepare(`SELECT total_count FROM checkin_counts WHERE event_id = ? LIMIT 1`)
+            .bind(eventId)
+            .first<{ total_count: number }>()
+        : Promise.resolve(null),
 
-    env.FORMS_DB
-      ? env.FORMS_DB.prepare(`SELECT COUNT(*) as cnt FROM form_surveys WHERE event_id = ?`)
-          .bind(eventId)
-          .first<{ cnt: number }>()
-      : Promise.resolve(null),
+      env.FORMS_DB
+        ? env.FORMS_DB.prepare(`SELECT COUNT(*) as cnt FROM form_surveys WHERE event_id = ?`)
+            .bind(eventId)
+            .first<{ cnt: number }>()
+        : Promise.resolve(null),
 
-    env.FORMS_DB
-      ? env.FORMS_DB.prepare(`SELECT COUNT(*) as cnt FROM email_signups WHERE event_id = ?`)
-          .bind(eventId)
-          .first<{ cnt: number }>()
-      : Promise.resolve(null),
+      env.FORMS_DB
+        ? env.FORMS_DB.prepare(`SELECT COUNT(*) as cnt FROM email_signups WHERE event_id = ?`)
+            .bind(eventId)
+            .first<{ cnt: number }>()
+        : Promise.resolve(null),
 
-    // OSE-1373: the walk-in path's own running count, recorded at check-in.
-    // Its own query so a FORMS_DB behind migration 0015 loses only this line.
-    env.FORMS_DB
-      ? env.FORMS_DB.prepare(`SELECT walk_in_count FROM checkin_counts WHERE event_id = ? LIMIT 1`)
-          .bind(eventId)
-          .first<{ walk_in_count: number }>()
-      : Promise.resolve(null),
-
-    // Partner links on show (owner 2026-11-28): both sides accept. A group's
-    // name and kind only; its own query, so a DB behind 0128 loses this line.
-    env.DB
-      ? env.DB.prepare(
-          `SELECT p.partner_name AS name, p.kind AS kind, p.is_public_body AS is_public_body
-               FROM event_partners p
-              WHERE p.event_id = ? AND ${partnerOnSql('p')}
-              ORDER BY p.created_at, p.id
-              LIMIT 12`
-        )
-          .bind(eventId)
-          .all<{ name: string; kind: string; is_public_body: number }>()
-      : Promise.resolve(null),
-  ]);
+      // OSE-1373: the walk-in path's own running count, recorded at check-in.
+      // Its own query so a FORMS_DB behind migration 0015 loses only this line.
+      env.FORMS_DB
+        ? env.FORMS_DB.prepare(
+            `SELECT walk_in_count FROM checkin_counts WHERE event_id = ? LIMIT 1`
+          )
+            .bind(eventId)
+            .first<{ walk_in_count: number }>()
+        : Promise.resolve(null),
+    ]);
 
   return {
     sponsors:
@@ -2363,15 +2346,35 @@ export async function fetchEventPageSocialData(
     walkInCount: walkInResult.status === 'fulfilled' ? (walkInResult.value?.walk_in_count ?? 0) : 0,
     surveyCount: surveyResult.status === 'fulfilled' ? (surveyResult.value?.cnt ?? 0) : 0,
     emailCount: emailResult.status === 'fulfilled' ? (emailResult.value?.cnt ?? 0) : 0,
-    partners:
-      partnersResult.status === 'fulfilled'
-        ? (partnersResult.value?.results ?? []).map((r) => ({
-            name: String(r.name),
-            kind: r.kind === 'co_host' ? ('co_host' as const) : ('partner' as const),
-            is_public_body: Number(r.is_public_body) === 1,
-          }))
-        : [],
+    partners: await partnersP,
   };
+}
+
+/**
+ * Partner links on show (owner 2026-11-28, lib/event-partners.ts): both sides
+ * accept. A group's name and kind only. Fails to [], so a database behind
+ * migration 0128 loses only this line.
+ */
+async function readPartnersOnShow(env: PublicEventEnv, eventId: string): Promise<PartnerOnShow[]> {
+  if (!env.DB) return [];
+  try {
+    const rs = await env.DB.prepare(
+      `SELECT p.partner_name AS name, p.kind AS kind, p.is_public_body AS is_public_body
+         FROM event_partners p
+        WHERE p.event_id = ? AND ${partnerOnSql('p')}
+        ORDER BY p.created_at, p.id
+        LIMIT 12`
+    )
+      .bind(eventId)
+      .all<{ name: string; kind: string; is_public_body: number }>();
+    return (rs.results ?? []).map((r) => ({
+      name: String(r.name),
+      kind: r.kind === 'co_host' ? ('co_host' as const) : ('partner' as const),
+      is_public_body: Number(r.is_public_body) === 1,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 /**

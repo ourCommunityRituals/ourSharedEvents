@@ -64,6 +64,7 @@ export const PURGE_TABLES = [
   { table: 'poster_deployments', column: 'event_id', ids: 'event' }, // 0003
   // After poster_deployments: a placement's booth_id points at a booth (0109, OSE-1998).
   { table: 'event_booths', column: 'event_id', ids: 'event' }, // 0109
+  { table: 'event_partners', column: 'event_id', ids: 'event' }, // 0128 (partner links; ON DELETE CASCADE too)
   // 0033. A series the nightly detector proposed for a stock venue. events.series_id
   // points back here, but the build never sets it (only an admin links a series); if
   // an admin linked one, the foreign key stops the purge rather than orphan the event.
