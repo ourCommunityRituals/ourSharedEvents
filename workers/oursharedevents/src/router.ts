@@ -79,6 +79,11 @@
  *                                  fragment and stays in memory. no-store, no referrer, never
  *                                  framed; no count, no cookie; rate-limited. An unknown or
  *                                  closed event is one 404.
+ *   GET /competitions/:id        → a league's public schedule and standings (leagues phase 1, OSE-527):
+ *                                  the name as one <h1>, the next night's matches, the table,
+ *                                  every round with its scores. Only a started or finished
+ *                                  competition; a draft or unknown id is one 404. Team labels and
+ *                                  scores only, never a person; no cookie; rate-limited.
  *   GET /brands/:brand/calendar.ics → a brand's public events as one calendar feed (OSE-2013):
  *                                  the rows GET /api/v2/events?brand= lists, through the public
  *                                  projection; rate-limited; 404 for an unknown or invalid brand
@@ -135,6 +140,20 @@
  *   GET    /api/v2/admin/addons?brand_id= → a brand's paid add-ons (platform only, OSE-2232)
  *   PUT    /api/v2/admin/addons → turn a brand's add-on on or off {brand_id, addon, on} (platform only, audited, OSE-2232)
  *   GET    /api/v2/admin/events/:id/poster-bundle  → poster bundle for draft/ready/live, no-store (auth)
+ *
+ *   Competitions: leagues, seasons and their matches (leagues phase 1, OSE-525/526/527/529):
+ *   GET    /api/v2/admin/competitions → the caller's brands' competitions (auth)
+ *   POST   /api/v2/admin/competitions → make one, with its round-robin stage (auth, audited)
+ *   GET    /api/v2/admin/competitions/:id → it, its teams, matches, scores and computed table (auth)
+ *   PUT    /api/v2/admin/competitions/:id → name, sport, dates, ruleset, status; finished makes every score final (auth, audited)
+ *   POST   /api/v2/admin/competitions/:id/entries → add a team entry: a public label and a seed, no person (auth, audited)
+ *   PUT    /api/v2/admin/competitions/:id/entries/:entryId → rename, reseed or withdraw a team (auth, audited)
+ *   POST   /api/v2/admin/competitions/:id/schedule → the round robin on the given nights, courts and times; scored rounds stay (auth, audited)
+ *   POST   /api/v2/admin/competitions/:id/fixtures → add one match by hand (auth, audited)
+ *   PUT    /api/v2/admin/competitions/:id/fixtures/:fixtureId → move, swap or postpone a match (auth, audited)
+ *   PUT    /api/v2/admin/competitions/:id/fixtures/:fixtureId/result → the host's score, confirmed at once (auth, audited)
+ *   DELETE /api/v2/admin/competitions/:id/fixtures/:fixtureId/result → take a mistaken score back (auth, audited)
+ *   GET    /api/v2/admin/competitions/:id/score-screen → the host's one-handed score screen, HTML, no-store + noindex (auth)
  *
  *   POST /api/v2/events/:id/forms/register      → submit registration (public)
  *   POST /api/v2/events/:id/forms/checkin        → increment check-in (public)
@@ -242,6 +261,11 @@
  *   PUT    /api/v2/admin/venues/:id/operators           → list a brand at the venue: on_platform or grandfathered (owner only, audited)
  *   DELETE /api/v2/admin/venues/:id/operators/:brand    → take a brand off the venue's list; its events stop counting (owner only, audited)
  *   GET    /api/v2/admin/venues/:id/rollup              → floored scans, taps and sponsors at the venue, per operator and in total (owner only)
+ *   Parent company report (auth required — OSE-2241; the parent and every venture below it):
+ *   GET    /api/v2/admin/brands/:brand/family-report           → floored traffic, events, sponsor traffic and footprint over the family (brand in scope; else 404)
+ *   POST   /api/v2/admin/brands/:brand/family-report/mint-link → a signed link to share it, 1 to 90 days (audited)
+ *   GET    /api/v2/family-report                → the family report by signed link (Bearer token; rate-limited per token)
+ *   GET    /family-report?token=…               → the family report page a corporate sponsor opens (no script, no-store)
  *   PUT    /api/v2/admin/events/:id/venue               → hold the event at a venue that lists its brand, or clear it (auth, audited)
  *   PUT    /api/v2/admin/venues/:id/room-ceiling        → the voting room-size ceiling: indoor fire-marshal capacity or outdoor permit limit (platform admins only, audited; OSE-2234)
  *
@@ -351,6 +375,13 @@ import { handleVotePage } from './handlers/vote-page';
 import { votingEnabled, type VotingSwitchEnv } from './lib/voting-switch';
 import { handlePortfolioRollup } from './handlers/portfolio-rollup';
 import {
+  familyReportBucketKey,
+  handleAdminFamilyReport,
+  handleAdminMintFamilyLink,
+  handleFamilyReportPage,
+  handlePublicFamilyReport,
+} from './handlers/family-report';
+import {
   handleOperationsDashboard,
   handleCorridorDashboard,
   handleEventDashboard,
@@ -386,6 +417,21 @@ import {
   type PagesEnv,
 } from './handlers/pages';
 import { handleBoothPage } from './handlers/booth-page';
+import {
+  handleCreateCompetition,
+  handleCreateEntry,
+  handleCreateFixture,
+  handleDeleteResult,
+  handleGenerateSchedule,
+  handleGetCompetition,
+  handleListCompetitions,
+  handlePutResult,
+  handleUpdateCompetition,
+  handleUpdateEntry,
+  handleUpdateFixture,
+} from './handlers/competitions';
+import { handleCompetitionPage } from './handlers/competition-page';
+import { handleScoreScreen } from './handlers/competition-score-screen';
 import { handleBoothListPage } from './handlers/booth-list-page';
 import { handleAdminBoothCounts } from './handlers/booth-counts';
 import { handleBriefingPage } from './handlers/briefing';
@@ -1372,6 +1418,43 @@ export async function route(
     return _venueCall(reqId, deny, null, id, () => handleVenueRollup(request, env, id));
   }
 
+  // /api/v2/admin/brands/:brand/family-report — OSE-2241. The parent company's
+  // one report over every venture below it. The handler reads a brand only
+  // when it is in the caller's scope (a miss is 404). Minting a link is audited.
+  const familyReportMatch = pathname.match(/^\/api\/v2\/admin\/brands\/([^/]+)\/family-report$/);
+  if (familyReportMatch && method === 'GET') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) return deny;
+    return handleAdminFamilyReport(request, env, familyReportMatch[1]);
+  }
+  const familyLinkMatch = pathname.match(
+    /^\/api\/v2\/admin\/brands\/([^/]+)\/family-report\/mint-link$/
+  );
+  if (familyLinkMatch && method === 'POST') {
+    const brand = familyLinkMatch[1];
+    if (env.RATE_LIMIT_KV) {
+      const key = `family-mint:${clientIp(request)}:${brand}`;
+      if (await checkRateLimit(env, key, RATE_LIMIT_MINT_MAX)) return rateLimitResponse();
+    }
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'MINT_FAMILY_REPORT_LINK', 'denied', 'brand', brand);
+      return deny;
+    }
+    const res = await handleAdminMintFamilyLink(request, env, brand);
+    _audit(
+      reqId,
+      'MINT_FAMILY_REPORT_LINK',
+      _auditOutcome(res),
+      'brand',
+      brand,
+      res.ok ? brand : null
+    );
+    return res;
+  }
+
   // PUT /api/v2/admin/events/:id/venue — OSE-2221. The event is brand-scoped by
   // guardAdminObjectScope above; the handler checks the venue lists its brand.
   const eventVenueMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/venue$/);
@@ -1887,6 +1970,122 @@ export async function route(
       })
     );
     return res;
+  }
+
+  // ── Admin competition routes (leagues phase 1; auth-gated, brand-scoped, audited) ──
+  //
+  // The collection routes scope their own SQL by the caller's brands; every
+  // by-id route sits behind guardAdminObjectScope (above), which 404s a
+  // competition outside the caller's brands. Each handler then reads an entry
+  // or a match only with the path competition as a bound predicate.
+  if (pathname === '/api/v2/admin/competitions' && (method === 'GET' || method === 'POST')) {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) {
+      if (method === 'POST') _audit(reqId, 'CREATE_COMPETITION', 'denied', 'competition');
+      return deny;
+    }
+    if (method === 'GET') return handleListCompetitions(request, env);
+    const response = await handleCreateCompetition(request, env);
+    _audit(
+      reqId,
+      'CREATE_COMPETITION',
+      _auditOutcome(response),
+      'competition',
+      await _createdId(response)
+    );
+    return response;
+  }
+
+  // One regex per route, written out, so the brand matrix and the write guard
+  // read each route out of this file. The first group is always the competition.
+  type CompetitionRoute = {
+    re: RegExp;
+    method: string;
+    action: string | null;
+    run: (cid: string, sub: string) => Promise<Response>;
+  };
+  const competitionRoutes: CompetitionRoute[] = [
+    {
+      re: /^\/api\/v2\/admin\/competitions\/([^/]+)$/,
+      method: 'GET',
+      action: null,
+      run: (cid) => handleGetCompetition(request, env, cid),
+    },
+    {
+      re: /^\/api\/v2\/admin\/competitions\/([^/]+)$/,
+      method: 'PUT',
+      action: 'UPDATE_COMPETITION',
+      run: (cid) => handleUpdateCompetition(request, env, cid),
+    },
+    {
+      re: /^\/api\/v2\/admin\/competitions\/([^/]+)\/score-screen$/,
+      method: 'GET',
+      action: null,
+      run: (cid) => handleScoreScreen(request, env, cid),
+    },
+    {
+      re: /^\/api\/v2\/admin\/competitions\/([^/]+)\/entries$/,
+      method: 'POST',
+      action: 'CREATE_COMPETITION_ENTRY',
+      run: (cid) => handleCreateEntry(request, env, cid),
+    },
+    {
+      re: /^\/api\/v2\/admin\/competitions\/([^/]+)\/entries\/([^/]+)$/,
+      method: 'PUT',
+      action: 'UPDATE_COMPETITION_ENTRY',
+      run: (cid, sub) => handleUpdateEntry(request, env, cid, sub),
+    },
+    {
+      re: /^\/api\/v2\/admin\/competitions\/([^/]+)\/schedule$/,
+      method: 'POST',
+      action: 'GENERATE_COMPETITION_SCHEDULE',
+      run: (cid) => handleGenerateSchedule(request, env, cid),
+    },
+    {
+      re: /^\/api\/v2\/admin\/competitions\/([^/]+)\/fixtures$/,
+      method: 'POST',
+      action: 'CREATE_FIXTURE',
+      run: (cid) => handleCreateFixture(request, env, cid),
+    },
+    {
+      re: /^\/api\/v2\/admin\/competitions\/([^/]+)\/fixtures\/([^/]+)$/,
+      method: 'PUT',
+      action: 'UPDATE_FIXTURE',
+      run: (cid, sub) => handleUpdateFixture(request, env, cid, sub),
+    },
+    {
+      re: /^\/api\/v2\/admin\/competitions\/([^/]+)\/fixtures\/([^/]+)\/result$/,
+      method: 'PUT',
+      action: 'ENTER_RESULT',
+      run: (cid, sub) => handlePutResult(request, env, cid, sub),
+    },
+    {
+      re: /^\/api\/v2\/admin\/competitions\/([^/]+)\/fixtures\/([^/]+)\/result$/,
+      method: 'DELETE',
+      action: 'REMOVE_RESULT',
+      run: (cid, sub) => handleDeleteResult(request, env, cid, sub),
+    },
+  ];
+  const adminCompetitionSub = pathname.match(/^\/api\/v2\/admin\/competitions\/(.+)$/);
+  if (adminCompetitionSub) {
+    for (const route of competitionRoutes) {
+      if (route.method !== method) continue;
+      const m = pathname.match(route.re);
+      if (!m) continue;
+      const cid = m[1];
+      const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+      const deny = await requireAdmin(request, env, reqId);
+      if (deny) {
+        if (route.action) _audit(reqId, route.action, 'denied', 'competition', cid);
+        return deny;
+      }
+      const response = await route.run(cid, m[2] ?? '');
+      // A read is not audited; every write is, against the competition, so the
+      // row carries the competition's brand.
+      if (route.action) _audit(reqId, route.action, _auditOutcome(response), 'competition', cid);
+      return response;
+    }
   }
 
   // ── Admin campaign routes (showcase S14; auth-gated, brand-scoped, audited) ──
@@ -2698,6 +2897,18 @@ export async function route(
     return handleBatchSharedReports(request, env, ctx, () => readReportPlan(env.FORMS_DB));
   }
 
+  // GET /api/v2/family-report — OSE-2241. A parent company's family report by
+  // its signed link (Authorization: Bearer). Limited per token, like the event
+  // SharedReport read.
+  if (pathname === '/api/v2/family-report' && method === 'GET') {
+    return publicReadLimited(
+      'family-report',
+      handlePublicFamilyReport,
+      RATE_LIMIT_MAX,
+      familyReportBucketKey
+    )(request, env);
+  }
+
   // GET /api/v2/events/:id/shared-report
   // Signed-link-authenticated single-event SharedReport read.
   const sharedReportMatch = pathname.match(/^\/api\/v2\/events\/([^/]+)\/shared-report$/);
@@ -3119,6 +3330,17 @@ export async function route(
     return handleBoothPage(request, env, boothPageMatch[1], boothPageMatch[2]);
   }
 
+  // ── A league's schedule and standings (leagues phase 1, OSE-527) ─────────
+  // Public, no cookie, rate-limited in its own scope; past the limit, the house
+  // page. Not on the language layer: under /es/ it is the ordinary 404.
+  const competitionPageMatch = pathname.match(/^\/competitions\/([^/]{1,200})$/);
+  if (competitionPageMatch && method === 'GET') {
+    if (await isPublicReadLimited(request, env, 'competition-page')) {
+      return renderErrorPage(429, 'Too many requests', 'Give it a minute and try again.');
+    }
+    return handleCompetitionPage(request, env, competitionPageMatch[1]);
+  }
+
   // ── A fair's stalls (OSE-1998, OSE ADR-034) — /events/<id>/booths ─────────
   // Matched before the event page's /events/<id>/<name>, which would otherwise
   // take "booths" as a name (canonical.ts keeps "booths" out of event names).
@@ -3266,6 +3488,17 @@ export async function route(
     // posterProductForPath() and attach data-poster-format to body.
     return limitedPage('poster-page', pathname, undefined, (req, e: typeof env) =>
       handlePosterPage(e, req)
+    )(request, env);
+  }
+
+  // GET /family-report?token=… — OSE-2241. The page a corporate sponsor opens
+  // from the parent company's link. Server-rendered, no script, never cached.
+  if (pathname === '/family-report' && (method === 'GET' || method === 'HEAD')) {
+    return publicReadLimited(
+      'family-report-page',
+      handleFamilyReportPage,
+      RATE_LIMIT_MAX,
+      familyReportBucketKey
     )(request, env);
   }
 

@@ -814,6 +814,13 @@
       "testCount": 22
     },
     {
+      "file": "workers/oursharedevents/tests/competitions.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 34
+    },
+    {
       "file": "workers/oursharedevents/tests/constraints.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -1528,6 +1535,13 @@
       "testCount": 2
     },
     {
+      "file": "workers/oursharedevents/tests/family-report.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): env.DB, createExecutionContext, waitOnExecutionContext",
+      "testCount": 16
+    },
+    {
       "file": "workers/oursharedevents/tests/fat-finger.property.spec.ts",
       "bucket": "node",
       "needsReview": false,
@@ -2107,6 +2121,13 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 12
+    },
+    {
+      "file": "workers/oursharedevents/tests/map-page-csp.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 6
     },
     {
       "file": "workers/oursharedevents/tests/map-page.spec.ts",

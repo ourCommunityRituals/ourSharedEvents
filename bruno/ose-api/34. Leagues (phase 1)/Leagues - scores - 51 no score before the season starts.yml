@@ -1,0 +1,33 @@
+info:
+  name: "Leagues | scores | no score before the season starts"
+  type: http
+  seq: 51
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/competitions/{{leagueId}}/fixtures/{{leagueFixtureId}}/result"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"score_a\": 12, \"score_b\": 5}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('leagues score: 409 COMPETITION_DRAFT', function () { expect(res.getStatus()).to.eql(409); expect(b.code).to.eql('COMPETITION_DRAFT'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

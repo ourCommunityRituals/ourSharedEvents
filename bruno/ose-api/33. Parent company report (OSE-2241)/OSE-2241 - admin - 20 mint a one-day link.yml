@@ -1,0 +1,40 @@
+info:
+  name: "OSE-2241 | admin | the parent mints a one-day link to share"
+  type: http
+  seq: 20
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/brands/lakeside-co/family-report/mint-link"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: '{"data_class":"all","ttl_days":1}'
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        bru.setVar('familyReportToken', b.token || 'missing-token');
+        test('OSE-2241 mint: 200, a token and the page path', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(b.brand).to.eql('lakeside-co');
+          expect(b.token).to.match(/^[A-Za-z0-9_-]+\.[0-9a-f]{64}$/);
+          expect(b.path).to.eql('/family-report?token=' + encodeURIComponent(b.token));
+          expect(res.getHeader('cache-control')).to.contain('no-store');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

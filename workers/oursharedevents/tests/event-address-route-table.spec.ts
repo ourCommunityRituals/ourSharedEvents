@@ -74,6 +74,11 @@ const OUTSIDE_THE_FOLDER: Readonly<Record<string, { why: Why; reason: string }>>
     why: 'signed-link',
     reason: 'The report link is a private key, kept long (owner 2026-10-09).',
   },
+  '/family-report': {
+    why: 'signed-link',
+    reason:
+      "A parent company's report over all its ventures (OSE-2241). The link is a private key and names a brand, never one event.",
+  },
   '/report': { why: 'signed-link', reason: 'Alias of /sharedReport.' },
   '/reports': { why: 'signed-link', reason: 'Alias of /sharedReport.' },
   '/analytics': { why: 'signed-link', reason: 'Alias of /sharedReport.' },
@@ -111,6 +116,11 @@ const OUTSIDE_THE_FOLDER: Readonly<Record<string, { why: Why; reason: string }>>
   '/lineup': { why: 'old-address', reason: 'Forwards 301 to /events.' },
 
   // ── The site: not about one event ────────────────────────────────────────
+  '/competitions/:param': {
+    why: 'site',
+    reason:
+      "A league's schedule and standings (leagues phase 1). A league runs over many event nights, so it is not one event's screen; each night keeps its own event page and links stay there.",
+  },
   '/': { why: 'site', reason: 'Landing.' },
   '/home': { why: 'site', reason: 'Landing alias.' },
   '/welcome': { why: 'site', reason: 'Landing alias.' },

@@ -1,0 +1,85 @@
+info:
+  name: Map page | GET /map | content policy is pinned
+  type: http
+  seq: 13
+
+http:
+  method: GET
+  url: "{{baseUrl}}/map"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        // The staging twin of workers/oursharedevents/tests/map-page-csp.spec.ts.
+        //
+        // Why: every request a browser makes carries the visitor's IP address. If
+        // the map page could load a map library, tiles or fonts from an outside map
+        // or tile host, each visitor's IP address would reach that host. The pinned
+        // policy keeps the map same-origin, so visitors' IP addresses never leave
+        // for an outside mapping service.
+        //
+        // The whole policy must match, directive by directive, with only the
+        // per-request nonce allowed to vary. A change to the map page's policy is
+        // a reviewed edit here and in the spec, never a quiet one.
+        const EXPECTED = [
+          ['default-src', "'self'"],
+          ['script-src', "'self' 'nonce-<nonce>'"],
+          ['style-src', "'self' 'unsafe-inline'"],
+          ['img-src', "'self' data:"],
+          ['connect-src', "'self'"],
+          ['frame-ancestors', "'self'"],
+          ['base-uri', "'self'"],
+          ['form-action', "'self'"],
+        ];
+        const csp = String(res.getHeader('content-security-policy') || '');
+        const directives = csp
+          .split(';')
+          .map(function (d) { return d.trim(); })
+          .filter(Boolean)
+          .map(function (d) {
+            const parts = d.split(/\s+/);
+            const sources = parts.slice(1).join(' ').replace(/'nonce-[A-Za-z0-9+\/=]+'/g, "'nonce-<nonce>'");
+            return [parts[0].toLowerCase(), sources];
+          });
+        const byName = {};
+        directives.forEach(function (d) { if (!(d[0] in byName)) byName[d[0]] = d[1]; });
+
+        test('Returns 200', function () {
+          expect(res.getStatus()).to.equal(200);
+        });
+
+        test('The policy is exactly the pinned one (only the nonce varies)', function () {
+          expect(directives).to.eql(EXPECTED);
+        });
+
+        test("connect-src is 'self' only", function () {
+          expect(byName['connect-src']).to.equal("'self'");
+        });
+
+        test("img-src is 'self' data: only", function () {
+          expect(byName['img-src']).to.equal("'self' data:");
+        });
+
+        test('No worker-src or child-src directive, and no blob: source', function () {
+          expect(byName).to.not.have.property('worker-src');
+          expect(byName).to.not.have.property('child-src');
+          expect(csp.toLowerCase()).to.not.include('blob:');
+        });
+
+        test('No host, scheme-only source or wildcard in any directive', function () {
+          const allowed = ["'self'", "'nonce-<nonce>'", "'unsafe-inline'", 'data:'];
+          const extra = [];
+          directives.forEach(function (d) {
+            d[1].split(' ').forEach(function (s) { if (allowed.indexOf(s) < 0) extra.push(d[0] + ' ' + s); });
+          });
+          expect(extra).to.eql([]);
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

@@ -88,6 +88,14 @@ simple = { limit = 60, period = 10 }
 [observability]
 enabled = true
 
+# Our own structured console lines are kept; the per-request invocation log
+# (request metadata and headers) is not. Staging and production inherit this
+# block, so do not add an [env.*.observability] block: it would replace this
+# one and turn the invocation log back on. Guarded by
+# tests/e2e/0-architecture/log-redaction.invariant.spec.ts.
+[observability.logs]
+invocation_logs = false
+
 # The nightly retention sweep, as on staging and production.
 [triggers]
 crons = ["0 3 * * *"]

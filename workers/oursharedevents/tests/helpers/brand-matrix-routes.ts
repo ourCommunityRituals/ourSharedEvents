@@ -498,8 +498,32 @@ export const MATRIX_ROUTES: readonly MatrixRoute[] = [
  * without a reason a reviewer would accept.
  */
 export const ROUTE_EXEMPTIONS: Readonly<Record<string, string>> = {
+  '/api/v2/admin/competitions':
+    "A competition is not one of the matrix fixtures; its isolation is held by tests/competitions.spec.ts (leagues phase 1): a competition of another brand, its teams and its matches answer the same 404 as an unknown id, a list shows only the caller's brands, and a match may be placed only on a night of the competition's own brand.",
+  '/api/v2/admin/competitions/(.+)':
+    "The router's outer match for the competition routes below; it dispatches to them and answers nothing itself. Held by tests/competitions.spec.ts.",
+  '/api/v2/admin/competitions/:id':
+    "A competition is not one of the matrix fixtures; its isolation is held by tests/competitions.spec.ts (leagues phase 1): a competition of another brand, its teams and its matches answer the same 404 as an unknown id, a list shows only the caller's brands, and a match may be placed only on a night of the competition's own brand.",
+  '/api/v2/admin/competitions/:id/score-screen':
+    "A competition is not one of the matrix fixtures; its isolation is held by tests/competitions.spec.ts (leagues phase 1): a competition of another brand, its teams and its matches answer the same 404 as an unknown id, a list shows only the caller's brands, and a match may be placed only on a night of the competition's own brand.",
+  '/api/v2/admin/competitions/:id/entries':
+    "A competition is not one of the matrix fixtures; its isolation is held by tests/competitions.spec.ts (leagues phase 1): a competition of another brand, its teams and its matches answer the same 404 as an unknown id, a list shows only the caller's brands, and a match may be placed only on a night of the competition's own brand.",
+  '/api/v2/admin/competitions/:id/entries/:id':
+    "A competition is not one of the matrix fixtures; its isolation is held by tests/competitions.spec.ts (leagues phase 1): a competition of another brand, its teams and its matches answer the same 404 as an unknown id, a list shows only the caller's brands, and a match may be placed only on a night of the competition's own brand.",
+  '/api/v2/admin/competitions/:id/schedule':
+    "A competition is not one of the matrix fixtures; its isolation is held by tests/competitions.spec.ts (leagues phase 1): a competition of another brand, its teams and its matches answer the same 404 as an unknown id, a list shows only the caller's brands, and a match may be placed only on a night of the competition's own brand.",
+  '/api/v2/admin/competitions/:id/fixtures':
+    "A competition is not one of the matrix fixtures; its isolation is held by tests/competitions.spec.ts (leagues phase 1): a competition of another brand, its teams and its matches answer the same 404 as an unknown id, a list shows only the caller's brands, and a match may be placed only on a night of the competition's own brand.",
+  '/api/v2/admin/competitions/:id/fixtures/:id':
+    "A competition is not one of the matrix fixtures; its isolation is held by tests/competitions.spec.ts (leagues phase 1): a competition of another brand, its teams and its matches answer the same 404 as an unknown id, a list shows only the caller's brands, and a match may be placed only on a night of the competition's own brand.",
+  '/api/v2/admin/competitions/:id/fixtures/:id/result':
+    "A competition is not one of the matrix fixtures; its isolation is held by tests/competitions.spec.ts (leagues phase 1): a competition of another brand, its teams and its matches answer the same 404 as an unknown id, a list shows only the caller's brands, and a match may be placed only on a night of the competition's own brand.",
   '/api/v2/admin/addons':
     'Platform only (key actor or platform brand, AUD-3): a brand cannot read or turn on add-ons, its own or another. Held by tests/brand-addons.spec.ts (OSE-2232).',
+  '/api/v2/admin/brands/:id/family-report':
+    "A brand tree is not one of the matrix fixtures; its isolation is held by tests/family-report.spec.ts (OSE-2241): a brand is read only when it is in the caller's scope, so a venture's member, another company and the public and platform brands get the same 404 as an unknown brand.",
+  '/api/v2/admin/brands/:id/family-report/mint-link':
+    "A brand tree is not one of the matrix fixtures; its isolation is held by tests/family-report.spec.ts (OSE-2241): a brand is read only when it is in the caller's scope, so a venture's member, another company and the public and platform brands get the same 404 as an unknown brand.",
   '/api/v2/admin/venues':
     'A venue is not one of the matrix fixtures; its isolation is held by tests/venues.spec.ts (OSE-2221): only the owner brand reaches a venue by id, another brand gets the same 404 as an unknown venue, and a list shows a brand only the venues it owns or is listed at.',
   '/api/v2/admin/venues/:id/operators':

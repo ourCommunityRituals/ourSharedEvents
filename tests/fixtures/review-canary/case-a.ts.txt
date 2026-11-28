@@ -1,0 +1,14 @@
+// Review check fixture. Plain text: never imported, built or deployed.
+interface Env { DB: D1Database }
+
+export async function eventBySlug(request: Request, env: Env): Promise<Response> {
+  const slug = new URL(request.url).searchParams.get('slug') ?? '';
+  if (slug.length === 0 || slug.length > 80) {
+    return new Response('bad slug', { status: 400 });
+  }
+  const row = await env.DB.prepare(
+    `SELECT id, title, starts_at FROM events WHERE slug = '${slug}'`,
+  ).first<{ id: string; title: string; starts_at: string }>();
+  if (!row) return new Response('not found', { status: 404 });
+  return Response.json({ id: row.id, title: row.title, startsAt: row.starts_at });
+}

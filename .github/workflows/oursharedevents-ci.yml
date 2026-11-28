@@ -1767,6 +1767,35 @@ jobs:
         run: |
           node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/lakeside-brand-tree-seed.sql
 
+      # OSE-2241: stand-in traffic for the Lakeside practice family (demo data,
+      # unpublished), so the parent company's family report has something to
+      # show; Bruno folder 33 reads it. After the brand tree. Idempotent.
+      - name: 'Seed Lakeside family report fixture (OSE-2241)'
+        if: matrix.section == 'api'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/lakeside-family-report-seed.sql
+
+      # Leagues phase 1 (OSE-525/526/527/529): the Lakeside practice league on
+      # lakeside-league, stand-in names only. Five unlisted league nights, six
+      # invented team labels, a round robin with rounds 1 and 2 scored. Also
+      # removes the league Bruno folder 34 made on an earlier pass. Runs after T1
+      # applied migration 0125 and after the brand tree. Idempotent. NOT
+      # continue-on-error.
+      - name: 'Seed Lakeside practice league (leagues phase 1)'
+        if: matrix.section == 'api'
+        timeout-minutes: 5
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN_OSE }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        working-directory: ${{ env.WORKER_DIR }}
+        run: |
+          node ../../scripts/ci/d1-seed-staging.mjs DB ../../bruno/fixtures/lakeside-league-competition-seed.sql
+
       # Larkspur practice neighborhood tavern (stand-in names, staging only): a
       # test account with larkspur-tavern over its nights, leagues and giving
       # ventures, the bar as a venue and ten synthetic, unpublished events, two

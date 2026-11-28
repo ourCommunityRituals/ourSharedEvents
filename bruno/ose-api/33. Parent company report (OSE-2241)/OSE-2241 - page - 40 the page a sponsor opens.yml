@@ -1,0 +1,36 @@
+info:
+  name: "OSE-2241 | page | the page: by name, no script, never cached, never indexed"
+  type: http
+  seq: 40
+
+http:
+  method: GET
+  url: "{{baseUrl}}/family-report?token={{familyReportToken}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const html = String(res.getBody() || '');
+        test('OSE-2241 page: 200, no-store, no-referrer, no framing, no script', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(String(res.getHeader('cache-control'))).to.contain('no-store');
+          expect(res.getHeader('referrer-policy')).to.eql('no-referrer');
+          expect(res.getHeader('x-frame-options')).to.eql('DENY');
+          expect(String(res.getHeader('content-security-policy'))).to.contain("script-src 'none'");
+          expect(html).to.not.contain('<script');
+        });
+        test('OSE-2241 page: the parent by name, one h1, the footprint drawn', function () {
+          expect(html).to.contain('Lakeside Bocce Co.');
+          expect((html.match(/<h1[\s>]/g) || []).length).to.eql(1);
+          expect(html).to.contain('<svg class="fp-map"');
+          expect(html).to.contain('Includes practice data');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

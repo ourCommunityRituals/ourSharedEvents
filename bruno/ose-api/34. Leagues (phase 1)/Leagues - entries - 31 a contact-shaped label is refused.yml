@@ -1,0 +1,36 @@
+info:
+  name: "Leagues | entries | a contact-shaped label is refused"
+  type: http
+  seq: 31
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/competitions/{{leagueId}}/entries"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"label\": \"someone@example.com\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('leagues entry: 400 INVALID_LABEL', function () {
+          expect(res.getStatus()).to.eql(400);
+          expect(b.code).to.eql('INVALID_LABEL');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

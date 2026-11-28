@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0124; the entries below do not cover every migration after 0083, see the note at 0104)
+- `DB` — main / anonymous public surface (highest migration: 0125; the entries below do not cover every migration after 0083, see the note at 0104)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -110,6 +110,22 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
+-- 0125: competitions, competition_stages, competition_entries, fixtures,
+-- fixture_results (leagues phase 1, OSE-525). Additive: five new tables, four
+-- indexes, no column on an existing table. THE ROLLBACK IS: revert the Worker
+-- and LEAVE THE TABLES. The older Worker never reads them: no league page, no
+-- score screen, and an event hard-delete no longer unsets a match's night (the
+-- FK from fixtures.event_id then blocks deleting an event that has matches; the
+-- events stay). Rows left behind hold no person: team labels and scores.
+--
+-- Surgical reverse, only if the tables themselves must go (every league,
+-- schedule and score is lost):
+DROP TABLE IF EXISTS fixture_results;
+DROP TABLE IF EXISTS fixtures;
+DROP TABLE IF EXISTS competition_entries;
+DROP TABLE IF EXISTS competition_stages;
+DROP TABLE IF EXISTS competitions;
+
 -- 0124: vote_access_passes and the Online Pick tables vote_crowd_sets,
 -- vote_crowd_tallies, vote_crowd_receipts, vote_crowd_participants (OSE ADR-040
 -- decision 13). Additive: five new tables, one index, no column. THE ROLLBACK

@@ -88,6 +88,9 @@ export const PURGE_EXEMPT = {
     'made only when a host gives an Access Pass under a vote set, never by the stock build; its foreign key to vote_sets stops the event delete rather than drop a pass',
   'vote_crowd_sets.event_id':
     'made only when a host turns the Online Pick on for a vote set, never by the stock build; its foreign key to vote_sets stops the event delete rather than drop Online Pick rows',
+  // 0125 (leagues phase 1). A match is made only by a host's schedule, never by the stock build.
+  'fixtures.event_id':
+    "made only when a host schedules a competition's matches on a night, never by the stock build; its foreign key stops the event delete rather than drop a match or its score",
   'sponsor_business_draft.event_id':
     "made only by a sponsor's own invite flow, never by the stock build; event_id has no foreign key (0053), and its sponsor_asset_draft children are keyed by draft_token, not a manifest id",
 };

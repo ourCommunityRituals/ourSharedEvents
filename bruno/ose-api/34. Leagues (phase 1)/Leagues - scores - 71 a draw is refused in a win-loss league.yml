@@ -1,0 +1,33 @@
+info:
+  name: "Leagues | scores | a draw is refused in a win-loss league"
+  type: http
+  seq: 71
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/competitions/{{leagueId}}/fixtures/{{leagueFixtureId}}/result"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"score_a\": 7, \"score_b\": 7}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('leagues score: 400 DRAW_NOT_ALLOWED', function () { expect(res.getStatus()).to.eql(400); expect(b.code).to.eql('DRAW_NOT_ALLOWED'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

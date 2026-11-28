@@ -100,7 +100,52 @@ const TENANT_TABLES = [
 //   verified: a same-text read in a new function of lib/draft-expiry.ts, a repeated
 //   key, an orphan key, an admin route written with startsWith, one with a /…/i
 //   regex, and a route pasted on the line above a guarded one each failed.
+// The parent company report (OSE-2241) reads the company and every venture below
+// it. Each of its reads is scoped by `e.brand_id IN (?, …)`, the list built by
+// withDescendants from a brand that passed resolveAdminBrandScopeAsync (admin) or
+// a signed family link naming that brand, so the literal `brand_id = ?` never
+// appears. Sponsor tables are read only through events in that list. Held by
+// workers/oursharedevents/tests/family-report.spec.ts (another company, a
+// venture member, root and the platform brand each get 404).
+const FAMILY_REPORT_SCOPE =
+  'Parent company report (OSE-2241): scoped by `e.brand_id IN (?, …)` over the ' +
+  "company and its ventures (withDescendants of a brand in the caller's scope or " +
+  'named by its signed link). Held by tests/family-report.spec.ts.';
+
 const BRAND_SCOPE_EXEMPT_LIST: ReadonlyArray<readonly [string, string]> = [
+  [
+    'lib/family-report.ts > buildFamilyReport: FROM events e LEFT JOIN venues v ON v.id = e.host_venue_id',
+    FAMILY_REPORT_SCOPE,
+  ],
+  [
+    'lib/family-report.ts > buildFamilyReport: JOIN events e ON e.id = s.event_id',
+    FAMILY_REPORT_SCOPE,
+  ],
+  [
+    'lib/family-report.ts > buildFamilyReport: FROM shortlinks sl JOIN events e ON e.id = sl.event_id',
+    FAMILY_REPORT_SCOPE,
+  ],
+  [
+    'lib/family-report.ts > buildFamilyReport: JOIN events e ON e.id = d.event_id',
+    FAMILY_REPORT_SCOPE,
+  ],
+  [
+    'lib/family-report.ts > buildFamilyReport: JOIN sponsor_placement sp ON sp.event_id = d.event_id AND sp.sponsor_business_id = d.sponsor_id',
+    FAMILY_REPORT_SCOPE,
+  ],
+  [
+    'lib/family-report.ts > buildFamilyReport: JOIN sponsor_business sb ON sb.id = d.sponsor_id',
+    FAMILY_REPORT_SCOPE,
+  ],
+  ['lib/family-report.ts > buildFamilyReport: FROM sponsor_placement sp', FAMILY_REPORT_SCOPE],
+  [
+    'lib/family-report.ts > buildFamilyReport: JOIN events e ON e.id = sp.event_id',
+    FAMILY_REPORT_SCOPE,
+  ],
+  [
+    'lib/family-report.ts > buildFamilyReport: JOIN sponsor_business sb ON sb.id = sp.sponsor_business_id',
+    FAMILY_REPORT_SCOPE,
+  ],
   [
     'lib/vote-sets.ts > runVoteFinalJob: JOIN events e ON e.id = s.event_id',
     'Nightly vote final job (runVoteFinalJob, index.ts scheduled; OSE-2127, OSE ADR-040 ' +

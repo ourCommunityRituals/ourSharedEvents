@@ -1,0 +1,33 @@
+info:
+  name: "Leagues | start | the season starts"
+  type: http
+  seq: 60
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/competitions/{{leagueId}}"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"status\": \"active\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('leagues start: 200 active', function () { expect(res.getStatus()).to.eql(200); expect(b.competition.status).to.eql('active'); });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false
