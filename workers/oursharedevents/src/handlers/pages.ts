@@ -89,6 +89,7 @@ import {
   type LandingAreaItem,
 } from '../lib/landing-area.js';
 import { categoryByTypeId, type TypeCategory } from '../lib/event-type-catalog.js';
+import { eventTypeName } from '../lib/i18n/event-type-names.js';
 import { readEventTypeCatalog } from '../lib/event-type-catalog-read.js';
 import { loadStreetLayer, type StreetMapEnv } from '../lib/street-map.js';
 import { renderShareButton } from '../lib/share-button.js';
@@ -691,8 +692,12 @@ function renderEventTypeMeta(
   testId = 'event-type',
   lang: Lang = DEFAULT_LANG
 ): string {
-  // The type's own name is catalog data; its labels per language are OSE-1764.
-  const label = esc(row.event_type_name) || esc(row.event_type_id);
+  // The type's name in the page's language (lib/i18n/event-type-names.ts),
+  // else the registry's own name, else its id.
+  const registryName = row.event_type_name ?? '';
+  const label =
+    esc(row.event_type_id ? eventTypeName(lang, row.event_type_id, registryName) : registryName) ||
+    esc(row.event_type_id);
   if (!label) return '';
   return `<p class="ose-meta" data-testid="${testId}">${fmt(lang, 'event.type', { type: label })}</p>`;
 }
