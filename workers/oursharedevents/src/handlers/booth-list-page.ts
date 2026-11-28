@@ -53,6 +53,7 @@ export async function handleBoothListPage(
       booths,
       sponsors,
       noindex,
+      passport: fair.passport === 1,
     }),
     noindex
   );

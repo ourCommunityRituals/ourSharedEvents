@@ -6529,6 +6529,15 @@
           <p class="sub-line" id="stalls-public-note" data-testid="stalls-public-note" hidden>Each stall in use gets its own public page once the fair is live.</p>
           <p class="sub-line" id="stalls-empty" data-testid="stalls-empty" hidden>No stalls yet. Add one below, or paste a list.</p>
           <ul class="pc-list" id="stalls-list" data-testid="stalls-list" aria-label="Stalls"></ul>
+          <!-- Stamp passport (owner 2026-11-28, lib/passport.ts): each stall's code
+               stamps a card kept on the visitor's phone. Saves on change. -->
+          <label class="create-publish-label" for="stalls-passport">
+            <input type="checkbox" id="stalls-passport" data-testid="stalls-passport" />
+            <span>Stamp passport: each stop's code adds a stamp</span>
+          </label>
+          <p class="create-publish-hint" data-testid="stalls-passport-hint">
+            Stamps stay on each visitor's phone. You still see scans per stop, never who.
+          </p>
         </div>
 
         <form class="card-body" id="stalls-add" data-testid="stalls-add" novalidate>
@@ -6865,6 +6874,12 @@
         byId('stalls-add').hidden = false;
         byId('stalls-bulk').hidden = false;
         var booths = Array.isArray(data.booths) ? data.booths : [];
+        var passportBox = byId('stalls-passport');
+        if (passportBox) {
+          passportBox.checked = data.passport === true;
+          passportBox.setAttribute('data-event-id', String(id));
+          passportBox.disabled = false;
+        }
         var inUse = booths.filter(function (b) { return b && b.is_active; }).length;
         var out = booths.length - inUse;
         summary.textContent = !booths.length
@@ -6975,12 +6990,32 @@
         var data = got[0].ok && Array.isArray(got[0].data.booths)
           ? {
               booths: got[0].data.booths,
+              passport: got[0].data.passport === true,
               counts: got[1].ok ? got[1].data : null,
               placements: got[2].ok && Array.isArray(got[2].data.items) ? got[2].data.items : null,
             }
           : null;
         window.renderStallsCard(id, data);
       };
+      /** Stamp passport: the switch saves through the event's settings. */
+      (function () {
+        var box = document.getElementById('stalls-passport');
+        if (!box) return;
+        box.addEventListener('change', async function () {
+          var id = box.getAttribute('data-event-id');
+          if (!id) return;
+          var want = box.checked;
+          box.disabled = true;
+          var r = await window.stallsFetch('/api/v2/admin/events/' + encodeURIComponent(id), 'PUT', { settings: { passport: want } });
+          if (r.ok) {
+            window.stallsSay(want ? 'Stamp passport is on. Each stop\u2019s code adds a stamp.' : 'Stamp passport is off.', false);
+          } else {
+            box.checked = !want;
+            window.stallsSay('Could not save. The passport is unchanged.', true);
+          }
+          box.disabled = false;
+        });
+      })();
       /** OSE-1998: say what a stall action did, in the card's status line. */
       window.stallsSay = function (text, failed) {
         var m = document.getElementById('stalls-msg');

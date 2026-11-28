@@ -466,4 +466,13 @@ export const ar: Record<MessageKey, string> = {
   'form.next.browse': 'اطّلع على ما سيأتي أيضًا',
   'form.privacy.details': 'تفاصيل الخصوصية',
   'form.privacy.englishNote': 'إشعار الخصوصية هذا باللغة الإنجليزية إلى أن تتوفر ترجمة مُراجَعة.',
+  'passport.label': 'جواز الأختام',
+  'passport.scanHere': 'امسح رمز هذه المحطة لتحصل على ختمها.',
+  'passport.saved': 'تم حفظ الختم لهذه المحطة.',
+  'passport.count': 'لديك {have} من {total} أختام.',
+  'passport.done': 'اكتملت البطاقة! اعرض هذه الشاشة عند طاولة الجوائز.',
+  'passport.private': 'تبقى أختامك على هذا الهاتف. لا نراها أبدًا.',
+  'passport.clear': 'امسح أختامي',
+  'passport.stamped': 'مختوم',
+  'passport.noScript': 'شغّل جافاسكريبت لحفظ الأختام على هذا الهاتف.',
 };

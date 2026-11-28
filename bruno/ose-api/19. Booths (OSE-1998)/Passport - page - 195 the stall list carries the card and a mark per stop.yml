@@ -1,0 +1,36 @@
+info:
+  name: "Passport | the stall list carries the card and a mark per stop"
+  type: http
+  seq: 195
+
+# Mock-layer twin: workers/oursharedevents/tests/passport-route.spec.ts.
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/{{boothLiveFairId}}/booths"
+  headers:
+    - name: Accept
+      value: text/html
+    - name: X-OCR-CI
+      value: "{{ocrCiEdgeToken}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        var edge = res.getStatus() === 403 && (res.getHeader('cf-mitigated') || '').length > 0;
+        if (edge) { test('EDGE: the page read was challenged before the Worker ran (OSE-939); nothing below was checked', function () { expect(edge).to.equal(true); }); }
+        var body = typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody());
+        if (!edge) {
+          test('Passport list: 200 with the card', function () { expect(res.getStatus()).to.eql(200); expect(body).to.include('data-testid="passport"'); });
+          test('Passport list: one mark per stop in use', function () { expect((body.match(/data-testid="passport-mark"/g) || []).length).to.eql(2); });
+          test('Passport list: no cookie', function () { expect(!res.getHeader('set-cookie')).to.equal(true); });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

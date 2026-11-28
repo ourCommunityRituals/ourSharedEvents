@@ -495,6 +495,17 @@ const en = {
   // Shown only on a page that is not in English, beside the English notice.
   'form.privacy.englishNote':
     'This privacy notice is in English until a reviewed translation is ready.',
+  // Stamp passport (owner, 2026-11-28): the card a walk or market keeps on the
+  // visitor's phone. {have} and {total} are filled on the phone, never sent.
+  'passport.label': 'Stamp passport',
+  'passport.scanHere': "Scan this stop's code to collect its stamp.",
+  'passport.saved': 'Stamp saved for this stop.',
+  'passport.count': 'You have {have} of {total} stamps.',
+  'passport.done': 'Card complete! Show this screen at the prize table.',
+  'passport.private': 'Your stamps stay on this phone. We never see them.',
+  'passport.clear': 'Clear my stamps',
+  'passport.stamped': 'Stamped',
+  'passport.noScript': 'Turn on JavaScript to keep stamps on this phone.',
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -952,6 +963,15 @@ const es: Record<MessageKey, string> = {
   'form.privacy.details': 'Detalles de privacidad',
   'form.privacy.englishNote':
     'Este aviso de privacidad está en inglés hasta que tengamos una traducción revisada.',
+  'passport.label': 'Pasaporte de sellos',
+  'passport.scanHere': 'Escanea el código de esta parada para ganar su sello.',
+  'passport.saved': 'Sello guardado para esta parada.',
+  'passport.count': 'Tienes {have} de {total} sellos.',
+  'passport.done': '¡Tarjeta completa! Muestra esta pantalla en la mesa de premios.',
+  'passport.private': 'Tus sellos se quedan en este teléfono. Nunca los vemos.',
+  'passport.clear': 'Borrar mis sellos',
+  'passport.stamped': 'Sellado',
+  'passport.noScript': 'Activa JavaScript para guardar sellos en este teléfono.',
 };
 
 /** One catalog per language. A language still being written may omit keys. */

@@ -27,6 +27,7 @@
  * deactivated booth keeps. No people table, no FORMS_DB, no count of anyone.
  */
 
+import { passportOnSql } from '../lib/event-settings';
 import { corsHeaders } from '../lib/cors';
 import { errorLabel } from '../lib/error-label';
 import {
@@ -205,9 +206,15 @@ export async function handleListEventBooths(
       )
       .bind(eventId)
       .all<BoothRow>();
+    // Stamp passport (lib/passport.ts): the Stalls card shows the switch.
+    const pass = await db
+      .prepare(`SELECT ${passportOnSql()} AS on_ FROM events WHERE id = ?`)
+      .bind(eventId)
+      .first<{ on_: number | null }>();
     return reply(request, 200, {
       event_id: eventId,
       booths: (rows.results ?? []).map(projectBooth),
+      passport: pass?.on_ === 1,
     });
   });
 }

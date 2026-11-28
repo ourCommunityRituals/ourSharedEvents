@@ -464,4 +464,13 @@ export const pl: Record<MessageKey, string> = {
   'form.privacy.details': 'Szczegóły prywatności',
   'form.privacy.englishNote':
     'Ta informacja o prywatności jest po angielsku, dopóki nie będzie sprawdzonego tłumaczenia.',
+  'passport.label': 'Paszport z pieczątkami',
+  'passport.scanHere': 'Zeskanuj kod tego przystanku, aby zebrać pieczątkę.',
+  'passport.saved': 'Pieczątka zapisana dla tego przystanku.',
+  'passport.count': 'Masz {have} z {total} pieczątek.',
+  'passport.done': 'Karta pełna! Pokaż ten ekran przy stoisku z nagrodami.',
+  'passport.private': 'Twoje pieczątki zostają w tym telefonie. Nigdy ich nie widzimy.',
+  'passport.clear': 'Usuń moje pieczątki',
+  'passport.stamped': 'Podstemplowano',
+  'passport.noScript': 'Włącz JavaScript, aby zapisywać pieczątki w tym telefonie.',
 };

@@ -897,6 +897,11 @@ jobs:
       # fair's stalls on a phone: five then five more a tap until the list ends,
       # focus on the first new card, a 44 px button across the list, axe light and
       # dark, 320 px reflow, 2.5.8, scripts off, and a mutation check per check.
+      #
+      # passport.component.spec.ts (owner 2026-11-28: a walk whose stops stamp a
+      # card kept on the visitor's phone) drives a stop page and the stop list:
+      # #stamp saves and is taken off, a reload saves nothing, a full card says
+      # complete, clear empties it, no request but the page, axe light and dark.
       - name: 'Component: viewport specs vs local worker'
         if: matrix.shard == 'component'
         run: |
@@ -918,7 +923,8 @@ jobs:
             tests/e2e/2-pages/landing-tabs.component.spec.ts \
             tests/e2e/2-pages/wcag-slider.component.spec.ts \
             tests/e2e/2-pages/wcag-sponsor-kind.component.spec.ts \
-            tests/e2e/2-pages/card-pager.component.spec.ts
+            tests/e2e/2-pages/card-pager.component.spec.ts \
+            tests/e2e/2-pages/passport.component.spec.ts
 
   # T0 test sub-gates: keep the existing required context `T0 Gate (tests)` as
   # an aggregate below, but split the former 9+ minute long-pole job into
