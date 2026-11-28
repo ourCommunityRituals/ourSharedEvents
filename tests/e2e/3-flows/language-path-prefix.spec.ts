@@ -922,9 +922,10 @@ test.describe('Form pages in every language on staging (OSE-1850)', () => {
         for (const en of ENGLISH_FORM_WORDS) {
           expect(visible, `"${en}" on the ${row.lang} page`).not.toContain(en);
         }
-        // The privacy text says, in the page language, why it is in English.
+        // The privacy text is translated; a note in view says the English is
+        // the official text, and that text sits under it, marked as English.
         await expect(page.locator('[data-testid="privacy-english-note"]')).toBeVisible();
-        await expect(page.locator('[data-testid="privacy-details"] p')).toHaveAttribute(
+        await expect(page.locator('[data-testid="privacy-official-english"] p')).toHaveAttribute(
           'lang',
           'en'
         );

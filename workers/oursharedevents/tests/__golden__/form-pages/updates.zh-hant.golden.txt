@@ -161,6 +161,7 @@
         <button type="submit" data-testid="email-submit">訂閱</button>
         <div class="privacy-notice" data-testid="privacy-notice">
     <p class="privacy-summary" data-testid="privacy-summary">你的電子郵件會在 30 天後刪除。</p>
+    <p class="privacy-lang-note" data-testid="privacy-english-note">這是譯文。以英文原文為準。</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>隱私詳情</summary>
       <p>
@@ -170,7 +171,6 @@
         
         <a href="/privacy" data-testid="privacy-policy-link">完整隱私權政策（英文）</a>
       </p>
-      <p class="privacy-lang-note" data-testid="privacy-english-note">這是譯文。以英文原文為準。</p>
       <details class="privacy-official" data-testid="privacy-official-english">
         <summary>英文正式文本</summary>
         <p lang="en" dir="ltr">

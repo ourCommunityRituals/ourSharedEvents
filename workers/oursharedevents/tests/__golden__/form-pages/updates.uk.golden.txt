@@ -161,6 +161,7 @@
         <button type="submit" data-testid="email-submit">Підписатися</button>
         <div class="privacy-notice" data-testid="privacy-notice">
     <p class="privacy-summary" data-testid="privacy-summary">Ваша пошта видаляється через 30 днів.</p>
+    <p class="privacy-lang-note" data-testid="privacy-english-note">Це переклад. Офіційний текст — англійський.</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Докладніше про конфіденційність</summary>
       <p>
@@ -170,7 +171,6 @@
         
         <a href="/privacy" data-testid="privacy-policy-link">Повна політика конфіденційності (англійською)</a>
       </p>
-      <p class="privacy-lang-note" data-testid="privacy-english-note">Це переклад. Офіційний текст — англійський.</p>
       <details class="privacy-official" data-testid="privacy-official-english">
         <summary>Офіційний текст англійською</summary>
         <p lang="en" dir="ltr">

@@ -150,10 +150,14 @@ function privacyNotice(formType: NoticeForm, legalTier = 1, lang: Lang = DEFAULT
     formType === 'checkin'
       ? `<p class="privacy-summary" data-testid="privacy-summary">${msg(lang, 'choices.checkinNote')}</p>`
       : `<p class="privacy-summary" data-testid="privacy-summary">${privacySummary(formType, lang)}</p>`;
-  // Not in English: the translation, then the official English text.
+  // Not in English: a note, always in view, that this is a translation and
+  // the English is official (a must-know, so never inside a closed details);
+  // then, inside the details, the translation and the official English text.
+  const note = translated
+    ? `\n    <p class="privacy-lang-note" data-testid="privacy-english-note">${msg(lang, 'form.privacy.englishNote')}</p>`
+    : '';
   const official = translated
     ? `
-      <p class="privacy-lang-note" data-testid="privacy-english-note">${msg(lang, 'form.privacy.englishNote')}</p>
       <details class="privacy-official" data-testid="privacy-official-english">
         <summary>${msg(lang, 'privacy.officialEnglish')}</summary>
         <p lang="en" dir="ltr">
@@ -163,7 +167,7 @@ function privacyNotice(formType: NoticeForm, legalTier = 1, lang: Lang = DEFAULT
     : '';
 
   return `<div class="privacy-notice" data-testid="privacy-notice">
-    ${summary}
+    ${summary}${note}
     <details class="privacy-details" data-testid="privacy-details">
       <summary>${msg(lang, 'form.privacy.details')}</summary>
       <p>

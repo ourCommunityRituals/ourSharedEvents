@@ -168,6 +168,7 @@
         <button type="submit" data-testid="survey-submit">Görüş gönder</button>
         <div class="privacy-notice" data-testid="privacy-notice">
     <p class="privacy-summary" data-testid="privacy-summary">Yorumlar 24 saat içinde kişisel bilgilerden temizlenir.</p>
+    <p class="privacy-lang-note" data-testid="privacy-english-note">Bu bir çeviridir. Resmî metin İngilizce olandır.</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Gizlilik ayrıntıları</summary>
       <p>
@@ -177,7 +178,6 @@
         
         <a href="/privacy" data-testid="privacy-policy-link">Gizlilik politikasının tamamı (İngilizce)</a>
       </p>
-      <p class="privacy-lang-note" data-testid="privacy-english-note">Bu bir çeviridir. Resmî metin İngilizce olandır.</p>
       <details class="privacy-official" data-testid="privacy-official-english">
         <summary>Resmî İngilizce metin</summary>
         <p lang="en" dir="ltr">

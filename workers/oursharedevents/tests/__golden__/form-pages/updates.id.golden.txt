@@ -161,6 +161,7 @@
         <button type="submit" data-testid="email-submit">Daftarkan saya</button>
         <div class="privacy-notice" data-testid="privacy-notice">
     <p class="privacy-summary" data-testid="privacy-summary">Email Anda dihapus setelah 30 hari.</p>
+    <p class="privacy-lang-note" data-testid="privacy-english-note">Ini terjemahan. Teks resminya adalah teks bahasa Inggris.</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Rincian privasi</summary>
       <p>
@@ -170,7 +171,6 @@
         
         <a href="/privacy" data-testid="privacy-policy-link">Kebijakan privasi lengkap (bahasa Inggris)</a>
       </p>
-      <p class="privacy-lang-note" data-testid="privacy-english-note">Ini terjemahan. Teks resminya adalah teks bahasa Inggris.</p>
       <details class="privacy-official" data-testid="privacy-official-english">
         <summary>Teks resmi bahasa Inggris</summary>
         <p lang="en" dir="ltr">

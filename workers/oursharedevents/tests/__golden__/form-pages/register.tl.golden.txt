@@ -163,6 +163,7 @@
         <button type="submit" data-testid="register-submit">Magpatala</button>
         <div class="privacy-notice" data-testid="privacy-notice">
     <p class="privacy-summary" data-testid="privacy-summary">Binubura ang pangalan at email mo kinabukasan pagkatapos ng kaganapan.</p>
+    <p class="privacy-lang-note" data-testid="privacy-english-note">Ito ay salin. Ang tekstong Ingles ang opisyal.</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Detalye ng pagkapribado</summary>
       <p>
@@ -172,7 +173,6 @@
         
         <a href="/privacy" data-testid="privacy-policy-link">Buong patakaran sa pagkapribado (sa Ingles)</a>
       </p>
-      <p class="privacy-lang-note" data-testid="privacy-english-note">Ito ay salin. Ang tekstong Ingles ang opisyal.</p>
       <details class="privacy-official" data-testid="privacy-official-english">
         <summary>Opisyal na tekstong Ingles</summary>
         <p lang="en" dir="ltr">

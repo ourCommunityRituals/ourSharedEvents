@@ -403,6 +403,8 @@ describe('H4 | privacy text in the page language, the official English under it'
         const note = d.querySelector('[data-testid="privacy-english-note"]');
         expect(note?.textContent).toBe(msg(lang, 'form.privacy.englishNote'));
         expect(note?.hasAttribute('lang')).toBe(false);
+        // A must-know stays in view: never inside a closed details.
+        expect(note?.closest('details')).toBeNull();
         const summary = d.querySelector('[data-testid="privacy-summary"]')!;
         expect(summary.hasAttribute('lang')).toBe(false);
         expect(summary.textContent).not.toMatch(/\b(Your|Comments)\b/);

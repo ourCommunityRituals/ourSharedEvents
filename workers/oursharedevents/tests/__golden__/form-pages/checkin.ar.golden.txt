@@ -160,6 +160,7 @@
       <div class="count" id="count" data-testid="checkin-count" role="status" aria-live="polite"></div>
       <div class="privacy-notice" data-testid="privacy-notice">
     <p class="privacy-summary" data-testid="privacy-summary">نحسبك، ولا نذكر اسمك أبدًا.</p>
+    <p class="privacy-lang-note" data-testid="privacy-english-note">هذه ترجمة. النص الإنجليزي هو النص الرسمي.</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>تفاصيل الخصوصية</summary>
       <p>
@@ -169,7 +170,6 @@
         
         <a href="/privacy" data-testid="privacy-policy-link">سياسة الخصوصية الكاملة (بالإنجليزية)</a>
       </p>
-      <p class="privacy-lang-note" data-testid="privacy-english-note">هذه ترجمة. النص الإنجليزي هو النص الرسمي.</p>
       <details class="privacy-official" data-testid="privacy-official-english">
         <summary>النص الرسمي بالإنجليزية</summary>
         <p lang="en" dir="ltr">
