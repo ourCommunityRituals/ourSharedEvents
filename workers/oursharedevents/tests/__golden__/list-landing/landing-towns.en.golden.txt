@@ -720,7 +720,7 @@
 
       <nav class="ose-lang" data-testid="language-switch" aria-label="Language">
       <details data-testid="language-switch-choice">
-        <summary class="ose-lang-chip" aria-label="Language: English" data-testid="language-switch-chip"><img class="ose-lang-flag" src="/flags/en.svg" alt="" width="21" height="14" loading="lazy"><span lang="en">English</span><span class="ose-lang-caret" aria-hidden="true">▾</span></summary>
+        <summary class="ose-lang-chip" aria-label="Language: English" data-testid="language-switch-chip"><img class="ose-lang-flag" src="/flags/en.svg" alt="" width="21" height="14"><span lang="en">English</span><span class="ose-lang-caret" aria-hidden="true">▾</span></summary>
         <ul class="ose-lang-card" data-testid="language-switch-card">
         <li><a lang="es" hreflang="es" data-testid="language-switch-es" href="/es/?where=Beverly"><img class="ose-lang-flag" src="/flags/es.svg" alt="" width="21" height="14" loading="lazy">Español</a></li>
         <li><a lang="zh-hans" hreflang="zh-hans" data-testid="language-switch-zh-hans" href="/zh-hans/?where=Beverly"><img class="ose-lang-flag" src="/flags/zh-hans.svg" alt="" width="21" height="14" loading="lazy">简体中文</a></li>

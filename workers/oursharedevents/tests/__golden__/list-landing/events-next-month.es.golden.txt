@@ -265,7 +265,7 @@
       </section>
       <nav class="ose-lang" data-testid="language-switch" aria-label="Idioma">
       <details data-testid="language-switch-choice">
-        <summary class="ose-lang-chip" aria-label="Idioma: Español" data-testid="language-switch-chip"><img class="ose-lang-flag" src="/flags/es.svg" alt="" width="21" height="14" loading="lazy"><span lang="es">Español</span><span class="ose-lang-caret" aria-hidden="true">▾</span></summary>
+        <summary class="ose-lang-chip" aria-label="Idioma: Español" data-testid="language-switch-chip"><img class="ose-lang-flag" src="/flags/es.svg" alt="" width="21" height="14"><span lang="es">Español</span><span class="ose-lang-caret" aria-hidden="true">▾</span></summary>
         <ul class="ose-lang-card" data-testid="language-switch-card">
         <li><a lang="es" hreflang="en" data-testid="language-switch-en" href="/events?when=next-month"><img class="ose-lang-flag" src="/flags/en.svg" alt="" width="21" height="14" loading="lazy">Inglés</a></li>
         <li><a lang="es" hreflang="zh-hans" data-testid="language-switch-zh-hans" href="/zh-hans/events?when=next-month"><img class="ose-lang-flag" src="/flags/zh-hans.svg" alt="" width="21" height="14" loading="lazy">Chino simplificado</a></li>
