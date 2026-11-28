@@ -84,6 +84,7 @@ import { CORRIDOR_RES, NODE_RES } from './h3-tagging.js';
 import type { StreetLayer } from './street-map.js';
 import { toPublicEvent } from './public-event-projection.js';
 import { fmt, msg } from './i18n/catalog.js';
+import { categoryName } from './i18n/event-type-names.js';
 import { AREA_FILTERS_STYLE, FILTERS_TOGGLE_ID } from './area-filters-style.js';
 import { AREA_TABS_STYLE } from './area-tabs-style.js';
 import { AREA_TABS_SCRIPT } from './area-tabs-script.js';
@@ -190,9 +191,9 @@ function slugify(raw: string): string {
 /** The slug every event without a known category shares. */
 const OTHER_SLUG = 'cat-other';
 
-// The category's own name from the catalog ("Arts, Culture & Live Music"), as
-// the Create Event picker shows it; names per language are OSE-1764. "Other" is
-// ours, so it is in the page's language, and it always sorts last.
+// The category's name in the page's language (lib/i18n/event-type-names.ts),
+// else the catalog's own ("Arts, Culture & Live Music"). "Other" is ours, so
+// it is in the page's language, and it always sorts last.
 function categoryOf(
   item: LandingAreaItem,
   lang: Lang,
@@ -207,7 +208,12 @@ function categoryOf(
       order: Infinity,
     };
   }
-  return { slug: `cat-${slugify(cat.code)}`, code: cat.code, label: cat.name, order: cat.order };
+  return {
+    slug: `cat-${slugify(cat.code)}`,
+    code: cat.code,
+    label: categoryName(lang, cat.code, cat.name),
+    order: cat.order,
+  };
 }
 
 function modalityOf(item: LandingAreaItem): 'online' | 'inperson' {

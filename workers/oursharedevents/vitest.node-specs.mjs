@@ -198,6 +198,7 @@ export const NODE_SPECS = [
   // The landing's filter tabs and distance choice (OSE-2156): the markup, the script in jsdom, its bans.
   'tests/area-tabs.spec.ts',
   'tests/category-slider.spec.ts',
+  'tests/event-type-names.spec.ts',
   'tests/area-pager.spec.ts',
   'tests/card-pager.spec.ts',
   'tests/street-map-landing.spec.ts',

@@ -1,0 +1,118 @@
+# Review check: a known-answer test for the automated PR reviewer.
+#
+# The reviewer (same action, charter and default model as claude-review.yml)
+# reads five small handlers in tests/fixtures/review-canary/. Some are correct
+# and some carry one known bug. scripts/ci/review-canary-check.mjs holds the
+# answers and scores the run: every bug named, no correct file named. The score,
+# cost, turns and time go to the run summary so weeks can be compared.
+#
+# Weekly and by hand only. claude-code-action does not run on `push`, and a
+# pull_request trigger would hand the workflow to PR code. A red run means PR
+# reviews cannot be trusted until it is green again. A missing credential is a
+# failure here, not a skip: this workflow's job is to say whether the reviewer
+# works.
+#
+# Rough cost: five short files and one answer, under $1 a run on Sonnet.
+
+name: Review Check
+
+on:
+  schedule:
+    - cron: '23 14 * * 1' # Mondays
+  workflow_dispatch:
+    inputs:
+      model:
+        description: Reviewer model to check
+        type: choice
+        default: claude-sonnet-5-5
+        options:
+          - claude-sonnet-5-5
+          - claude-haiku-5-5
+          - claude-opus-5-5
+
+concurrency:
+  group: review-canary
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: 'Reviewer finds the known bugs'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15 # [Claude] ceiling: 10 turns on five short files; no run to measure yet
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2
+        with:
+          egress-policy: audit
+
+      - name: Check auth
+        env:
+          HAS_OAUTH: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+          HAS_API_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+        run: |
+          if [ "$HAS_OAUTH" != "true" ] && [ "$HAS_API_KEY" != "true" ]; then
+            echo "::error title=Review check cannot run::Neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY is set, so PRs get no automated review."
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Load review charter
+        id: charter
+        run: |
+          delim="CHARTER_$(openssl rand -hex 16)"
+          {
+            echo "text<<${delim}"
+            cat .github/claude-review/security-charter.md
+            echo "${delim}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Run the reviewer on the fixtures
+        id: reviewer
+        uses: anthropics/claude-code-action@f431adaf77e0fecf918431e75a2b5b45b85af002 # v1
+        with:
+          # Same auth order as claude-review.yml: subscription first, API key only without it.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN == '' && secrets.ANTHROPIC_API_KEY || '' }}
+          github_token: ${{ github.token }}
+          prompt: |
+            Review these five files as if each were a new file added in a pull request,
+            against the charter below. They are TypeScript for a Cloudflare Worker with
+            a D1 database, saved as .txt.
+            tests/fixtures/review-canary/case-a.ts.txt
+            tests/fixtures/review-canary/case-b.ts.txt
+            tests/fixtures/review-canary/case-c.ts.txt
+            tests/fixtures/review-canary/case-d.ts.txt
+            tests/fixtures/review-canary/case-e.ts.txt
+            Read only those five files. Do not post comments or change anything.
+            End your answer with one line per finding, in exactly this form:
+            CANARY: <file path>:<line number>
+            If you find none, end with the single line: CANARY: NONE
+
+            ${{ steps.charter.outputs.text }}
+          claude_args: |
+            --model ${{ inputs.model || 'claude-sonnet-5-5' }}
+            --max-turns 10
+            --allowedTools "Read"
+            --setting-sources user
+
+      # Runs even when the reviewer step failed, so a failed run is still scored
+      # (as a fail) and the summary says why. The job is red either way.
+      - name: Score the answer
+        if: ${{ !cancelled() }}
+        env:
+          EXECUTION_FILE: ${{ steps.reviewer.outputs.execution_file }}
+        run: |
+          if ! node scripts/ci/review-canary-check.mjs "${EXECUTION_FILE:-/nonexistent}" "$GITHUB_STEP_SUMMARY"; then
+            echo "::error title=Review check failed::The reviewer missed a known bug, flagged a correct file, or did not run. See the run summary."
+            exit 1
+          fi

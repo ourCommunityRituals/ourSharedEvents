@@ -49,6 +49,9 @@ const DB_TABLES = [
   'business_type_category_map', // 0059 (OSE-730 Sponsor Onboarding — step-5 smart default)
   'campaigns', // 0039 (campaigns metadata table — enterprise sponsor comparison)
   'category_registry', // 0058 (OSE-729 Sponsor Onboarding — canonical category lookup)
+  'competition_entries', // 0125 (leagues phase 1 — the public label and opaque grp_ id of a team; no person column)
+  'competition_stages', // 0125 (leagues phase 1 — one round robin per competition for now)
+  'competitions', // 0125 (leagues phase 1 — a league or season on one brand; no person column)
   'corridor_density_baseline', // 0032 (OSE-272 SharedReport pipeline)
   'corridor_density_snapshots', // 0044 (OER longitudinal archive — append-only)
   'corridor_readiness_latch', // 0082 (VISION §6.2b corridor readiness latch)
@@ -62,6 +65,8 @@ const DB_TABLES = [
   'event_type_registry', // 0023
   'events', // 0001 + 0034 series_id column
   'export_manifest', // 0043 (OSE-556 D1→OCR export audit)
+  'fixture_results', // 0125 (leagues phase 1 — the two scores of a game, not a count of people)
+  'fixtures', // 0125 (leagues phase 1 — one match on one event night)
   'node_hierarchy', // 0010
   'poster_deployments', // 0003
   'report_access_log', // 0043 (OSE-557 SharedReport access logging)

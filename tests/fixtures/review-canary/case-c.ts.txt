@@ -1,0 +1,12 @@
+// Review check fixture. Plain text: never imported, built or deployed.
+interface Env { DB: D1Database }
+
+export async function sessionAttendance(eventId: string, env: Env): Promise<Response> {
+  const rows = await env.DB.prepare(
+    'SELECT session_id, COUNT(*) AS n FROM scans WHERE event_id = ?1 GROUP BY session_id',
+  )
+    .bind(eventId)
+    .all<{ session_id: string; n: number }>();
+  const sessions = rows.results.map((r) => ({ sessionId: r.session_id, checkIns: r.n }));
+  return Response.json({ eventId, sessions });
+}

@@ -89,6 +89,7 @@ import {
   type LandingAreaItem,
 } from '../lib/landing-area.js';
 import { categoryByTypeId, type TypeCategory } from '../lib/event-type-catalog.js';
+import { eventTypeName } from '../lib/i18n/event-type-names.js';
 import { readEventTypeCatalog } from '../lib/event-type-catalog-read.js';
 import { loadStreetLayer, type StreetMapEnv } from '../lib/street-map.js';
 import { renderShareButton } from '../lib/share-button.js';
@@ -240,7 +241,8 @@ function securityHeaders(nonce: string): Record<string, string> {
     // and the UEC resolver both hand the page data: PNGs, and without an explicit
     // img-src they fall to default-src 'self' and the browser refuses them (the
     // poster printed alt text on staging). Same directive form-pages.ts and
-    // demo.ts already carry. Guarded by tests/poster-page-csp.spec.ts.
+    // demo.ts already carry. Guarded by tests/poster-page-csp.spec.ts; the
+    // whole policy, as the /map page sends it, is pinned by tests/map-page-csp.spec.ts.
     'Content-Security-Policy': `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self'`,
   };
 }
@@ -690,8 +692,12 @@ function renderEventTypeMeta(
   testId = 'event-type',
   lang: Lang = DEFAULT_LANG
 ): string {
-  // The type's own name is catalog data; its labels per language are OSE-1764.
-  const label = esc(row.event_type_name) || esc(row.event_type_id);
+  // The type's name in the page's language (lib/i18n/event-type-names.ts),
+  // else the registry's own name, else its id.
+  const registryName = row.event_type_name ?? '';
+  const label =
+    esc(row.event_type_id ? eventTypeName(lang, row.event_type_id, registryName) : registryName) ||
+    esc(row.event_type_id);
   if (!label) return '';
   return `<p class="ose-meta" data-testid="${testId}">${fmt(lang, 'event.type', { type: label })}</p>`;
 }

@@ -1293,4 +1293,39 @@ test.describe('Invariant: log redaction — no identifiers or credentials in log
         violations.join('\n')
     ).toEqual([]);
   });
+
+  // The per-request invocation log records request metadata and headers, which
+  // no console line chooses. It stays off in every deployed config, and no
+  // named environment may carry its own observability block, because that
+  // block would replace the top-level one and turn the invocation log back on.
+  // @born-red method: run with `invocation_logs = true`, with the
+  //   [observability.logs] block removed, and with an [env.staging.observability]
+  //   block added; each failed this test on that file | date: 2026-11-27
+  test('log-redaction | the invocation log is off in every deployed worker config', () => {
+    const configs = ['wrangler.toml', 'wrangler.client-test.toml'];
+    for (const name of configs) {
+      const text = readFileSync(join(REPO_ROOT, 'workers', 'oursharedevents', name), 'utf8');
+      const lines = text.split('\n').map((l) => l.replace(/#.*$/, '').trim());
+      let section = '';
+      let invocationLogs: string | undefined;
+      const envObservability: string[] = [];
+      for (const line of lines) {
+        const header = /^\[\[?([^\]]+)\]\]?$/.exec(line);
+        if (header) {
+          section = header[1].trim();
+          if (/^env\.[^.]+\.observability(\.|$)/.test(section)) envObservability.push(section);
+          continue;
+        }
+        const kv = /^invocation_logs\s*=\s*(\S+)$/.exec(line);
+        if (kv && section === 'observability.logs') invocationLogs = kv[1];
+      }
+      expect(invocationLogs, `${name}: [observability.logs] invocation_logs must be false`).toBe(
+        'false'
+      );
+      expect(
+        envObservability,
+        `${name}: a named environment must not carry its own observability block`
+      ).toEqual([]);
+    }
+  });
 });

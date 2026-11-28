@@ -1,0 +1,39 @@
+info:
+  name: "Leagues | setup | make a league on lakeside-league"
+  type: http
+  seq: 10
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/competitions"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"brand_id\": \"lakeside-league\", \"name\": \"CI league (synthetic)\", \"sport\": \"bocce_league\", \"format\": \"seasonal\", \"starts_on\": \"2026-11-18\", \"ends_on\": \"2026-12-16\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('leagues setup: 201, a draft round-robin season', function () {
+          expect(res.getStatus()).to.eql(201);
+          expect(b.id).to.match(/^cmp_[0-9a-f]{32}$/);
+          expect(b.competition.status).to.eql('draft');
+          expect(b.competition.source).to.eql('native');
+        });
+        bru.setVar('leagueId', b.id || 'cmp_missing');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

@@ -289,6 +289,7 @@
       "tests/canonical-link.spec.ts": 3800,
       "tests/category-registry.spec.ts": 2800,
       "tests/ci-service-actor-router.spec.ts": 2800,
+      "tests/competitions.spec.ts": 5000,
       "tests/constraints.spec.ts": 3500,
       "tests/core-values-refused-log.spec.ts": 2500,
       "tests/corridor-density-ratios.spec.ts": 1800,

@@ -1,0 +1,37 @@
+info:
+  name: "Leagues | scores | the host enters a score"
+  type: http
+  seq: 70
+
+http:
+  method: PUT
+  url: "{{baseUrl}}/api/v2/admin/competitions/{{leagueId}}/fixtures/{{leagueFixtureId}}/result"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"score_a\": 12, \"score_b\": 5}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('leagues score: 200, confirmed at once, the match is played', function () {
+          expect(res.getStatus()).to.eql(200);
+          expect(b.fixture.status).to.eql('played');
+          expect(b.fixture.result).to.eql({ score_a: 12, score_b: 5, state: 'confirmed', entered_by: 'host' });
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

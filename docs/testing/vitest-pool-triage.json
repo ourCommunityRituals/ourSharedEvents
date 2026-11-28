@@ -814,6 +814,13 @@
       "testCount": 22
     },
     {
+      "file": "workers/oursharedevents/tests/competitions.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): createExecutionContext, waitOnExecutionContext",
+      "testCount": 34
+    },
+    {
       "file": "workers/oursharedevents/tests/constraints.spec.ts",
       "bucket": "workerd",
       "needsReview": false,
@@ -1421,6 +1428,13 @@
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch, env.DB",
       "testCount": 24
+    },
+    {
+      "file": "workers/oursharedevents/tests/event-type-names.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 10
     },
     {
       "file": "workers/oursharedevents/tests/event-type-reachability.spec.ts",
@@ -2128,6 +2142,13 @@
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
       "testCount": 12
+    },
+    {
+      "file": "workers/oursharedevents/tests/map-page-csp.spec.ts",
+      "bucket": "workerd",
+      "needsReview": false,
+      "reason": "runtime marker(s): SELF.fetch",
+      "testCount": 6
     },
     {
       "file": "workers/oursharedevents/tests/map-page.spec.ts",
