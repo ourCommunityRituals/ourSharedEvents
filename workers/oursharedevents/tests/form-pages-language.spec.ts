@@ -105,9 +105,24 @@ async function html(screen: EventFormScreen, o: RenderOpts = {}): Promise<string
   return (await respond(screen, o)).text();
 }
 
-/** The page parsed, scripts off: what the server wrote. */
+/**
+ * The page parsed, scripts off: what the server wrote. A page asked for by
+ * screen and language alone is parsed once and shared: most cases read the
+ * same 88 pages, and every test that reads one only reads it. Parsing each
+ * one again made this spec a minute long, and the mutation pass reruns it.
+ */
+const PARSED = new Map<string, Promise<Document>>();
 async function doc(screen: EventFormScreen, o: RenderOpts = {}): Promise<Document> {
-  return new JSDOM(await html(screen, o)).window.document;
+  const plainAsk = Object.keys(o).every((k) => k === 'lang');
+  if (!plainAsk) return new JSDOM(await html(screen, o)).window.document;
+  const key = `${screen}|${o.lang ?? ''}`;
+  if (!PARSED.has(key)) {
+    PARSED.set(
+      key,
+      html(screen, o).then((h) => new JSDOM(h).window.document)
+    );
+  }
+  return PARSED.get(key)!;
 }
 
 interface Posted {
@@ -743,8 +758,16 @@ describe('N1 | refusals read in the page language, and never echo the server', (
     ['network down', () => 'reject', 'form.error.generic'],
   ];
 
+  // Which refusal maps to which words does not depend on the language, so every
+  // case runs in the first four languages (one of them right to left), and each
+  // other language runs a sample that reaches a coded, an uncoded and a network
+  // refusal. Each case is a live page with its scripts; all 17 in all 22
+  // languages was 374 of them, about 30 s per run, and the mutation pass reruns
+  // this spec for every static mutant of the page renderers.
+  const SAMPLE = new Set(['INVALID_EMAIL', '429, no code', 'network down']);
+  const FULL: readonly Lang[] = ['en', 'es', 'pl', 'ar'];
   for (const lang of LANGUAGES) {
-    for (const [name, answer, key] of CASES) {
+    for (const [name, answer, key] of CASES.filter(([n]) => FULL.includes(lang) || SAMPLE.has(n))) {
       test(`${lang}: ${name}`, async () => {
         const { doc: d, settle } = await live('checkin', lang, answer);
         (d.getElementById('checkin-btn') as HTMLButtonElement).click();
