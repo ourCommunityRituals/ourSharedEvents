@@ -407,16 +407,17 @@ describe('admin.html — the picker is on BOTH create paths', () => {
     expect(h).toContain('data-testid="create-type-picker-msg"');
   });
 
-  test('wizard step 2: the same two-level picker, ahead of the copy-prefill cards', async () => {
+  test('wizard step 1: the same two-level picker, ahead of the copy-prefill cards', async () => {
     const h = await html();
-    const step2 = h.indexOf('id="wizard-step-2"');
+    // Owner 2026-11-27: two screens; "what kind" is on step 1.
+    const step1 = h.indexOf('id="wizard-step-1"');
     const picker = h.indexOf('id="wizard-category"');
     const cards = h.indexOf('id="wizardTemplatePicker"');
-    const step3 = h.indexOf('id="wizard-step-3"');
-    expect(step2).toBeGreaterThan(-1);
-    expect(picker).toBeGreaterThan(step2);
+    const step2 = h.indexOf('id="wizard-step-2"');
+    expect(step1).toBeGreaterThan(-1);
+    expect(picker).toBeGreaterThan(step1);
     expect(cards).toBeGreaterThan(picker);
-    expect(step3).toBeGreaterThan(cards);
+    expect(step2).toBeGreaterThan(cards);
     expect(h).toMatch(/id="wizard-category"[^>]*data-type-select="wizard-event-type"/s);
   });
 

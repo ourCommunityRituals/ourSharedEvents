@@ -7,7 +7,7 @@
  *      a phone). It is drawn in the browser from the fields, updates as the
  *      organizer types, works before anything is saved, and calls no endpoint
  *      at all (nothing is published, listed or sent while typing).
- *   2. Step 5 opens with a review: name, when, event type, where, map, codes.
+ *   2. The share screen holds a review (folded): name, when, event type, where, map, codes.
  *      Missing core values use the server's own CORE_VALUES_MISSING sentence.
  *   3. Each row has Change, which goes back to the right field (the event is
  *      already saved, so this is an edit, not a second Create). Save puts one
@@ -140,20 +140,18 @@ function isoDaysFromNow(days: number): string {
 
 type M = ReturnType<typeof mount>;
 
-/** Fill step 1, optionally the type, then Create; ends on step 5 with the event saved. */
+/** Fill step 1 (the type too, if asked), then Save draft; ends on the share screen (step 3), where the review is. */
 async function toReview(m: M, o: { time?: string; withType?: boolean } = {}) {
   m.type('wizard-event-name', 'Bocce Night');
   m.type('wizard-event-venue', 'Eagles Hall');
   m.type('wizard-event-date', isoDaysFromNow(14));
   if (o.time) m.type('wizard-event-time', o.time);
-  m.next();
   if (o.withType) await m.chooseType();
   m.next();
-  m.next(); // Create Event
+  expect(m.onStep(2), 'on step 2').toBe(true);
+  m.$('wizard-save-draft-btn').click();
   await m.flush();
-  expect(m.onStep(4), 'created, on step 4').toBe(true);
-  m.next();
-  expect(m.onStep(5), 'on step 5').toBe(true);
+  expect(m.onStep(3), 'saved, on the share screen').toBe(true);
 }
 
 describe('OSE-1528: the live preview', () => {
@@ -345,11 +343,9 @@ describe('OSE-1528: the review before publish', () => {
     b.type('wizard-event-venue', 'Eagles Hall');
     b.type('wizard-event-date', isoDaysFromNow(14));
     b.next();
-    b.next();
     b.$('wizard-signup-none').click();
-    b.next();
+    b.$('wizard-save-draft-btn').click();
     await b.flush();
-    b.next();
     expect(b.txt('wizard-review-row-codes')).not.toMatch(/sign-up/i);
   });
 
@@ -408,7 +404,7 @@ describe('OSE-1644: Publish with a core value missing goes to the field and mark
     m.type('wizard-event-date', '');
     m.$('wizard-save-edit-btn').click();
     await m.flush();
-    expect(m.onStep(5)).toBe(true);
+    expect(m.onStep(3)).toBe(true);
     m.$('wizard-go-live-btn').click();
     await m.flush();
     expect(m.onStep(1)).toBe(true);
@@ -417,12 +413,12 @@ describe('OSE-1644: Publish with a core value missing goes to the field and mark
     expect(invalid(m, 'wizard-event-time')).toBe('true');
   });
 
-  test('no event type: step 2, the category marked and focused', async () => {
+  test('no event type: step 1, the category marked and focused', async () => {
     const m = mount();
     await toReview(m, { time: '18:30' });
     m.$('wizard-go-live-btn').click();
     await m.flush();
-    expect(m.onStep(2)).toBe(true);
+    expect(m.onStep(1)).toBe(true);
     expect(m.doc.activeElement).toBe(m.$('wizard-category'));
     expect(invalid(m, 'wizard-category')).toBe('true');
     expect(m.txt('wizard-msg')).toBe('Add an event type before this event goes further');
@@ -465,7 +461,7 @@ describe('OSE-1644: Publish with a core value missing goes to the field and mark
     m.$('wizard-go-live-btn').click();
     await m.flush();
     m.$('wizard-cancel-edit-btn').click();
-    expect(m.onStep(5)).toBe(true);
+    expect(m.onStep(3)).toBe(true);
     expect(invalid(m, 'wizard-event-time')).toBeNull();
     expect(m.txt('wizard-msg')).toBe('');
   });
@@ -486,10 +482,10 @@ describe('OSE-1644: Publish with a core value missing goes to the field and mark
     m.type('wizard-event-time', '19:15');
     m.$('wizard-save-edit-btn').click();
     await m.flush();
-    expect(m.onStep(5)).toBe(true);
+    expect(m.onStep(3)).toBe(true);
     m.$('wizard-go-live-btn').click();
     await m.flush();
-    expect(m.onStep(2)).toBe(true);
+    expect(m.onStep(1)).toBe(true);
     await m.chooseType();
     m.$('wizard-save-edit-btn').click();
     await m.flush();
@@ -512,11 +508,11 @@ describe('OSE-1528: Change goes back to the right field, and Save returns to the
     expect(m.$('wizard-back-btn').hidden).toBe(true);
   });
 
-  test('Change on the type row opens step 2 on the category', async () => {
+  test('Change on the type row opens step 1 on the category', async () => {
     const m = mount();
     await toReview(m, { time: '18:30' });
     m.$('wizard-review-change-type').click();
-    expect(m.onStep(2)).toBe(true);
+    expect(m.onStep(1)).toBe(true);
     expect(m.doc.activeElement).toBe(m.$('wizard-category'));
   });
 
@@ -558,7 +554,7 @@ describe('OSE-1528: Change goes back to the right field, and Save returns to the
     expect(body.location).toBe('Eagles Hall');
     expect(body.event_type_id).toBe('type_bocce');
     expect(posts()).toBe(1);
-    expect(m.onStep(5)).toBe(true);
+    expect(m.onStep(3)).toBe(true);
     expect(m.$('wizard-save-edit-btn').hidden).toBe(true);
     expect(m.$('wizard-review-missing').hidden).toBe(true);
     expect(m.txt('wizard-review-row-when')).toContain('7:15 PM');
@@ -578,7 +574,7 @@ describe('OSE-1528: Change goes back to the right field, and Save returns to the
     await m.chooseType();
     m.$('wizard-save-edit-btn').click();
     await m.flush();
-    expect(m.onStep(5)).toBe(true);
+    expect(m.onStep(3)).toBe(true);
     expect(m.$('wizard-review-missing').hidden).toBe(true);
     m.$('wizard-go-live-btn').click();
     await m.flush();
@@ -619,7 +615,7 @@ describe('OSE-1528: Change goes back to the right field, and Save returns to the
     m.type('wizard-event-time', '21:00');
     m.type('wizard-event-name', 'Something else');
     m.$('wizard-cancel-edit-btn').click();
-    expect(m.onStep(5)).toBe(true);
+    expect(m.onStep(3)).toBe(true);
     expect(m.$<HTMLInputElement>('wizard-event-time').value).toBe('18:30');
     expect(m.$<HTMLInputElement>('wizard-event-name').value).toBe('Bocce Night');
     expect(m.txt('wizard-preview-title')).toBe('Bocce Night');
@@ -669,10 +665,9 @@ describe('OSE-2012: the create flow says how people take part', () => {
     m.type('wizard-event-date', isoDaysFromNow(14));
     m.type('wizard-event-time', '18:00');
     expect(m.txt('wizard-preview-where')).toBe('Online');
-    m.next();
     await m.chooseType();
     m.next();
-    m.next(); // Create Event
+    m.$('wizard-save-draft-btn').click();
     await m.flush();
     expect(posts(m)).toHaveLength(1);
     const body = posts(m)[0]!.body as Record<string, unknown>;
@@ -698,7 +693,7 @@ describe('OSE-2012: the create flow says how people take part', () => {
       location: null,
       where_address: null,
     });
-    expect(m.onStep(5)).toBe(true);
+    expect(m.onStep(3)).toBe(true);
     expect(m.txt('wizard-review-row-where')).toContain('Online');
   });
 });

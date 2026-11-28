@@ -1365,7 +1365,6 @@
       .create-slot-chip { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--text); font-size: 0.8125rem; line-height: 1.4; }
       .create-slot-chip--typed { border-color: var(--success); color: var(--success); font-weight: 600; }
       .wizard-publish { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }
-      .wizard-publish-note { margin: 0.75rem 0 0; font-size: 0.9375rem; line-height: 1.5; color: var(--text-muted); }
       /* OSE-1314: one card per row on phones; side by side from 640px. */
       .wizard-template-grid, .wizard-signup-grid, .wizard-links-grid { display: grid; grid-template-columns: 1fr; gap: 0.75rem; margin-bottom: 1rem; }
       @media (min-width: 640px) {
@@ -1948,37 +1947,32 @@
         aria-label="Create and launch your event, step by step"
         hidden
       >
-        <h2>Create &amp; Launch</h2>
+        <h2>New event</h2>
         <!-- Names the step in words; the rail below hides its labels on narrow phones. -->
-        <p class="wizard-step-caption" id="wizard-step-caption" data-testid="wizard-step-caption">Step 1 of 5: <strong>Basic info</strong></p>
+        <p class="wizard-step-caption" id="wizard-step-caption" data-testid="wizard-step-caption">Step 1 of 2: <strong>What's happening?</strong></p>
 
-        <!-- Progress rail — completed steps are clickable to go back (only
-             before the event is created; afterwards steps 1–3 are history). -->
-        <div class="wizard-progress" role="group" aria-label="Setup steps">
+        <!-- Two screens before the save, then a share screen (owner, 2026-11-27:
+             the create flow was too long on a phone). The rail shows the two
+             steps and hides on the share screen, which is not one you go back to. -->
+        <div class="wizard-progress" role="group" aria-label="Setup steps" id="wizard-progress">
           <button type="button" class="wizard-progress-step active" data-step="1" aria-current="step" data-testid="wizard-progress-1">
-            <span class="step-number">1</span><span class="step-label">Basic info</span>
+            <span class="step-number">1</span><span class="step-label">What's happening?</span>
           </button>
           <button type="button" class="wizard-progress-step" data-step="2" data-testid="wizard-progress-2">
-            <span class="step-number">2</span><span class="step-label">Template</span>
-          </button>
-          <button type="button" class="wizard-progress-step" data-step="3" data-testid="wizard-progress-3">
-            <span class="step-number">3</span><span class="step-label">Sign-ups</span>
-          </button>
-          <button type="button" class="wizard-progress-step" data-step="4" data-testid="wizard-progress-4">
-            <span class="step-number">4</span><span class="step-label">Your links</span>
-          </button>
-          <button type="button" class="wizard-progress-step" data-step="5" data-testid="wizard-progress-5">
-            <span class="step-number">5</span><span class="step-label">Launch</span>
+            <span class="step-number">2</span><span class="step-label">Who can find it?</span>
           </button>
         </div>
 
         <div class="wizard-layout">
         <div class="wizard-main">
-        <!-- Step 1 — the only must-answer questions. Date pre-fills to today. -->
+        <!-- Step 1: what, when, where, what kind. The rest folds away. -->
         <div class="wizard-step active" id="wizard-step-1" data-testid="wizard-step-1">
-          <div class="create-form">
+          <!-- Owner 2026-11-27: each screen fits one phone screen, no scrolling.
+               Name, when, where and what kind; everything else folds into
+               "More details". -->
+          <div class="create-form wizard-compact">
             <div class="full-width">
-              <label for="wizard-event-name">What's it called? <span class="required-star">*</span></label>
+              <label for="wizard-event-name">Name <span class="required-star">*</span></label>
               <input
                 type="text"
                 id="wizard-event-name"
@@ -1989,21 +1983,90 @@
                 aria-required="true"
               />
             </div>
+            <!-- When: one tap for the usual answers; the chips only fill the date box. -->
+            <div class="full-width" role="group" aria-labelledby="wizard-when-label">
+              <p class="wizard-field-label" id="wizard-when-label">When?</p>
+              <div class="wizard-chips" data-testid="wizard-when-chips">
+                <button type="button" class="wizard-chip" data-when="today" data-testid="wizard-when-today" aria-pressed="false">Today</button>
+                <button type="button" class="wizard-chip" data-when="tomorrow" data-testid="wizard-when-tomorrow" aria-pressed="false">Tomorrow</button>
+                <button type="button" class="wizard-chip" data-when="saturday" data-testid="wizard-when-saturday" aria-pressed="false">Saturday</button>
+              </div>
+            </div>
+            <!-- OSE-1313: start time + the EVENT's time zone. The API stores the
+                 UTC instant (starts_at) and every surface renders it back in this
+                 zone, never the viewer's. The zone is in More details. -->
             <div>
-              <label for="wizard-event-date">When is it?</label>
+              <label for="wizard-event-date" class="sr-only">Date</label>
               <input type="date" id="wizard-event-date" data-testid="wizard-event-date" />
             </div>
-            <!-- OSE-1313 — start time + the EVENT's time zone. The API stores the
-                 UTC instant (starts_at) and every surface renders it back in this
-                 zone, never the viewer's. Curated IANA list, not free text; the
-                 default is the founding node's zone and stays editable. -->
             <div>
-              <label for="wizard-event-time">What time does it start?</label>
+              <label for="wizard-event-time" class="sr-only">Start time</label>
               <input type="time" id="wizard-event-time" data-testid="wizard-event-time" step="60" />
             </div>
+            <!-- OSE-2012 (owner, 2026-11-12): every event says how people take
+                 part. It starts on "In person". Online takes no place, so the
+                 place box goes away. No meeting link is asked for.
+                 W1 (OSE-2095) / OSE-1717: the address and ZIP are in More details;
+                 the ZIP fills itself in from the place or the address. -->
+            <p class="wizard-field-label full-width" id="wizard-where-label">Where?</p>
             <div>
-              <label for="wizard-event-tz">Time zone</label>
-              <select id="wizard-event-tz" data-testid="wizard-event-tz">
+              <label for="wizard-event-mode" class="sr-only">How do people take part? <span class="required-star">*</span></label>
+              <select id="wizard-event-mode" data-testid="wizard-event-mode" required aria-required="true" aria-describedby="wizard-event-mode-note">
+                <option value="in_person" selected>In person</option>
+                <option value="online">Online</option>
+                <option value="both">Online and in person</option>
+              </select>
+            </div>
+            <div id="wizard-event-venue-field">
+              <label for="wizard-event-venue" class="sr-only">Place name <span class="required-star">*</span></label>
+              <input
+                type="text"
+                id="wizard-event-venue"
+                data-testid="wizard-event-venue"
+                placeholder="Rock Island Public House"
+                maxlength="500"
+                required
+                aria-required="true"
+              />
+            </div>
+            <p class="muted-sm full-width" id="wizard-event-mode-note" data-testid="wizard-event-mode-note" hidden>An online event has no place. It stays off the map and the events list; people open it by its link.</p>
+            <p class="muted-sm full-width" data-testid="wizard-zip-auto-note" aria-live="polite" hidden></p>
+            <!-- OSE-1344: Category, then Type. A start time and a type are what publishing needs. -->
+            <div class="wizard-field-label full-width wizard-label-row"><span id="wizard-kind-label">What kind?</span> <details class="deeper-dive" data-testid="wizard-kind-dive">
+              <summary><span class="deeper-dive-label">Deeper Dive</span></summary>
+              <p>Pick a group, then the kind of event. You need a kind and a start time to publish. You can save a draft without them.</p>
+            </details></div>
+            <div class="create-form type-picker full-width" data-testid="wizard-type-picker">
+              <div>
+                <label for="wizard-category" class="sr-only">Category</label>
+                <select
+                  id="wizard-category"
+                  data-testid="wizard-category"
+                  data-type-picker="category"
+                  data-type-select="wizard-event-type"
+                  data-empty="Category"
+                >
+                  <option value="">Category</option>
+                </select>
+              </div>
+              <div>
+                <label for="wizard-event-type" class="sr-only">Event type</label>
+                <select id="wizard-event-type" data-testid="wizard-event-type" data-empty="Type" disabled>
+                  <option value="">Type</option>
+                </select>
+              </div>
+              <p class="type-picker-msg full-width" data-testid="wizard-type-picker-msg" hidden></p>
+            </div>
+          </div>
+          <!-- Time zone, street address and ZIP, and a short description:
+               asked, never required (OSE-1518). A card fills the line; the
+               organizer's own words replace it and are kept. -->
+          <details class="pd-advanced wizard-fold" data-testid="wizard-more-details" id="wizard-more-details">
+            <summary>More details (optional)</summary>
+            <div class="create-form">
+              <div class="full-width">
+                <label for="wizard-event-tz">Time zone: <span data-testid="wizard-tz-summary">Central (Chicago)</span></label>
+                <select id="wizard-event-tz" data-testid="wizard-event-tz">
                 <option value="America/New_York">Eastern (New York)</option>
                 <option value="America/Chicago" selected>Central (Chicago)</option>
                 <option value="America/Denver">Mountain (Denver)</option>
@@ -2023,41 +2086,8 @@
                 <option value="Asia/Kolkata">India (Kolkata)</option>
                 <option value="UTC">UTC</option>
               </select>
-            </div>
-            <!-- OSE-2012 (owner, 2026-11-12): every event says how people take
-                 part, and the organizer says it here. It starts on "In person",
-                 which is what this step has always meant: it asks for a place.
-                 Online takes no place, so the place field goes away. No meeting
-                 link is asked for: it is never stored. -->
-            <div>
-              <label for="wizard-event-mode">How do people take part? <span class="required-star">*</span></label>
-              <select id="wizard-event-mode" data-testid="wizard-event-mode" required aria-required="true" aria-describedby="wizard-event-mode-note">
-                <option value="in_person" selected>In person</option>
-                <option value="online">Online</option>
-                <option value="both">Online and in person</option>
-              </select>
-              <p class="muted-sm" id="wizard-event-mode-note" data-testid="wizard-event-mode-note" hidden>An online event has no place. It stays off the map and the events list; people open it by its link.</p>
-            </div>
-            <!-- W1 (OSE-2095, owner 2026-11-16) and OSE-1717: the place name,
-                 the street address and the ZIP, each in its own box. The name
-                 goes as `location`, the address as `where_address`, the ZIP as
-                 `zip_code`. The ZIP is how zip and town search find the event;
-                 it is never made into a map cell. It is filled in from an
-                 address that ends in one or a town with one ZIP, and the
-                 organizer can change it. Asked for, not required. -->
-            <div id="wizard-event-venue-field">
-              <label for="wizard-event-venue">Place name <span class="required-star">*</span></label>
-              <input
-                type="text"
-                id="wizard-event-venue"
-                data-testid="wizard-event-venue"
-                placeholder="Rock Island Public House"
-                maxlength="500"
-                required
-                aria-required="true"
-              />
-            </div>
-            <div id="wizard-event-address-field">
+              </div>
+              <div id="wizard-event-address-field">
               <label for="wizard-event-address">Street address (optional)</label>
               <input
                 type="text"
@@ -2068,7 +2098,7 @@
                 autocomplete="off"
               />
             </div>
-            <div id="wizard-event-zip-field">
+              <div id="wizard-event-zip-field">
               <label for="wizard-event-zip">ZIP code</label>
               <input
                 type="text"
@@ -2082,90 +2112,9 @@
               />
               <p class="muted-sm" id="wizard-event-zip-note" data-testid="wizard-event-zip-note">People who search by ZIP code or town find your event by this.</p>
             </div>
-          </div>
-
-          <!-- OSE-1245 — the publication question, asked HERE because this is
-               the moment the address exists and the question means something.
-               Doctrine: OCR_VISION.md §6.2c (the choice network).
-
-               It is asked, not defaulted. `events.is_published` defaults to 1
-               at the column and in the API for backward compatibility, so if
-               this is the only place a human is ever asked, this is where the
-               guarantee actually lives.
-
-               The copy names the address explicitly and says the part that is
-               easy to not think about: publishing cannot be fully undone. That
-               sentence is the whole reason this is two cards instead of a
-               checkbox — a checkbox invites you past the decision, and this
-               decision is not symmetric. -->
-          <div class="wizard-publish" data-testid="wizard-publish">
-            <p class="wizard-step-help wizard-question">
-              Should this show up when neighbors look for something to do?
-            </p>
-            <div class="wizard-signup-grid">
-              <button
-                type="button"
-                aria-pressed="false"
-                class="wizard-publish-option"
-                data-option="published"
-                data-testid="wizard-publish-yes"
-              >
-                <span class="wizard-card-title">Yes — put it on the map</span>
-                <span class="wizard-card-desc">
-                  Anyone nearby can find it, and the address above is shown publicly.
-                </span>
-              </button>
-              <button
-                type="button"
-                aria-pressed="true"
-                class="wizard-publish-option selected"
-                data-option="unpublished"
-                data-testid="wizard-publish-no"
-              >
-                <span class="wizard-card-title">No — keep it off the map</span>
-                <span class="wizard-card-desc">
-                  Your links and printed codes still work, so the people you invite can
-                  still get in. It just won't be listed.
-                </span>
-              </button>
-            </div>
-            <p class="wizard-publish-note" data-testid="wizard-publish-note">
-              At home? Keep it off the map. Anything already public may have been copied.
-            </p>
-          </div>
-        </div>
-
-        <!-- Step 2 — template = a plain-language starting description. It
-             pre-fills the same optional "what/why" fields the dashboard form
-             sends; nothing tier-gated, nothing saved until step 3's create. -->
-        <div class="wizard-step" id="wizard-step-2" data-testid="wizard-step-2">
-          <p class="wizard-step-help wizard-question">What kind of event is this?</p>
-          <!-- OSE-1344 — Category → Type. The SAME two-level picker the advanced
-               form uses (one loader, one catalog, lib/event-type-catalog.ts on
-               the server). Optional: an event with only a name still saves. The
-               chosen type rides the create POST as event_type_id. -->
-          <div class="create-form type-picker" data-testid="wizard-type-picker">
-            <div>
-              <label for="wizard-category">Category</label>
-              <select
-                id="wizard-category"
-                data-testid="wizard-category"
-                data-type-picker="category"
-                data-type-select="wizard-event-type"
-              >
-                <option value="">Choose a category…</option>
-              </select>
-            </div>
-            <div>
-              <label for="wizard-event-type">Event type</label>
-              <select id="wizard-event-type" data-testid="wizard-event-type" disabled>
-                <option value="">Pick a category first</option>
-              </select>
-            </div>
-            <p class="type-picker-msg full-width" data-testid="wizard-type-picker-msg" hidden></p>
-          </div>
-          <p class="wizard-step-help wizard-question">Want a head start on the description? Pick one, or start blank.</p>
-          <div class="wizard-template-grid" id="wizardTemplatePicker">
+              <div class="full-width">
+                <p class="wizard-field-label">Pick a card, or write your own line</p>
+                <div class="wizard-template-grid" id="wizardTemplatePicker">
             <button aria-pressed="false" type="button" class="wizard-template-card" data-template="trivia" data-testid="wizard-template-trivia">
               <span class="wizard-card-title">Trivia Night</span>
               <span class="wizard-card-desc">Teams, questions, bragging rights.</span>
@@ -2183,11 +2132,9 @@
               <span class="wizard-card-desc">Start blank — describe it your way.</span>
             </button>
           </div>
-          <!-- OSE-1518: asked, never required. A card above fills this line; the
-               organizer's own words replace it and are kept. -->
-          <div class="create-form">
-            <div class="full-width">
-              <label for="wizard-event-what">In one line, what is it? <span class="muted-sm">(optional)</span></label>
+              </div>
+              <div class="full-width">
+                <label for="wizard-event-what">In one line, what is it? <span class="muted-sm">(optional)</span></label>
               <input
                 type="text"
                 id="wizard-event-what"
@@ -2195,42 +2142,97 @@
                 placeholder="Bocce and a potluck in the back yard"
                 maxlength="300"
               />
+              </div>
             </div>
-          </div>
+          </details>
         </div>
 
-        <!-- Step 3 — sign-ups. Honest options only: the built-in sign-up page
-             already exists for every event (served at /events/:eventId/register), so
-             "yes" simply surfaces its link in step 4. No pretend-saved
-             external URLs (provenance/honesty doctrine). -->
-        <div class="wizard-step" id="wizard-step-3" data-testid="wizard-step-3">
-          <!-- OSE-1518 (PO 2026-10-03): ask, do not block. Create stays enabled. -->
-          <p class="wizard-step-help" id="wizard-missing" data-testid="wizard-missing" role="status" hidden></p>
-          <p class="wizard-step-help wizard-question">Want people to sign up ahead of time?</p>
+        <!-- Step 2: who can find it and sign-ups, then Save draft or Publish. -->
+        <div class="wizard-step" id="wizard-step-2" data-testid="wizard-step-2">
+          <!-- OSE-1245 / OSE-1560: the publication question is asked, never
+               defaulted on. "Invite only" starts selected and nothing is sent
+               until a card is chosen. -->
+          <div class="wizard-publish" data-testid="wizard-publish">
+            <p class="wizard-step-help wizard-question">
+              Where it shows
+            </p>
+            <div class="wizard-signup-grid">
+              <button
+                type="button"
+                aria-pressed="false"
+                class="wizard-publish-option"
+                data-option="published"
+                data-testid="wizard-publish-yes"
+              >
+                <span class="wizard-card-title">📍 On the map</span>
+                <span class="wizard-card-desc">
+                  Neighbors can find it. The address shows.
+                </span>
+              </button>
+              <button
+                type="button"
+                aria-pressed="true"
+                class="wizard-publish-option selected"
+                data-option="unpublished"
+                data-testid="wizard-publish-no"
+              >
+                <span class="wizard-card-title">✉️ Invite only</span>
+                <span class="wizard-card-desc">
+                  Only your links and posters reach it.
+                </span>
+              </button>
+            </div>
+            <details class="deeper-dive" data-testid="wizard-publish-dive">
+              <summary><span class="deeper-dive-label">Deeper Dive</span></summary>
+              <p><strong>On the map:</strong> people nearby can find it on the map and the events list. The address shows. <strong>Invite only:</strong> only people with your link or poster can open it. Hosting at home? Pick invite only. You can change this later, but anything that was already public may have been copied.</p>
+            </details>
+          </div>
+          <p class="wizard-step-help wizard-question">Sign-ups</p>
           <div class="wizard-signup-grid">
             <button aria-pressed="true" type="button" class="wizard-signup-option selected" data-option="create" data-testid="wizard-signup-create">
-              <span class="wizard-card-title">Yes — use the built-in sign-up page</span>
-              <span class="wizard-card-desc">We make it for you. You'll get the link in the next step.</span>
+              <span class="wizard-card-title">Sign-ups on</span>
+              <span class="wizard-card-desc">We make the sign-up page for you.</span>
             </button>
             <button aria-pressed="false" type="button" class="wizard-signup-option" data-option="none" data-testid="wizard-signup-none">
-              <span class="wizard-card-title">No sign-ups needed</span>
-              <span class="wizard-card-desc">People can just show up. You can add this later.</span>
+              <span class="wizard-card-title">No sign-ups</span>
+              <span class="wizard-card-desc">People just show up.</span>
             </button>
           </div>
+          <details class="deeper-dive" data-testid="wizard-signup-dive">
+              <summary><span class="deeper-dive-label">Deeper Dive</span></summary>
+              <p><strong>Sign-ups on:</strong> we make a sign-up page and a code for your flyers. <strong>No sign-ups:</strong> people just come.</p>
+            </details>
+          <!-- OSE-1518 (PO 2026-10-03): ask, do not block. -->
+          <p class="wizard-step-help" id="wizard-missing" data-testid="wizard-missing" role="status" hidden></p>
         </div>
 
-        <!-- Step 4 — every link the organizer needs, with a scannable code for
-             the pages attendees reach by phone (mobile = the attendee surface).
-             QR images come from the existing poster-bundle endpoint. -->
-        <div class="wizard-step" id="wizard-step-4" data-testid="wizard-step-4">
-          <p class="wizard-step-help">Your links. They work once you publish. Use Preview to check them first.</p>
+        <!-- Step 3: saved. Publish state first, then the share tiles; the rest folds. -->
+        <div class="wizard-step" id="wizard-step-3" data-testid="wizard-step-3">
+          <div class="wizard-summary" id="wizardEventSummary"></div>
+          <p class="wizard-step-help" id="wizard-map-note" data-testid="wizard-map-note" role="status" aria-live="polite" hidden></p>
+          <!-- Every event is created as a DRAFT (handleCreateEvent). Publish on
+               step 2 moves it live through the same calls as this button. -->
+          <div class="wizard-go-live" id="wizard-go-live" data-testid="wizard-go-live">
+            <p class="wizard-step-help sr-only" id="wizard-go-live-help">It's a draft. Only you can see it.</p>
+            <button
+              type="button"
+              class="wizard-back-btn"
+              id="wizard-undo-live-btn"
+              data-testid="wizard-undo-live-btn"
+              hidden
+            >
+              Undo, back to draft
+            </button>
+            <p class="create-msg" id="wizard-go-live-msg" data-testid="wizard-go-live-msg" role="status" aria-live="polite"></p>
+          </div>
+          <div class="wizard-step-help wizard-question wizard-label-row"><span>Share it</span> <details class="deeper-dive" data-testid="wizard-draft-dive"><summary><span class="deeper-dive-label">Deeper Dive</span></summary><p>Press Publish now to turn your links on. Not ready? Press Done. It stays a draft in <em>Your events</em>. Drafts nobody touches for 30 days are archived automatically.</p></details></div>
           <div class="wizard-links-grid">
             <div class="wizard-link-card" id="wizard-link-public" data-testid="wizard-link-public">
               <span class="wizard-card-title">Event page</span>
               <span class="wizard-card-desc">Share this link — it's what your guests see on their phones.</span>
               <span class="wizard-card-url" data-role="url"></span>
               <span id="wizardQrPublic"></span>
-              <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-public">Copy link</button>
+              <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-public" aria-label="Copy link">Copy</button>
               <a class="wizard-copy-btn" data-testid="wizard-preview-public" target="_blank" rel="noopener">Preview</a>
             </div>
             <div class="wizard-link-card" id="wizard-link-signup" data-testid="wizard-link-signup" hidden>
@@ -2238,32 +2240,34 @@
               <span class="wizard-card-desc">Put this code on flyers — a phone scan opens the sign-up.</span>
               <span class="wizard-card-url" data-role="url"></span>
               <span id="wizardQrSignup"></span>
-              <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-signup">Copy link</button>
+              <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-signup" aria-label="Copy link">Copy</button>
             </div>
             <div class="wizard-link-card" id="wizard-link-poster" data-testid="wizard-link-poster">
               <span class="wizard-card-title">Printable poster</span>
               <span class="wizard-card-desc">Open, print, and hang it up — codes included.</span>
               <span class="wizard-card-url" data-role="url"></span>
-              <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-poster">Copy link</button>
+              <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-poster" aria-label="Copy link">Copy</button>
               <a class="wizard-copy-btn" data-testid="wizard-preview-poster" target="_blank" rel="noopener">Preview</a>
             </div>
+            
+          </div>
+          <details class="pd-advanced wizard-fold" data-testid="wizard-tv-details">
+            <summary>TV screen and report</summary>
+            <div class="wizard-links-grid">
             <div class="wizard-link-card" id="wizard-link-display" data-testid="wizard-link-display">
               <span class="wizard-card-title">Big-screen display</span>
               <span class="wizard-card-desc">Open this on a TV at the venue for a live view.</span>
               <span class="wizard-card-url" data-role="url"></span>
-              <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-display">Copy link</button>
+              <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-display" aria-label="Copy link">Copy</button>
             </div>
             <div class="wizard-link-card" id="wizard-link-report" data-testid="wizard-link-report">
               <span class="wizard-card-title">Results report</span>
               <span class="wizard-card-desc">After the event, make a share link from the dashboard's report tool.</span>
               <span class="wizard-card-url" data-role="url"></span>
-              <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-report">Copy link</button>
+              <button type="button" class="wizard-copy-btn" data-testid="wizard-copy-report" aria-label="Copy link">Copy</button>
             </div>
-          </div>
-          <!-- The TV, the plain way: which screens and how fast, in one line.
-               Order and league links stay in the event's TV display card.
-               Saves on change through the same PUT { settings } as that card. -->
-          <section class="wizard-tv" id="wizard-tv" data-testid="wizard-tv" aria-labelledby="wizard-tv-title">
+            </div>
+            <section class="wizard-tv" id="wizard-tv" data-testid="wizard-tv" aria-labelledby="wizard-tv-title">
             <h3 class="wizard-card-title" id="wizard-tv-title">Your TV screen</h3>
             <p class="wizard-step-help">The TV at the venue shows these in turn.</p>
             <p><strong>Your TV will show:</strong> <span data-testid="wizard-tv-summary"></span></p>
@@ -2285,67 +2289,24 @@
             <p class="create-msg" data-testid="wizard-tv-msg" role="status" aria-live="polite"></p>
             <p class="wizard-step-help">More TV options are in the event's TV display card.</p>
           </section>
-        </div>
-
-        <!-- Step 5 — launch checklist + summary, then back to the dashboard. -->
-        <div class="wizard-step" id="wizard-step-5" data-testid="wizard-step-5">
-          <div class="wizard-summary" id="wizardEventSummary"></div>
-          <!-- OSE-1528: check before publish. Rows are drawn from the fields by
-               the preview script; Change goes back to that field. -->
-          <section class="wizard-review" data-testid="wizard-review" aria-labelledby="wizard-review-heading">
+          </details>
+          <!-- OSE-1528: the review. Rows are drawn from the fields by the
+               preview script; Change goes back to that field. -->
+          <details class="pd-advanced wizard-fold" data-testid="wizard-review-details">
+            <summary>Check the details</summary>
+            <section class="wizard-review" data-testid="wizard-review" aria-labelledby="wizard-review-heading">
             <h3 class="wizard-card-title" id="wizard-review-heading">Check before you publish</h3>
             <ul class="wizard-checklist" data-testid="wizard-review-list"></ul>
             <p class="create-msg error" data-testid="wizard-review-missing" role="status" hidden></p>
           </section>
-          <p class="wizard-step-help" id="wizard-map-note" data-testid="wizard-map-note" role="status" aria-live="polite" hidden></p>
-          <!-- Every event is created as a DRAFT (handleCreateEvent). The public
-               page, poster and display refuse drafts, so the links on step 4
-               do nothing until the event is live. This step is where that
-               happens — it is the only reason the step exists. Before this
-               button, the wizard said "ready to go" and handed out links that
-               404'd; the state machine had no driver from the UI. -->
-          <div class="wizard-go-live" id="wizard-go-live" data-testid="wizard-go-live">
-            <p class="wizard-step-help" id="wizard-go-live-help">
-              This is a <strong>draft</strong>. Links work once you publish. You can take it offline any time.
-            </p>
-            <button
-              type="button"
-              class="btn btn-primary create-btn"
-              id="wizard-go-live-btn"
-              data-testid="wizard-go-live-btn"
-            >
-              Publish now
-            </button>
-            <button
-              type="button"
-              class="wizard-back-btn"
-              id="wizard-undo-live-btn"
-              data-testid="wizard-undo-live-btn"
-              hidden
-            >
-              Undo, back to draft
-            </button>
-            <p class="create-msg" id="wizard-go-live-msg" data-testid="wizard-go-live-msg" role="status" aria-live="polite"></p>
-          </div>
-          <p class="wizard-step-help wizard-question">Once it's live:</p>
-          <ul class="wizard-checklist">
-            <li id="wizardCheckPublic">📱 Share the event page link with your regulars</li>
-            <li id="wizardCheckPoster">📄 Print the poster and hang it where people will see it</li>
-            <li id="wizardCheckDisplay">📺 Open the big-screen display at the venue</li>
-            <li id="wizardCheckReport">📊 After the event, share the results report</li>
-          </ul>
-          <p class="wizard-step-help muted-sm">
-            Not ready? Press Done. It stays a draft in <em>Your events</em>. Drafts nobody touches for 30 days are archived automatically.
-          </p>
+          </details>
         </div>
 
         <div class="create-msg" id="wizard-msg" data-testid="wizard-msg" role="status"></div>
 
         <div class="wizard-nav">
           <button type="button" class="wizard-back-btn" id="wizardBackBtn" data-testid="wizard-back-btn" hidden>Back</button>
-          <button type="button" class="wizard-skip-btn" id="wizardSkipBtn" data-testid="wizard-skip-btn" hidden>
-            Skip this step
-          </button>
+          <button type="button" class="wizard-skip-btn" id="wizard-save-draft-btn" data-testid="wizard-save-draft-btn" hidden>Save draft</button>
           <button
             type="button"
             class="btn btn-primary create-btn"
@@ -2354,6 +2315,8 @@
           >
             Next
           </button>
+          <!-- The share screen's Publish sits in the bar, one thumb away. -->
+          <button type="button" class="btn btn-primary create-btn" id="wizard-go-live-btn" data-testid="wizard-go-live-btn" hidden>Publish now</button>
           <button
             type="button"
             class="btn btn-primary create-btn"
@@ -2367,6 +2330,7 @@
           <button type="button" class="wizard-back-btn" id="wizard-cancel-edit-btn" data-testid="wizard-cancel-edit-btn" hidden>Back to review</button>
         </div>
         </div>
+
         <!-- OSE-1528: what guests will see, drawn here from the fields as they
              are typed. No request is made to draw it; nothing is saved,
              listed or published by it. Below the form on a phone (foldable),
@@ -2421,7 +2385,8 @@
             return o;
           }
           function fillTypes(typeSel, cat) {
-            typeSel.replaceChildren(opt('', cat ? 'Choose a type…' : 'Pick a category first'));
+            // A short placeholder where a select is half width (the wizard).
+            typeSel.replaceChildren(opt('', typeSel.getAttribute('data-empty') || (cat ? 'Choose a type…' : 'Pick a category first')));
             if (!cat) { typeSel.disabled = true; return; }
             cat.types.forEach(function (t) {
               var o = opt(t.id, t.name);
@@ -2442,7 +2407,7 @@
               fillTypes(typeSel, byCode[catSel.value] || null);
             });
             loadCatalog().then(function (categories) {
-              catSel.replaceChildren(opt('', 'Choose a category…'));
+              catSel.replaceChildren(opt('', catSel.getAttribute('data-empty') || 'Choose a category…'));
               categories.forEach(function (c) {
                 byCode[c.code] = c;
                 catSel.appendChild(opt(c.code, c.name + ' (' + c.types.length + ')'));
@@ -2579,7 +2544,7 @@
 
           // Single render pass: panels, progress rail, nav buttons.
           function updateUI() {
-            for (var i = 1; i <= 5; i++) {
+            for (var i = 1; i <= 3; i++) {
               var panel = document.getElementById('wizard-step-' + i);
               if (panel) panel.classList.toggle('active', i === wiz.step);
             }
@@ -2595,29 +2560,36 @@
             // phones). Built with textContent, never innerHTML (#1).
             var caption = document.getElementById('wizard-step-caption');
             var stepLabel = document.querySelector('.wizard-progress-step[data-step="' + wiz.step + '"] .step-label');
-            if (caption && stepLabel) {
+            if (caption) {
               var strong = document.createElement('strong');
-              strong.textContent = stepLabel.textContent;
-              caption.textContent = 'Step ' + wiz.step + ' of 5: ';
+              strong.textContent = stepLabel ? stepLabel.textContent : 'Share it';
+              caption.textContent = stepLabel ? 'Step ' + wiz.step + ' of 2: ' : 'Saved: ';
               caption.appendChild(strong);
             }
+            document.getElementById('launch-wizard').setAttribute('data-step', String(wiz.step));
+            // The share screen is not a step you go back to, so the rail goes.
+            var rail = document.getElementById('wizard-progress');
+            if (rail) rail.hidden = wiz.step === 3;
             var back = document.getElementById('wizardBackBtn');
-            var skip = document.getElementById('wizardSkipBtn');
+            var draft = document.getElementById('wizard-save-draft-btn');
             var next = document.getElementById('wizard-next-btn');
             var finish = document.getElementById('wizard-finish-btn');
-            // Before the save, Back walks steps 1-3 (on step 1 it returns to the
-            // front door, OSE-1315). After it, you can't un-create, but step 5
-            // goes back to step 4 so links and TV can be changed and republished.
+            // Before the save, Back walks steps 1-2 (on step 1 it returns to the
+            // front door, OSE-1315). After it, the share screen has no Back: you
+            // can't un-create, and Publish and Undo live on that screen.
             // OSE-1528: while a fact is being changed from the review, Save and
             // Back to review replace Next and Back.
-            back.hidden = !!wiz.editing || !((wiz.step <= 3 && !wiz.createdId) || (wiz.step === 5 && wiz.createdId));
+            back.hidden = !!wiz.editing || !(wiz.step <= 2 && !wiz.createdId);
             back.textContent = wiz.step === 1 ? 'Back to start' : 'Back';
-            skip.hidden = wiz.step !== 3 || !!wiz.editing;
-            next.hidden = wiz.step === 5 || !!wiz.editing;
-            finish.hidden = wiz.step !== 5;
+            draft.hidden = wiz.step !== 2 || !!wiz.editing || !!wiz.createdId;
+            next.hidden = wiz.step === 3 || !!wiz.editing;
+            finish.hidden = wiz.step !== 3 || !!wiz.editing;
+            var live = wiz.status === 'active';
+            document.getElementById('wizard-go-live-btn').hidden = wiz.step !== 3 || !!wiz.editing || live;
+            document.getElementById('launch-wizard').setAttribute('data-live', live ? '1' : '0');
             document.getElementById('wizard-save-edit-btn').hidden = !wiz.editing;
             document.getElementById('wizard-cancel-edit-btn').hidden = !wiz.editing;
-            next.textContent = wiz.step === 3 ? 'Create Event' : 'Next';
+            next.textContent = wiz.step === 2 ? 'Publish' : 'Next';
             validate();
             showMissing();
             // The TV step's optional demo stops the moment the wizard leaves it.
@@ -2682,6 +2654,8 @@
               if (online) el.removeAttribute('aria-invalid');
             });
             document.getElementById('wizard-event-mode-note').hidden = !online;
+            var zipNoteEl = document.querySelector('[data-testid="wizard-zip-auto-note"]');
+            if (zipNoteEl && online) zipNoteEl.hidden = true;
             // The map question has nothing to ask: an online event is never on
             // the map or the list.
             var mapQuestion = document.querySelector('[data-testid="wizard-publish"]');
@@ -2707,7 +2681,7 @@
             if (!missing && msg && isStep1Msg(msg.textContent)) setMsg('');
           }
 
-          // Step 3 is the last screen before Create. Say what the public page
+          // Step 2 is the last screen before the save. Say what the public page
           // will not say, and leave Create enabled: asked, never required
           // (OSE-1518, PO 2026-10-03).
           function showMissing() {
@@ -2717,7 +2691,7 @@
             if (!document.getElementById('wizard-event-what').value.trim()) missing.push('what it is');
             var timeEl = document.getElementById('wizard-event-time');
             if (!(timeEl && timeEl.value)) missing.push('what time it starts');
-            if (wiz.step !== 3 || wiz.createdId || !missing.length) {
+            if (wiz.step !== 2 || wiz.createdId || !missing.length) {
               note.hidden = true;
               note.textContent = '';
               return;
@@ -2725,12 +2699,31 @@
             note.textContent =
               "Your page won't say " +
               missing.join(' or ') +
-              '. You can go Back to add ' +
+              '. Go Back to add ' +
               (missing.length > 1 ? 'them' : 'it') +
-              ', or create the event as it is.';
+              ', or save it as it is.';
             note.hidden = false;
           }
 
+          // A field folded inside a <details> is opened before focus goes there.
+          // Opens the fold that holds a field and lights its arrow, because
+          // the person needs what is behind it (owner 2026-11-27). The light
+          // goes when the field has a value again.
+          function reveal(el) {
+            var d = el && el.closest ? el.closest('details') : null;
+            if (!d) return;
+            d.open = true;
+            d.classList.add('needs-you');
+            var clear = function () {
+              if (!String(el.value || '').trim() && el.getAttribute('aria-invalid') === 'true') return;
+              d.classList.remove('needs-you');
+              el.removeEventListener('input', clear);
+              el.removeEventListener('change', clear);
+            };
+            el.addEventListener('input', clear);
+            el.addEventListener('change', clear);
+          }
+          window.oseWizardReveal = reveal;
           // True when step 1 may not move on yet; says why and puts focus there.
           function step1Blocked() {
             var empty = step1Required().map(function (id) {
@@ -2743,6 +2736,7 @@
                 el.setAttribute('aria-invalid', 'true');
               });
               setMsg(step1Msg(empty.map(function (el) { return el.id; })), 'error');
+              reveal(empty[0]);
               empty[0].focus();
               return true;
             }
@@ -2751,6 +2745,7 @@
               var zipBox = document.getElementById('wizard-event-zip');
               zipBox.setAttribute('aria-invalid', 'true');
               setMsg(WIZARD_ZIP_MSG, 'error');
+              reveal(zipBox);
               zipBox.focus();
               return true;
             }
@@ -2852,11 +2847,13 @@
             }
           }
 
-          // Step 3 → 4 is the moment of truth: one POST to the same endpoint
-          // the dashboard form uses. Template prefills ride along as the
-          // optional what/why fields.
-          async function createEvent() {
-            var next = document.getElementById('wizard-next-btn');
+          // Step 2's Save draft and Publish are the moment of truth: one POST to
+          // the same endpoint the dashboard form uses. Template prefills ride
+          // along as the optional what/why fields. Publish then moves the new
+          // draft live through the same calls as the share screen's button.
+          async function createEvent(opts) {
+            var publishAfter = !!(opts && opts.publish);
+            var next = document.getElementById(publishAfter ? 'wizard-next-btn' : 'wizard-save-draft-btn');
             var body = { title: document.getElementById('wizard-event-name').value.trim() };
             var dateVal = document.getElementById('wizard-event-date').value;
             if (dateVal) body.start_date = dateVal;
@@ -2903,7 +2900,7 @@
             else delete body.what_short;
 
             next.disabled = true;
-            next.textContent = 'Creating…';
+            next.textContent = publishAfter ? 'Publishing…' : 'Saving…';
             setMsg('');
             var res = null;
             try {
@@ -3018,12 +3015,13 @@
                   mapNoteEl.textContent = mapNote;
                   mapNoteEl.hidden = !mapNote;
                 }
-                wiz.step = 4;
+                wiz.step = 3;
                 // Post-save transition: replace, never push — Back must not
                 // land on a create step for an event that already exists.
-                replaceWizardStep(4);
+                replaceWizardStep(3);
                 updateUI();
                 loadLinks();
+                if (publishAfter) goLive();
               } else {
                 // Always name the status. requireAdmin's 401 envelope has no
                 // `error` field — only `code` — so without this an auth failure
@@ -3041,6 +3039,7 @@
               setMsg('The event may have been created, but this page could not show it. Reload to check before trying again.', 'error');
             } finally {
               next.disabled = false;
+              if (!publishAfter) next.textContent = 'Save draft';
               updateUI();
             }
           }
@@ -3130,6 +3129,7 @@
             }
           }
           function showDoor() {
+            document.body.classList.remove('sponsor-focus');
             document.body.classList.remove('wizard-active');
             document.body.classList.add('chooser-active');
             document.getElementById('launch-wizard').hidden = true;
@@ -3137,6 +3137,7 @@
             window.scrollTo(0, 0);
           }
           function showDashboard() {
+            document.body.classList.remove('sponsor-focus');
             document.body.classList.remove('wizard-active');
             document.body.classList.remove('chooser-active');
             document.getElementById('launch-wizard').hidden = true;
@@ -3168,6 +3169,9 @@
             document.body.classList.remove('chooser-active');
             document.getElementById('admin-path-chooser').hidden = true;
             document.getElementById('launch-wizard').hidden = true;
+            // Owner 2026-11-27: from the front door the sponsor form stands
+            // alone; Cancel or Close brings the full dashboard back.
+            document.body.classList.add('sponsor-focus');
 
             var card = document.querySelector('[data-testid="sponsors-card"]');
             if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -3193,6 +3197,7 @@
             leaveDoor();
             document.body.classList.remove('wizard-active');
             document.body.classList.remove('chooser-active');
+            document.body.classList.remove('sponsor-focus');
             document.getElementById('admin-path-chooser').hidden = true;
             document.getElementById('launch-wizard').hidden = true;
             if (typeof window.focusEventsList === 'function') window.focusEventsList();
@@ -3212,6 +3217,7 @@
             // Reveal the full dashboard and clear the doorway.
             document.body.classList.remove('wizard-active');
             document.body.classList.remove('chooser-active');
+            document.body.classList.remove('sponsor-focus');
             document.getElementById('admin-path-chooser').hidden = true;
             document.getElementById('launch-wizard').hidden = true;
             var card = document.querySelector('[data-testid="admin-intro"]');
@@ -3248,13 +3254,13 @@
           function leaveEdit() {
             clearCoreMarks(false);
             wiz.editing = false;
-            wiz.step = 5;
-            replaceWizardStep(5);
+            wiz.step = 3;
+            replaceWizardStep(3);
             updateUI();
           }
           window.addEventListener('ose:wizard-edit', function (ev) {
             var d = (ev && ev.detail) || {};
-            if (!wiz.createdId || wiz.step !== 5 || (d.step !== 1 && d.step !== 2)) return;
+            if (!wiz.createdId || wiz.step !== 3 || d.step !== 1) return;
             snapshotFields();
             wiz.editing = true;
             wiz.step = d.step;
@@ -3262,7 +3268,7 @@
             setMsg('');
             updateUI();
             var f = document.getElementById(d.focus || '');
-            if (f) f.focus();
+            if (f) { reveal(f); f.focus(); }
             // A refused Publish names the fields it needs (OSE-1644). The
             // Change button sends none, so it marks nothing.
             (d.invalid || []).forEach(function (id) {
@@ -3376,30 +3382,46 @@
               return;
             }
             if (wiz.step === 1 && step1Blocked()) return;
-            if (wiz.step === 3) {
-              createEvent();
+            if (wiz.step === 2) {
+              // Publishing needs a start time and a type (CORE_VALUES_MISSING).
+              // Say so before anything is saved, on the screen that asks.
+              var gap = window.oseWizardReview ? window.oseWizardReview.message() : '';
+              if (gap) {
+                if (historyBack(1)) { wiz.pendingGap = true; return; }
+                wiz.step = 1;
+                replaceWizardStep(1);
+                updateUI();
+                markGap();
+                return;
+              }
+              createEvent({ publish: true });
               return;
             }
-            if (wiz.step < 5) {
-              wiz.step += 1;
-              // Pre-create steps are real history entries; after the save
-              // (4 → 5) the move replaces.
-              if (wiz.createdId) replaceWizardStep(wiz.step);
-              else pushWizardStep(wiz.step);
+            if (wiz.step === 1) {
+              wiz.step = 2;
+              pushWizardStep(2);
               updateUI();
             }
           }
 
+          // Marks the start time or type that Publish needs, on step 1.
+          function markGap() {
+            var m = window.oseWizardReview ? window.oseWizardReview.missing() : [];
+            if (!m.length) return;
+            var ids = m[0] === 'time'
+              ? ['wizard-event-date', 'wizard-event-time'].filter(function (id) { return !document.getElementById(id).value; })
+              : [document.getElementById('wizard-category').value ? 'wizard-event-type' : 'wizard-category'];
+            ids.forEach(function (id) { document.getElementById(id).setAttribute('aria-invalid', 'true'); });
+            var kindDive = document.querySelector('[data-testid="wizard-kind-dive"]');
+            if (kindDive) kindDive.classList.toggle('needs-you', m[0] !== 'time');
+            setMsg(window.oseWizardReview.message() + '. Or go to the next step and save a draft.', 'error');
+            var f = document.getElementById(ids[0]);
+            if (f) { reveal(f); f.focus(); }
+          }
+
           function goBack() {
-            // Saved: steps 4 and 5 are a loop (links + TV <-> publish), so an
-            // organizer can publish, come back, change things and publish again.
-            if (wiz.createdId) {
-              if (wiz.step !== 5) return;
-              wiz.step = 4;
-              replaceWizardStep(4);
-              updateUI();
-              return;
-            }
+            // Saved: the share screen has no Back (Publish and Undo are on it).
+            if (wiz.createdId) return;
             if (wiz.step === 1) {
               closeWizard();
               return;
@@ -3426,9 +3448,10 @@
                 else closeWizard({ fromHistory: true });
                 return;
               }
-              wiz.step = Math.min(Math.max(Number(st.step) || 1, 1), 3);
+              wiz.step = Math.min(Math.max(Number(st.step) || 1, 1), 2);
               if (w && w.hidden) startWizard(null, { fromHistory: true });
               else updateUI();
+              if (wiz.pendingGap && wiz.step === 1) { wiz.pendingGap = false; markGap(); }
               return;
             }
             closeWizard({ fromHistory: true });
@@ -3471,16 +3494,6 @@
             else if (start === 'event' || reopen) startWizard();
           })();
 
-          function skipSignup() {
-            // Skipping = "no sign-ups" + straight to create. Still one POST.
-            wiz.signup = 'none';
-            document.querySelectorAll('.wizard-signup-option').forEach(function (c) {
-              var on = c.getAttribute('data-option') === 'none';
-              c.classList.toggle('selected', on);
-              c.setAttribute('aria-pressed', String(on));
-            });
-            createEvent();
-          }
 
           function copyLink(btn) {
             var card = btn.closest('.wizard-link-card');
@@ -3491,7 +3504,7 @@
               function () {
                 btn.textContent = 'Copied!';
                 setTimeout(function () {
-                  btn.textContent = 'Copy link';
+                  btn.textContent = 'Copy';
                 }, 1500);
               },
               function () {
@@ -3521,7 +3534,46 @@
             leaveEdit();
           });
           document.getElementById('wizardBackBtn').addEventListener('click', goBack);
-          document.getElementById('wizardSkipBtn').addEventListener('click', skipSignup);
+          document.getElementById('wizard-save-draft-btn').addEventListener('click', function () {
+            if (wiz.createdId) return;
+            createEvent({ publish: false });
+          });
+          // When chips: Today, Tomorrow, Saturday fill the date box (local date).
+          function ymd(d) {
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+          }
+          function chipDate(kind) {
+            var d = new Date();
+            if (kind === 'tomorrow') d.setDate(d.getDate() + 1);
+            if (kind === 'saturday') d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7));
+            return ymd(d);
+          }
+          function syncChips() {
+            var v = document.getElementById('wizard-event-date').value;
+            document.querySelectorAll('.wizard-chip[data-when]').forEach(function (c) {
+              c.setAttribute('aria-pressed', String(!!v && chipDate(c.getAttribute('data-when')) === v));
+            });
+          }
+          document.querySelectorAll('.wizard-chip[data-when]').forEach(function (c) {
+            c.addEventListener('click', function () {
+              var dateEl = document.getElementById('wizard-event-date');
+              dateEl.value = chipDate(c.getAttribute('data-when'));
+              dateEl.dispatchEvent(new Event('input', { bubbles: true }));
+              dateEl.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+          });
+          ['input', 'change'].forEach(function (n) {
+            document.getElementById('wizard-event-date').addEventListener(n, syncChips);
+          });
+          window.addEventListener('ose:wizard-step', syncChips);
+          // The folded time zone says its value on the fold.
+          var tzSel = document.getElementById('wizard-event-tz');
+          function syncTz() {
+            var out = document.querySelector('[data-testid="wizard-tz-summary"]');
+            if (out && tzSel.selectedIndex >= 0) out.textContent = tzSel.options[tzSel.selectedIndex].textContent;
+          }
+          tzSel.addEventListener('change', syncTz);
+          syncTz();
           document.getElementById('wizard-finish-btn').addEventListener('click', function () {
             // Reload = the same convention as the dashboard's create flow;
             // SELECTED_EVENT_KEY re-selects the new event on the dashboard.
@@ -3530,9 +3582,11 @@
           // Step 5 — Go live: draft → ready → active through the SAME two calls
           // the status panel uses (window.changeEventStatus, defined in the
           // dashboard script; looked up lazily at click time).
-          document.getElementById('wizard-go-live-btn').addEventListener('click', async function () {
-            var btn = this;
+          document.getElementById('wizard-go-live-btn').addEventListener('click', function () { goLive(); });
+          async function goLive() {
+            var btn = document.getElementById('wizard-go-live-btn');
             var msgEl = document.getElementById('wizard-go-live-msg');
+            if (btn.disabled) return;
             if (!wiz.createdId || typeof window.goLiveFromDraft !== 'function') return;
             if (refusedByReview(msgEl)) return;
             btn.disabled = true;
@@ -3545,16 +3599,17 @@
               syncWizardSummary();
               btn.textContent = 'Published \u2713';
               btn.classList.add('is-live');
-              if (msgEl) { msgEl.textContent = 'Your event is published. The links on the previous step work now.' + (window.graceNote ? window.graceNote(r.listedFrom, wiz.published !== false, !wiz.publishedChosen) : ''); msgEl.className = 'create-msg success'; }
+              if (msgEl) { msgEl.textContent = 'Your event is published. Your links work now.' + (window.graceNote ? window.graceNote(r.listedFrom, wiz.published !== false, !wiz.publishedChosen) : ''); msgEl.className = 'create-msg success'; }
               var help = document.getElementById('wizard-go-live-help');
               if (help) help.hidden = true;
               document.getElementById('wizard-undo-live-btn').hidden = false;
+              updateUI();
             } else {
               btn.disabled = false;
               btn.textContent = 'Publish now';
               if (msgEl) { msgEl.textContent = r.error || 'Could not publish. Try again from Your events.'; msgEl.className = 'create-msg error'; }
             }
-          });
+          }
           // Went live by mistake? One click puts it back to a draft, right here.
           document.getElementById('wizard-undo-live-btn').addEventListener('click', async function () {
             var undo = this;
@@ -3574,6 +3629,7 @@
               var help = document.getElementById('wizard-go-live-help');
               if (help) help.hidden = false;
               if (msgEl) { msgEl.textContent = 'Back to a draft. Nothing is public.'; msgEl.className = 'create-msg success'; }
+              updateUI();
             } else if (msgEl) {
               msgEl.textContent = r.error || 'Could not take it back. Use Your events.';
               msgEl.className = 'create-msg error';
@@ -3709,6 +3765,12 @@
               zipEl.value = '';
               zipEl.dataset.auto = '';
             }
+            // The ZIP box is folded, so the fill-in is said under the place.
+            var zipNote = document.querySelector('[data-testid="wizard-zip-auto-note"]');
+            if (zipNote) {
+              zipNote.textContent = zipEl.dataset.auto === '1' ? '\u2713 ZIP ' + zipEl.value + ' filled in for you' : '';
+              zipNote.hidden = zipEl.dataset.auto !== '1';
+            }
           }
           // Asked once when the organizer leaves the address or the name box
           // (change), not on every keystroke: by the time they reach the ZIP
@@ -3781,7 +3843,7 @@
               (panes.length > 1 ? ' \u00b7 demo plays ' + DEMO_SPEEDUP + 'x faster' : '');
           }
           function demoNext() {
-            var step = document.getElementById('wizard-step-4');
+            var step = document.getElementById('wizard-step-3');
             if (!step || !step.classList.contains('active')) return demoStop();
             demo.index = (demo.index + 1) % Math.max(picked().length, 1);
             demoShow();
@@ -3802,7 +3864,7 @@
             if (demo.timer || !(q('wizard-tv-demo') || {}).hidden) demoStart();
           }
           window.addEventListener('ose:wizard-step', function (e) {
-            if (!e || !e.detail || e.detail.step !== 4) demoStop();
+            if (!e || !e.detail || e.detail.step !== 3) demoStop();
           });
           var toggle = q('wizard-tv-demo-toggle');
           if (toggle) toggle.addEventListener('click', function () {
@@ -3991,8 +4053,15 @@
               : mapOn()
               ? 'On the map and list. The place above is shown publicly.'
               : 'Off the map and list. Only your links and codes reach it.', false);
-            var p5 = byId('wizard-step-5');
-            if (p5 && p5.classList.contains('active')) renderReview();
+            var p3 = byId('wizard-step-3');
+            if (p3 && p3.classList.contains('active')) {
+              renderReview();
+              // A draft that cannot be published yet lights the arrow (owner
+              // 2026-11-27: highlight it, do not spill it onto the screen).
+              var fold = q('wizard-review-details');
+              var gaps = missingCore().length > 0;
+              if (fold) fold.classList.toggle('needs-you', gaps);
+            }
           }
 
           // ── the review: what the server will ask for, said the server's way
@@ -4040,7 +4109,7 @@
               row('title', 'Name', val('wizard-event-name') || 'not set', !val('wizard-event-name'), { step: 1, focus: 'wizard-event-name' }),
               row('when', 'When', whenText() + (m.indexOf('time') >= 0 ? ' (no start time yet)' : ''), m.indexOf('time') >= 0,
                 { step: 1, focus: val('wizard-event-date') ? 'wizard-event-time' : 'wizard-event-date' }),
-              row('type', 'Event type', t || 'not chosen', m.indexOf('event_type') >= 0, { step: 2, focus: 'wizard-category' }),
+              row('type', 'Event type', t || 'not chosen', m.indexOf('event_type') >= 0, { step: 1, focus: 'wizard-category' }),
               val('wizard-event-mode') === 'online'
                 ? row('where', 'Where', 'Online', false, { step: 1, focus: 'wizard-event-mode' })
                 : row('where', 'Where', (val('wizard-event-venue') || 'not set') +
@@ -4074,7 +4143,7 @@
               } else {
                 var typ = byId('wizard-event-type');
                 var pickType = val('wizard-category') && typ && !typ.disabled;
-                d = { step: 2, focus: pickType ? 'wizard-event-type' : 'wizard-category', invalid: pickType ? ['wizard-event-type'] : ['wizard-category', 'wizard-event-type'] };
+                d = { step: 1, focus: pickType ? 'wizard-event-type' : 'wizard-category', invalid: pickType ? ['wizard-event-type'] : ['wizard-category', 'wizard-event-type'] };
               }
               d.message = sentence(m);
               window.dispatchEvent(new CustomEvent('ose:wizard-edit', { detail: d }));
@@ -4086,6 +4155,17 @@
           window.addEventListener('ose:wizard-step', render);
           var toggle = q('wizard-preview-toggle');
           var body = q('wizard-preview-card');
+          // On a phone the preview starts folded, so the screen fits without scrolling.
+          var phoneMq = window.matchMedia ? window.matchMedia('(max-width: 767px)') : null;
+          function foldForWidth() {
+            if (!toggle || !body || !phoneMq) return;
+            body.hidden = phoneMq.matches;
+            toggle.setAttribute('aria-expanded', String(!body.hidden));
+            toggle.textContent = body.hidden ? 'Show preview' : 'Hide preview';
+          }
+          foldForWidth();
+          // Wider than a phone, it always sits open beside the form.
+          if (phoneMq && phoneMq.addEventListener) phoneMq.addEventListener('change', foldForWidth);
           if (toggle && body) toggle.addEventListener('click', function () {
             body.hidden = !body.hidden;
             toggle.setAttribute('aria-expanded', String(!body.hidden));
@@ -5445,7 +5525,11 @@
         <form id="spon-create-form" data-testid="sponsor-create-form" novalidate>
           <input type="hidden" id="spon-edit-id" data-testid="spon-edit-id" value="" />
           <div id="spon-edit-ctx" class="spon-edit-ctx" hidden data-testid="sponsor-edit-ctx"></div>
-          <div class="create-form">
+          <p class="spon-step-caption" id="spon-step-caption" data-testid="sponsor-step-caption" aria-live="polite">Step 1 of 2: <strong>Who's the sponsor?</strong></p>
+          <!-- Owner 2026-11-27: two short screens when adding. Step 1 is who it
+               is; step 2 is how often it shows and the optional extras. An edit
+               shows both at once. -->
+          <div class="create-form spon-step" data-spon-step="1" data-testid="sponsor-step-1">
             <div>
               <label for="spon-name"
                 >Name <span class="required-star" aria-hidden="true">*</span></label
@@ -5462,61 +5546,17 @@
                 aria-required="true"
               />
             </div>
-            <!-- OSE-1434: the required fields come first (Name, Tier), then what
-                 the sponsor shows (Event, Image, Website), then the optional
-                 public card in its own collapsed section. -->
-            <!-- OSE-1316/1317: tier is the only hard gate. The six stored tiers
-                 share out as Premium / Mid / Base (sovTierOf). -->
-            <div>
-              <label for="spon-tier"
-                >Tier <span class="required-star" aria-hidden="true">*</span></label
-              >
-              <select
-                id="spon-tier"
-                name="tier"
-                data-testid="spon-tier"
-                required
-                aria-required="true"
-                aria-describedby="spon-tier-hint"
-              >
-                <option value="" selected>Choose a tier</option>
-                <optgroup label="Premium">
-                  <option value="title">Title</option>
-                  <option value="platinum">Platinum</option>
-                </optgroup>
-                <optgroup label="Anchor">
-                  <option value="gold">Gold</option>
-                  <option value="silver">Silver</option>
-                </optgroup>
-                <optgroup label="Base">
-                  <option value="bronze">Bronze</option>
-                  <option value="primary">Primary</option>
-                </optgroup>
-              </select>
-              <p class="spon-covenant-note" id="spon-tier-hint" data-testid="spon-tier-hint">
-                Required. Sets how often the sponsor rotates.
-              </p>
-            </div>
             <!-- OSE-2207 (owner 2026-11-22): the kind of business, picked by icon.
                  Optional. The page fills this in (handlers/pages.ts
                  handleAdminPage, lib/business-kinds.ts). -->
             <div class="full-width" data-testid="spon-kind-field"><!--OCR_SPON_KIND--></div>
             <div>
-              <label for="spon-event">Event (optional)</label>
-              <select
-                id="spon-event"
-                name="event_id"
-                data-testid="spon-event"
-                aria-describedby="spon-event-hint"
-              ></select>
-              <p class="spon-covenant-note" id="spon-event-hint" data-testid="spon-event-hint">
-                You can attach events later.
-              </p>
-            </div>
-            <div>
-              <label for="spon-image-choice">Image</label>
-              <select
-                id="spon-image-choice"
+              <div class="wizard-field-label wizard-label-row"><span id="spon-image-label">Logo</span> <details class="deeper-dive" data-testid="spon-image-dive"><summary><span class="deeper-dive-label">Deeper Dive</span></summary><p>Every sponsor shows a picture. No logo yet? We show ours until you add one. You can add it later.</p></details></div>
+              <div class="wizard-chips" role="group" aria-labelledby="spon-image-label" data-testid="spon-image-picker">
+                <button type="button" class="wizard-chip" data-image="own" data-testid="spon-image-own" aria-pressed="false">⬆️ Add their logo</button>
+                <button type="button" class="wizard-chip" data-image="default" data-testid="spon-image-default" aria-pressed="true">Use ours for now</button>
+              </div>
+              <select hidden id="spon-image-choice"
                 name="image_choice"
                 data-testid="spon-image-choice"
                 aria-describedby="spon-image-choice-hint"
@@ -5527,7 +5567,7 @@
               <!-- aria-live: choosing "Our own logo" reveals two fields below;
                    the hint says so out loud rather than moving focus away from
                    the select (OSE-1434). -->
-              <p class="spon-covenant-note" id="spon-image-choice-hint" data-testid="spon-image-choice-hint" aria-live="polite">
+              <p class="spon-covenant-note sr-only" id="spon-image-choice-hint" data-testid="spon-image-choice-hint" aria-live="polite">
                 Every sponsor shows an image. No logo? The standard image is used, at every tier.
               </p>
             </div>
@@ -5563,7 +5603,58 @@
                 Square or compact (e.g. 300&times;300), for the side rail. Optional. Blank uses the wide logo, then the standard image.
               </p>
             </div>
-            <div class="full-width">
+          </div>
+          <div class="create-form spon-step" data-spon-step="2" data-testid="sponsor-step-2">
+            <!-- OSE-1316/1317: tier is the only hard gate. The six stored tiers
+                 share out as Premium / Mid / Base (sovTierOf). -->
+            <div>
+              <div class="wizard-field-label wizard-label-row"><span id="spon-tier-label">Level <span class="required-star" aria-hidden="true">*</span></span> <details class="deeper-dive" data-testid="spon-tier-dive"><summary><span class="deeper-dive-label">Deeper Dive</span></summary><p>Every sponsor is the same size and gets the same spot. The level only changes how often it shows. A top level shows more, but never more than a fair share, and local businesses always get their turn.</p></details></div>
+              <select hidden id="spon-tier"
+                name="tier"
+                data-testid="spon-tier"
+                required
+                aria-required="true"
+                aria-describedby="spon-tier-hint"
+              >
+                <option value="" selected>Choose a tier</option>
+                <optgroup label="Premium">
+                  <option value="title">Title</option>
+                  <option value="platinum">Platinum</option>
+                </optgroup>
+                <optgroup label="Anchor">
+                  <option value="gold">Gold</option>
+                  <option value="silver">Silver</option>
+                </optgroup>
+                <optgroup label="Base">
+                  <option value="bronze">Bronze</option>
+                  <option value="primary">Primary</option>
+                </optgroup>
+              </select>
+              <div class="spon-levels" role="group" aria-labelledby="spon-tier-label" aria-describedby="spon-tier-hint" data-testid="spon-tier-picker">
+                <div class="spon-level"><p class="spon-level-name">⭐ Premium</p><div class="wizard-chips"><button type="button" class="wizard-chip" data-tier="title" data-testid="spon-tier-title" aria-pressed="false">Title</button><button type="button" class="wizard-chip" data-tier="platinum" data-testid="spon-tier-platinum" aria-pressed="false">Platinum</button></div></div>
+                <div class="spon-level"><p class="spon-level-name">🏛️ Anchor</p><div class="wizard-chips"><button type="button" class="wizard-chip" data-tier="gold" data-testid="spon-tier-gold" aria-pressed="false">Gold</button><button type="button" class="wizard-chip" data-tier="silver" data-testid="spon-tier-silver" aria-pressed="false">Silver</button></div></div>
+                <div class="spon-level"><p class="spon-level-name">🌱 Base</p><div class="wizard-chips"><button type="button" class="wizard-chip" data-tier="bronze" data-testid="spon-tier-bronze" aria-pressed="false">Bronze</button><button type="button" class="wizard-chip" data-tier="primary" data-testid="spon-tier-primary" aria-pressed="false">Primary</button></div></div>
+              </div>
+              <p class="spon-covenant-note sr-only" id="spon-tier-hint" data-testid="spon-tier-hint">
+                Every sponsor is the same size. The level only changes how often it shows.
+              </p>
+            </div>
+            <div>
+              <label for="spon-event">Event (optional)</label>
+              <select
+                id="spon-event"
+                name="event_id"
+                data-testid="spon-event"
+                aria-describedby="spon-event-hint"
+              ></select>
+              <p class="spon-covenant-note sr-only" id="spon-event-hint" data-testid="spon-event-hint">
+                You can attach events later.
+              </p>
+            </div>
+            <details class="pd-advanced full-width wizard-fold" id="spon-more-details" data-testid="spon-more-details">
+              <summary>More details (optional)</summary>
+              <div class="create-form">
+                <div class="full-width">
               <label for="spon-website">Website URL (optional)</label>
               <input
                 type="text"
@@ -5579,7 +5670,7 @@
                 Must start with https://. Leave blank and a tap opens the sponsor's card instead.
               </p>
             </div>
-            <!-- OSE-1826 (0105): the sponsor's header block on the digital poster:
+                <!-- OSE-1826 (0105): the sponsor's header block on the digital poster:
                  a wide header image and a short line of text. Optional, the same
                  for every tier. Collapsed like the card details so the short path
                  stays short; opened on an edit that has values and before
@@ -5620,7 +5711,7 @@
                 </div>
               </div>
             </details>
-            <!-- 0083: the public card. A sponsor is complete with a name and a
+                <!-- 0083: the public card. A sponsor is complete with a name and a
                  tier; these four are optional and shown publicly. Collapsed so
                  the short path stays short on a phone (OSE-1434). `.pd-advanced`
                  gives the summary its 44px target — no new CSS. The script opens
@@ -5686,8 +5777,10 @@
                 </div>
               </div>
             </details>
+              </div>
+            </details>
             <div class="full-width">
-              <label id="spon-placement-label">Placement &amp; share</label>
+              <p class="sr-only" id="spon-placement-label">Placement &amp; share</p>
               <!--
                 OSE-670 (#25 sponsor_share_covenant): placement is UNIFORM and
                 non-purchasable. Every sponsor renders at the same size/slot on
@@ -5698,13 +5791,12 @@
                 position. is_local is geo-derived and shown read-only.
               -->
               <p
-                class="spon-covenant-note"
+                class="spon-covenant-note sr-only"
                 role="note"
                 data-testid="spon-covenant-note"
                 aria-labelledby="spon-placement-label"
               >
-                Same size and slot for every sponsor. Tier sets only a
-                <strong>capped, locally-floored share of rotation</strong>.
+                Same size and slot for everyone. The level sets only a <strong>capped, locally-floored share of rotation</strong>.
               </p>
               <span
                 class="is-local-pill"
@@ -5715,7 +5807,11 @@
                 >Local business — geo-derived</span
               >
             </div>
+          </div>
+          <div class="create-form">
             <div class="full-width form-actions">
+              <button type="button" class="btn btn-secondary" id="spon-back-btn" data-testid="sponsor-back" hidden>Back</button>
+              <button type="button" class="btn btn-primary create-btn" id="spon-next-btn" data-testid="sponsor-next">Next</button>
               <button
                 type="submit"
                 id="spon-submit-btn"
@@ -5741,7 +5837,7 @@
               ></div>
             </div>
           </div>
-        </form>
+          </form>
       </div>
 
       <div id="sponsors-list" data-testid="sponsors-list">
@@ -5961,12 +6057,87 @@
         // one of them has to be seen (an edit with values, a rejected field).
         function showCardDetails(open) {
           document.getElementById('spon-card-details').open = !!open;
+          if (open) document.getElementById('spon-more-details').open = true;
         }
         // OSE-1826: the poster header's two fields, in their own <details>.
         const SPON_HEADER_FIELDS = ['spon-header-image', 'spon-header-text'];
         function showHeaderDetails(open) {
           document.getElementById('spon-header-details').open = !!open;
+          if (open) document.getElementById('spon-more-details').open = true;
         }
+
+        // Two steps when adding; an edit shows every field (owner 2026-11-27).
+        const SPON_STEP_NAMES = { 1: 'Who\u2019s the sponsor?', 2: 'How often does it show?' };
+        function setSponStep(n) {
+          const wrap = document.getElementById('spon-form-wrap');
+          const editing = !!document.getElementById('spon-edit-id').value.trim();
+          wrap.classList.toggle('is-editing', editing);
+          wrap.setAttribute('data-spon-at', String(n));
+          const cap = document.getElementById('spon-step-caption');
+          if (cap) {
+            const b = document.createElement('strong');
+            b.textContent = SPON_STEP_NAMES[n];
+            cap.textContent = 'Step ' + n + ' of 2: ';
+            cap.appendChild(b);
+          }
+          document.getElementById('spon-next-btn').hidden = editing || n !== 1;
+          document.getElementById('spon-back-btn').hidden = editing || n !== 2;
+          document.getElementById('spon-submit-btn').hidden = !editing && n !== 2;
+        }
+        window.oseSponStep = setSponStep;
+        function syncTierChips() {
+          const v = document.getElementById('spon-tier').value;
+          document.querySelectorAll('[data-testid="spon-tier-picker"] [data-tier]').forEach(function (b) {
+            b.setAttribute('aria-pressed', String(b.getAttribute('data-tier') === v));
+          });
+        }
+        function syncImageChips() {
+          const v = document.getElementById('spon-image-choice').value;
+          document.querySelectorAll('[data-testid="spon-image-picker"] [data-image]').forEach(function (b) {
+            b.setAttribute('aria-pressed', String(b.getAttribute('data-image') === v));
+          });
+        }
+        document.querySelectorAll('[data-testid="spon-tier-picker"] [data-tier]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            const sel = document.getElementById('spon-tier');
+            sel.value = b.getAttribute('data-tier');
+            sel.removeAttribute('aria-invalid');
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+            syncTierChips();
+          });
+        });
+        document.querySelectorAll('[data-testid="spon-image-picker"] [data-image]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            const sel = document.getElementById('spon-image-choice');
+            sel.value = b.getAttribute('data-image');
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+            syncImageChips();
+            if (sel.value === 'own') document.getElementById('spon-logo').focus();
+          });
+        });
+        document.getElementById('spon-tier').addEventListener('change', syncTierChips);
+        document.getElementById('spon-image-choice').addEventListener('change', syncImageChips);
+        document.getElementById('spon-next-btn').addEventListener('click', function () {
+          const nameEl = document.getElementById('spon-name');
+          const msg = document.getElementById('spon-form-msg');
+          if (!nameEl.value.trim()) {
+            msg.textContent = 'Name is required.';
+            msg.className = 'create-msg error';
+            nameEl.setAttribute('aria-invalid', 'true');
+            nameEl.focus();
+            return;
+          }
+          nameEl.removeAttribute('aria-invalid');
+          msg.textContent = '';
+          msg.className = 'create-msg';
+          setSponStep(2);
+          const first = document.querySelector('[data-testid="spon-tier-picker"] [data-tier]');
+          if (first) first.focus();
+        });
+        document.getElementById('spon-back-btn').addEventListener('click', function () {
+          setSponStep(1);
+          document.getElementById('spon-name').focus();
+        });
 
         function openForm() {
           if (window.oseSponsorsCard) window.oseSponsorsCard.open();
@@ -5975,6 +6146,9 @@
           wrap.removeAttribute('hidden');
           btn.setAttribute('aria-expanded', 'true');
           btn.textContent = '✕ Cancel';
+          setSponStep(1);
+          syncTierChips();
+          syncImageChips();
           document.getElementById('spon-name').focus();
         }
 
@@ -5999,7 +6173,13 @@
           setSponKind('');
           showCardDetails(false);
           showHeaderDetails(false);
+          document.getElementById('spon-more-details').open = false;
           syncImageChoice();
+          syncTierChips();
+          syncImageChips();
+          setSponStep(1);
+          // Opened from the front door: closing goes back to the full dashboard.
+          document.body.classList.remove('sponsor-focus');
           ['spon-name', 'spon-tier', 'spon-website', 'spon-logo', 'spon-sidebar-logo'].concat(SPON_CARD_FIELDS, SPON_HEADER_FIELDS).forEach(function(fid) { document.getElementById(fid).removeAttribute('aria-invalid'); });
           const msg = document.getElementById('spon-form-msg');
           msg.textContent = '';
@@ -6077,11 +6257,15 @@
             document.getElementById('spon-header-image').value = s.header_image_url || '';
             document.getElementById('spon-header-text').value = s.header_text || '';
             showHeaderDetails(SPON_HEADER_FIELDS.some(function(fid) { return !!document.getElementById(fid).value; }));
+            if (s.website_url) document.getElementById('spon-more-details').open = true;
             // OSE-670 (#25): placement is uniform — no slot checkboxes. Show the
             // geo-derived is_local classification read-only (non-purchasable).
             const localPill = document.getElementById('spon-is-local-pill');
             if (localPill) localPill.hidden = !(s.is_local === 1 || s.is_local === true);
             document.getElementById('spon-submit-btn').textContent = 'Update Sponsor';
+            syncTierChips();
+            syncImageChips();
+            setSponStep(1);
             const ctx = document.getElementById('spon-edit-ctx');
             ctx.textContent = 'Editing: ' + (s.name || s.id);
             ctx.hidden = false;
@@ -6220,10 +6404,19 @@
             msg.className = 'create-msg error';
             if (el) { el.setAttribute('aria-invalid', 'true'); el.focus(); }
           }
-          if (!name) { blockSubmit(document.getElementById('spon-name'), 'Name is required.'); return; }
-          // OSE-1316/1317: tier is required; the event is not.
-          if (!tier) { blockSubmit(tierEl, 'Choose a tier before saving.'); return; }
+          if (!name) { setSponStep(1); blockSubmit(document.getElementById('spon-name'), 'Name is required.'); return; }
+          // OSE-1316/1317: tier is required; the event is not. The select is
+          // hidden behind the level buttons, so focus goes to the first one.
+          if (!tier) {
+            setSponStep(2);
+            blockSubmit(null, 'Choose how often it shows before saving.');
+            tierEl.setAttribute('aria-invalid', 'true');
+            const firstTier = document.querySelector('[data-testid="spon-tier-picker"] [data-tier]');
+            if (firstTier) firstTier.focus();
+            return;
+          }
           if (siteVal && !/^https:\/\/[^\s/?#]+\.[^\s]+$/i.test(siteVal)) {
+            document.getElementById('spon-more-details').open = true;
             blockSubmit(siteEl, 'Website must be a full https:// address, for example https://acme.com — or leave it blank.');
             return;
           }
@@ -6273,6 +6466,14 @@
               }[data.code];
               const fieldEl = fieldFor ? document.getElementById(fieldFor) : null;
               if (fieldEl) {
+                if (fieldFor === 'spon-tier') {
+                  setSponStep(2);
+                } else if (fieldFor !== 'spon-logo' && fieldFor !== 'spon-sidebar-logo') {
+                  setSponStep(2);
+                  document.getElementById('spon-more-details').open = true;
+                } else {
+                  setSponStep(1);
+                }
                 if (SPON_CARD_FIELDS.indexOf(fieldFor) !== -1) showCardDetails(true);
                 if (SPON_HEADER_FIELDS.indexOf(fieldFor) !== -1) showHeaderDetails(true);
                 fieldEl.setAttribute('aria-invalid', 'true');
@@ -6285,7 +6486,7 @@
             const mapFlipNote = data.map && data.map.changed && data.map.note ? ' ' + esc(data.map.note) : '';
             if (data.map && data.map.changed && window.oseMapFlipped) window.oseMapFlipped(body.event_id || event_id);
             msg.innerHTML = (editId ? 'Sponsor updated.' : event_id ? 'Sponsor created — ' + esc(data.id) : 'Sponsor saved to your pool — attach events later. ' + esc(data.id)) + mapFlipNote +
-              ' <button class="btn btn-secondary spon-action-btn spon-ml" data-action="sponsor-close-form" data-testid="close-after-save">Close</button>';
+              ' <button class="btn btn-secondary spon-action-btn spon-ml" data-action="sponsor-close-form" data-testid="close-after-save">Close</button>';
             loadSponsors();
           } catch (err) {
             msg.textContent = err.message || 'Could not save sponsor.';

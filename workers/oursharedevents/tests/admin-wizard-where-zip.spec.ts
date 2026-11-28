@@ -110,10 +110,9 @@ async function createFrom(m: M) {
   m.type('wizard-event-date', isoDaysFromNow(14));
   m.next();
   expect(m.onStep(2), m.txt('wizard-msg')).toBe(true);
-  m.next();
-  m.next(); // Create Event
+  m.$('wizard-save-draft-btn').click(); // Save draft
   await m.flush();
-  expect(m.onStep(4), 'created, on step 4').toBe(true);
+  expect(m.onStep(3), 'created, on the share screen').toBe(true);
 }
 
 const choose = (m: M, value: string) => {
@@ -305,8 +304,7 @@ describe('W1: review and edit', () => {
     m.type('wizard-event-address', '1 Main St, Blue Island, IL 60406');
     m.type('wizard-event-zip', '60406');
     await createFrom(m);
-    m.next();
-    expect(m.onStep(5)).toBe(true);
+    // The review is on the share screen, folded.
     expect(m.txt('wizard-review-row-where')).toContain(
       'Eagles Hall, 1 Main St, Blue Island, IL 60406 · ZIP 60406'
     );
@@ -327,7 +325,6 @@ describe('W1: review and edit', () => {
     const m = mount();
     m.type('wizard-event-venue', 'Eagles Hall');
     await createFrom(m);
-    m.next();
     m.$('wizard-review-change-where').click();
     m.type('wizard-event-zip', '604');
     m.$('wizard-save-edit-btn').click();

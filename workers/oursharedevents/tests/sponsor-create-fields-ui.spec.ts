@@ -108,7 +108,7 @@ describe('admin | Create Sponsor form', () => {
     $('spon-name').value = 'Acme';
     await submit();
     expect(posts()).toHaveLength(0);
-    expect($('spon-form-msg').textContent).toMatch(/choose a tier/i);
+    expect($('spon-form-msg').textContent).toMatch(/choose how often it shows/i);
     expect($('spon-form-msg').className).toMatch(/error/);
     expect($('spon-tier').getAttribute('aria-invalid')).toBe('true');
   });
