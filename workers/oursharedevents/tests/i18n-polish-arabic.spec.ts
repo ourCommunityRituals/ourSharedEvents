@@ -173,15 +173,17 @@ describe('the language list and the chosen values', () => {
   it('the footer switch marks a page-language name with the page’s lang, an own name with its own', () => {
     const html = renderLanguageSwitch({ lang: 'ar', path: '/events' });
     expect(html).toContain(
-      '<a lang="ar" hreflang="en" data-testid="language-switch-en" href="/events">الإنجليزية</a>'
+      '<a lang="ar" hreflang="en" data-testid="language-switch-en" href="/events"><img class="ose-lang-flag" src="/flags/en.svg" alt="" width="21" height="14" loading="lazy">الإنجليزية</a>'
     );
-    expect(html).toContain('href="/pl/events">البولندية</a>');
+    expect(html).toContain(
+      'href="/pl/events"><img class="ose-lang-flag" src="/flags/pl.svg" alt="" width="21" height="14" loading="lazy">البولندية</a>'
+    );
     const en = renderLanguageSwitch({ lang: 'en', path: '/events' });
     expect(en).toContain(
-      '<a lang="ar" hreflang="ar" data-testid="language-switch-ar" href="/ar/events">العربية</a>'
+      '<a lang="ar" hreflang="ar" data-testid="language-switch-ar" href="/ar/events"><img class="ose-lang-flag" src="/flags/ar.svg" alt="" width="21" height="14" loading="lazy">العربية</a>'
     );
     expect(en).toContain(
-      '<a lang="pl" hreflang="pl" data-testid="language-switch-pl" href="/pl/events">Polski</a>'
+      '<a lang="pl" hreflang="pl" data-testid="language-switch-pl" href="/pl/events"><img class="ose-lang-flag" src="/flags/pl.svg" alt="" width="21" height="14" loading="lazy">Polski</a>'
     );
   });
 });

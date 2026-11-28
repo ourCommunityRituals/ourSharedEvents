@@ -191,9 +191,18 @@
         color: var(--text);
       }
       
-    .ose-lang { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.5rem; margin: 1.5rem 0 0; }
-    .ose-lang a { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; min-height: 44px; min-width: 44px; padding: 0.5rem 1rem; color: var(--accent); font-size: 1rem; font-weight: 600; line-height: 1.5; text-decoration: underline; }
-    .ose-lang a:focus { outline: 3px solid var(--accent); outline-offset: 2px; }
+    .ose-lang { display: flex; flex-direction: column; align-items: center; margin: 1.5rem 0 0; }
+    .ose-lang details { width: 100%; display: flex; flex-direction: column; align-items: center; }
+    .ose-lang-chip { list-style: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; box-sizing: border-box; min-height: 48px; min-width: 44px; padding: 0.5rem 1rem; border: 1.5px solid var(--border-strong); border-radius: 999px; background: var(--surface); color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; }
+    .ose-lang-chip::-webkit-details-marker { display: none; }
+    .ose-lang-chip:hover { outline: 2px solid var(--border-strong); outline-offset: -2px; }
+    .ose-lang-chip:focus-visible, .ose-lang a:focus-visible { outline: 3px solid var(--focus-ring, var(--accent)); outline-offset: 2px; }
+    .ose-lang-caret { font-size: 0.875rem; }
+    .ose-lang details[open] > .ose-lang-chip .ose-lang-caret { transform: rotate(180deg); }
+    .ose-lang-flag { flex: 0 0 auto; border-radius: 2px; }
+    .ose-lang-card { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.25rem; box-sizing: border-box; width: min(100%, 26rem); margin: 0.5rem 0 0; padding: 0.375rem; list-style: none; background: var(--surface); border: 1.5px solid var(--border-strong); border-radius: 8px; }
+    .ose-lang a { display: flex; align-items: center; gap: 0.5rem; box-sizing: border-box; min-height: 44px; min-width: 44px; padding: 0.5rem 0.75rem; border-radius: 6px; color: var(--text); font-size: 1rem; font-weight: 600; line-height: 1.5; text-decoration: none; }
+    .ose-lang a:hover { outline: 2px solid var(--border-strong); outline-offset: -2px; }
     .ose-langmenu { position: relative; display: inline-flex; align-items: center; flex: 0 0 auto; }
     .ose-langmenu details { position: relative; }
     .ose-langmenu summary { list-style: none; cursor: pointer; }
@@ -985,27 +994,32 @@
       
 
       <nav class="ose-lang" data-testid="language-switch" aria-label="Idioma">
-      <a lang="es" hreflang="en" data-testid="language-switch-en" href="/">Inglés</a>
-      <a lang="es" hreflang="zh-hans" data-testid="language-switch-zh-hans" href="/zh-hans/">Chino simplificado</a>
-      <a lang="es" hreflang="zh-hant" data-testid="language-switch-zh-hant" href="/zh-hant/">Chino tradicional</a>
-      <a lang="es" hreflang="hi" data-testid="language-switch-hi" href="/hi/">Hindi</a>
-      <a lang="es" hreflang="ar" data-testid="language-switch-ar" href="/ar/">Árabe</a>
-      <a lang="es" hreflang="pt" data-testid="language-switch-pt" href="/pt/">Portugués</a>
-      <a lang="es" hreflang="bn" data-testid="language-switch-bn" href="/bn/">Bengalí</a>
-      <a lang="es" hreflang="ru" data-testid="language-switch-ru" href="/ru/">Ruso</a>
-      <a lang="es" hreflang="ja" data-testid="language-switch-ja" href="/ja/">Japonés</a>
-      <a lang="es" hreflang="fr" data-testid="language-switch-fr" href="/fr/">Francés</a>
-      <a lang="es" hreflang="de" data-testid="language-switch-de" href="/de/">Alemán</a>
-      <a lang="es" hreflang="ur" data-testid="language-switch-ur" href="/ur/">Urdu</a>
-      <a lang="es" hreflang="id" data-testid="language-switch-id" href="/id/">Indonesio</a>
-      <a lang="es" hreflang="ko" data-testid="language-switch-ko" href="/ko/">Coreano</a>
-      <a lang="es" hreflang="vi" data-testid="language-switch-vi" href="/vi/">Vietnamita</a>
-      <a lang="es" hreflang="tr" data-testid="language-switch-tr" href="/tr/">Turco</a>
-      <a lang="it" hreflang="it" data-testid="language-switch-it" href="/it/">Italiano</a>
-      <a lang="es" hreflang="tl" data-testid="language-switch-tl" href="/tl/">Filipino</a>
-      <a lang="es" hreflang="pl" data-testid="language-switch-pl" href="/pl/">Polaco</a>
-      <a lang="es" hreflang="uk" data-testid="language-switch-uk" href="/uk/">Ucraniano</a>
-      <a lang="es" hreflang="fa" data-testid="language-switch-fa" href="/fa/">Persa</a>
+      <details data-testid="language-switch-choice">
+        <summary class="ose-lang-chip" aria-label="Idioma: Español" data-testid="language-switch-chip"><img class="ose-lang-flag" src="/flags/es.svg" alt="" width="21" height="14" loading="lazy"><span lang="es">Español</span><span class="ose-lang-caret" aria-hidden="true">▾</span></summary>
+        <ul class="ose-lang-card" data-testid="language-switch-card">
+        <li><a lang="es" hreflang="en" data-testid="language-switch-en" href="/"><img class="ose-lang-flag" src="/flags/en.svg" alt="" width="21" height="14" loading="lazy">Inglés</a></li>
+        <li><a lang="es" hreflang="zh-hans" data-testid="language-switch-zh-hans" href="/zh-hans/"><img class="ose-lang-flag" src="/flags/zh-hans.svg" alt="" width="21" height="14" loading="lazy">Chino simplificado</a></li>
+        <li><a lang="es" hreflang="zh-hant" data-testid="language-switch-zh-hant" href="/zh-hant/"><img class="ose-lang-flag" src="/flags/zh-hant.svg" alt="" width="21" height="14" loading="lazy">Chino tradicional</a></li>
+        <li><a lang="es" hreflang="hi" data-testid="language-switch-hi" href="/hi/"><img class="ose-lang-flag" src="/flags/hi.svg" alt="" width="21" height="14" loading="lazy">Hindi</a></li>
+        <li><a lang="es" hreflang="ar" data-testid="language-switch-ar" href="/ar/"><img class="ose-lang-flag" src="/flags/ar.svg" alt="" width="21" height="14" loading="lazy">Árabe</a></li>
+        <li><a lang="es" hreflang="pt" data-testid="language-switch-pt" href="/pt/"><img class="ose-lang-flag" src="/flags/pt.svg" alt="" width="21" height="14" loading="lazy">Portugués</a></li>
+        <li><a lang="es" hreflang="bn" data-testid="language-switch-bn" href="/bn/"><img class="ose-lang-flag" src="/flags/bn.svg" alt="" width="21" height="14" loading="lazy">Bengalí</a></li>
+        <li><a lang="es" hreflang="ru" data-testid="language-switch-ru" href="/ru/"><img class="ose-lang-flag" src="/flags/ru.svg" alt="" width="21" height="14" loading="lazy">Ruso</a></li>
+        <li><a lang="es" hreflang="ja" data-testid="language-switch-ja" href="/ja/"><img class="ose-lang-flag" src="/flags/ja.svg" alt="" width="21" height="14" loading="lazy">Japonés</a></li>
+        <li><a lang="es" hreflang="fr" data-testid="language-switch-fr" href="/fr/"><img class="ose-lang-flag" src="/flags/fr.svg" alt="" width="21" height="14" loading="lazy">Francés</a></li>
+        <li><a lang="es" hreflang="de" data-testid="language-switch-de" href="/de/"><img class="ose-lang-flag" src="/flags/de.svg" alt="" width="21" height="14" loading="lazy">Alemán</a></li>
+        <li><a lang="es" hreflang="ur" data-testid="language-switch-ur" href="/ur/"><img class="ose-lang-flag" src="/flags/ur.svg" alt="" width="21" height="14" loading="lazy">Urdu</a></li>
+        <li><a lang="es" hreflang="id" data-testid="language-switch-id" href="/id/"><img class="ose-lang-flag" src="/flags/id.svg" alt="" width="21" height="14" loading="lazy">Indonesio</a></li>
+        <li><a lang="es" hreflang="ko" data-testid="language-switch-ko" href="/ko/"><img class="ose-lang-flag" src="/flags/ko.svg" alt="" width="21" height="14" loading="lazy">Coreano</a></li>
+        <li><a lang="es" hreflang="vi" data-testid="language-switch-vi" href="/vi/"><img class="ose-lang-flag" src="/flags/vi.svg" alt="" width="21" height="14" loading="lazy">Vietnamita</a></li>
+        <li><a lang="es" hreflang="tr" data-testid="language-switch-tr" href="/tr/"><img class="ose-lang-flag" src="/flags/tr.svg" alt="" width="21" height="14" loading="lazy">Turco</a></li>
+        <li><a lang="it" hreflang="it" data-testid="language-switch-it" href="/it/"><img class="ose-lang-flag" src="/flags/it.svg" alt="" width="21" height="14" loading="lazy">Italiano</a></li>
+        <li><a lang="es" hreflang="tl" data-testid="language-switch-tl" href="/tl/"><img class="ose-lang-flag" src="/flags/tl.svg" alt="" width="21" height="14" loading="lazy">Filipino</a></li>
+        <li><a lang="es" hreflang="pl" data-testid="language-switch-pl" href="/pl/"><img class="ose-lang-flag" src="/flags/pl.svg" alt="" width="21" height="14" loading="lazy">Polaco</a></li>
+        <li><a lang="es" hreflang="uk" data-testid="language-switch-uk" href="/uk/"><img class="ose-lang-flag" src="/flags/uk.svg" alt="" width="21" height="14" loading="lazy">Ucraniano</a></li>
+        <li><a lang="es" hreflang="fa" data-testid="language-switch-fa" href="/fa/"><img class="ose-lang-flag" src="/flags/fa.svg" alt="" width="21" height="14" loading="lazy">Persa</a></li>
+        </ul>
+      </details>
     </nav>
       <details class="ose-never-who" data-testid="landing-privacy" data-never-who="landing">
     <summary class="ose-never-who-summary" data-testid="never-who-summary"><span class="ose-never-who-line">Nunca quién, solo cuántos.</span> <span class="ose-never-who-trigger">Cómo funciona</span></summary>
