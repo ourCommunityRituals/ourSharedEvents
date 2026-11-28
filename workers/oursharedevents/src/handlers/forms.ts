@@ -572,47 +572,43 @@ export async function handleFormEmailSignup(
     // pepper throws here and is caught below → clean 503 (handleDbError).
     const emailHash = await hashEmail(email, env.FORMS_HASH_PEPPER, { requirePepper: true });
 
-    const existing = await env.FORMS_DB.prepare(
-      'SELECT id FROM email_signups WHERE event_id = ? AND email_hash = ?'
-    )
-      .bind(eventId, emailHash)
-      .first();
-
-    if (existing) {
-      logFormEvent('email-signup', eventId, 'submit', {
-        duplicate: true,
-        latencyMs: Date.now() - start,
-      });
-      // Same answer as a new sign-up, key for key: whether an address is
-      // already on the list is never shown to the caller.
-      const res = jsonResponse({ ok: true, id: existing.id as string }, request);
-      return isNew ? setAnonCookie(res, cookieValue) : res;
-    }
-
+    // A new address and one already on the list take the same path: the same
+    // encryption, one conditional insert and one read, so neither the answer
+    // nor the work done tells the two apart.
     const encrypted = await encryptEmail(email, encryptionKey);
     const anonKey = await eventAnonKey(anonId, eventId, env.FORMS_HASH_PEPPER);
-    const id = generateId();
+    const newId = generateId();
     const bucket = bucketTimestamp();
     const retentionExpiresAt = new Date(Date.now() + EMAIL_RETENTION_MS).toISOString();
 
-    await env.FORMS_DB.prepare(
+    const inserted = await env.FORMS_DB.prepare(
       `INSERT INTO email_signups (id, event_id, email_hash, email_encrypted, signup_bucket, retention_expires_at, anonymous_id, consent_given_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?
+       WHERE NOT EXISTS (SELECT 1 FROM email_signups WHERE event_id = ? AND email_hash = ?)`
     )
       .bind(
-        id,
+        newId,
         eventId,
         emailHash,
         encrypted,
         bucket,
         retentionExpiresAt,
         anonKey, // per-event keyed id, never the cookie value
-        new Date().toISOString()
+        new Date().toISOString(),
+        eventId,
+        emailHash
       )
       .run();
 
+    const row = await env.FORMS_DB.prepare(
+      'SELECT id FROM email_signups WHERE event_id = ? AND email_hash = ? ORDER BY rowid LIMIT 1'
+    )
+      .bind(eventId, emailHash)
+      .first<{ id: string }>();
+    const id = row?.id ?? newId;
+
     logFormEvent('email-signup', eventId, 'submit', {
-      isNew,
+      ...((inserted.meta?.changes ?? 0) === 0 ? { duplicate: true } : { isNew }),
       latencyMs: Date.now() - start,
     });
     const res = jsonResponse({ ok: true, id }, request);
