@@ -1349,8 +1349,6 @@
       .launch-wizard .muted-sm { font-size: 0.8125rem; }
       .create-publish-label { display: flex; align-items: center; gap: 0.625rem; min-height: 44px; font-size: 1rem; cursor: pointer; }
       .create-publish-label input[type='checkbox'] { width: 20px; height: 20px; min-height: 20px; flex: 0 0 auto; margin: 0; }
-      /* The stalls card holds every control to a 44px target and 16px text. */
-      #stalls-card .create-publish-label input[type='checkbox'] { width: 44px; height: 44px; min-height: 44px; font-size: 16px; }
       .create-publish-hint { margin: 0.25rem 0 0 1.875rem; font-size: 0.875rem; line-height: 1.5; color: var(--text-muted); }
       /* R3/R5 (OSE-1319) — typed external-link controls + poster-slot preview. */
       .create-linkctl { padding: 0.75rem 0.875rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-hover); }
@@ -6533,13 +6531,18 @@
           <ul class="pc-list" id="stalls-list" data-testid="stalls-list" aria-label="Stalls"></ul>
           <!-- Stamp passport (owner 2026-11-28, lib/passport.ts): each stall's code
                stamps a card kept on the visitor's phone. Saves on change. -->
-          <label class="create-publish-label" for="stalls-passport">
-            <input type="checkbox" id="stalls-passport" data-testid="stalls-passport" />
-            <span>Stamp passport: each stop's code adds a stamp</span>
-          </label>
-          <p class="create-publish-hint" data-testid="stalls-passport-hint">
-            Stamps stay on each visitor's phone. You still see scans per stop, never who.
-          </p>
+          <div class="create-form">
+            <div class="full-width">
+              <label for="stalls-passport">Stamp passport</label>
+              <select id="stalls-passport" data-testid="stalls-passport" aria-describedby="stalls-passport-hint">
+                <option value="off">Off</option>
+                <option value="on">On: each stop's code adds a stamp</option>
+              </select>
+              <p class="create-publish-hint" id="stalls-passport-hint" data-testid="stalls-passport-hint">
+                Stamps stay on each visitor's phone. You still see scans per stop, never who.
+              </p>
+            </div>
+          </div>
         </div>
 
         <form class="card-body" id="stalls-add" data-testid="stalls-add" novalidate>
@@ -6878,7 +6881,7 @@
         var booths = Array.isArray(data.booths) ? data.booths : [];
         var passportBox = byId('stalls-passport');
         if (passportBox) {
-          passportBox.checked = data.passport === true;
+          passportBox.value = data.passport === true ? 'on' : 'off';
           passportBox.setAttribute('data-event-id', String(id));
           passportBox.disabled = false;
         }
@@ -7006,13 +7009,13 @@
         box.addEventListener('change', async function () {
           var id = box.getAttribute('data-event-id');
           if (!id) return;
-          var want = box.checked;
+          var want = box.value === 'on';
           box.disabled = true;
           var r = await window.stallsFetch('/api/v2/admin/events/' + encodeURIComponent(id), 'PUT', { settings: { passport: want } });
           if (r.ok) {
             window.stallsSay(want ? 'Stamp passport is on. Each stop\u2019s code adds a stamp.' : 'Stamp passport is off.', false);
           } else {
-            box.checked = !want;
+            box.value = want ? 'off' : 'on';
             window.stallsSay('Could not save. The passport is unchanged.', true);
           }
           box.disabled = false;
