@@ -1161,3 +1161,41 @@ describe('E3 | headers, the log, and the parts around the words', () => {
     }
   });
 });
+
+// The check-in privacy line says what the code keeps (PR 1602): an anonymous
+// count, never a name, and a random id in a cookie on the device so a person
+// counts once. Each language must name that cookie; the old line, "no personal
+// data is stored", did not and is wrong under GDPR.
+const CHECKIN_COOKIE_WORD: Record<Lang, string> = {
+  en: 'cookie',
+  es: 'cookie',
+  ar: 'كوكي',
+  bn: 'কুকি',
+  de: 'Cookie',
+  fa: 'کوکی',
+  fr: 'cookie',
+  hi: 'कुकी',
+  id: 'cookie',
+  it: 'cookie',
+  ja: 'クッキー',
+  ko: '쿠키',
+  pl: 'cookie',
+  pt: 'cookie',
+  ru: 'cookie',
+  tl: 'cookie',
+  tr: 'çerez',
+  uk: 'cookie',
+  ur: 'کوکی',
+  vi: 'cookie',
+  'zh-hans': 'cookie',
+  'zh-hant': 'cookie',
+};
+
+describe('the check-in privacy line names the cookie in every language', () => {
+  test.each(LANGUAGES.map((l) => [l] as const))('%s', (lang) => {
+    const line = CATALOG[lang]['privacy.purpose.checkin'];
+    expect(line, `${lang} has its own line`).toBeTruthy();
+    expect(line).toContain('<strong>');
+    expect(line).toContain(CHECKIN_COOKIE_WORD[lang]);
+  });
+});

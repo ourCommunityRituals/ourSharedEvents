@@ -164,7 +164,7 @@
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Detalles de privacidad</summary>
       <p>
-        Solo guardamos un <strong>conteo anónimo</strong>; no se guardan datos personales. Base legal: RGPD art. 6(1)(f): interés legítimo en saber cuántas personas asisten. Los conteos anónimos totales se guardan solo para los informes del evento.
+        Solo guardamos un <strong>conteo anónimo</strong>, nunca tu nombre. Un id aleatorio en una cookie de este dispositivo te cuenta una sola vez. Base legal: RGPD art. 6(1)(f): interés legítimo en saber cuántas personas asisten. Los conteos anónimos totales se guardan solo para los informes del evento.
         Tienes derecho a ver, corregir o borrar tus datos, y a presentar una queja ante la
         <strong>autoridad de protección de datos de tu zona</strong>.
         

@@ -454,7 +454,7 @@ export const ja: Record<MessageKey, string> = {
   'privacy.purpose.register':
     'イベントに変更があったとき主催者が連絡できるよう、お名前と、ご希望の場合はメールアドレスを集めます。',
   'privacy.purpose.checkin':
-    '<strong>匿名の人数だけ</strong>を記録します — 個人のデータは保存しません。',
+    '<strong>匿名の人数だけ</strong>を記録し、名前は記録しません。この端末のクッキーに入ったランダムなIDで、1人を1回だけ数えます。',
   'privacy.purpose.survey': '今後のイベントをよくするため、評価と任意のコメントを集めます。',
   'privacy.purpose.email': '今後の地域イベントをお知らせするため、メールアドレスを集めます。',
   'privacy.basisLabel': '法的根拠：',

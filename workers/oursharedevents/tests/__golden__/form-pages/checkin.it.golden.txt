@@ -164,7 +164,7 @@
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Dettagli sulla riservatezza</summary>
       <p>
-        Registriamo <strong>solo un conteggio anonimo</strong> — nessun dato personale viene conservato. Base giuridica: GDPR art. 6(1)(f) — legittimo interesse a conoscere il numero di partecipanti. I conteggi anonimi complessivi sono conservati solo per il resoconto dell’evento.
+        Registriamo <strong>solo un conteggio anonimo</strong>, mai il tuo nome. Un id casuale in un cookie su questo dispositivo ti conta una volta sola. Base giuridica: GDPR art. 6(1)(f) — legittimo interesse a conoscere il numero di partecipanti. I conteggi anonimi complessivi sono conservati solo per il resoconto dell’evento.
         Hai il diritto di vedere, correggere o cancellare i tuoi dati, e di presentare reclamo alla tua
         <strong>autorità locale per la protezione dei dati</strong>.
         

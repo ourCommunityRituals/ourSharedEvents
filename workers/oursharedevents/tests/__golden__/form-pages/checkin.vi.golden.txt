@@ -164,7 +164,7 @@
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Chi tiết quyền riêng tư</summary>
       <p>
-        Chúng tôi chỉ ghi <strong>một con số ẩn danh</strong> — không lưu dữ liệu cá nhân nào. Cơ sở pháp lý: GDPR Điều 6(1)(f) — lợi ích chính đáng trong việc biết số người tham dự. Các con số tổng hợp ẩn danh chỉ được giữ cho báo cáo sự kiện.
+        Chúng tôi chỉ ghi <strong>một con số ẩn danh</strong>, không bao giờ ghi tên bạn. Một mã ngẫu nhiên trong cookie trên thiết bị này đếm bạn một lần. Cơ sở pháp lý: GDPR Điều 6(1)(f) — lợi ích chính đáng trong việc biết số người tham dự. Các con số tổng hợp ẩn danh chỉ được giữ cho báo cáo sự kiện.
         Bạn có quyền xem, sửa hoặc xóa dữ liệu của mình, và khiếu nại với
         <strong>cơ quan bảo vệ dữ liệu tại nơi bạn sống</strong>.
         

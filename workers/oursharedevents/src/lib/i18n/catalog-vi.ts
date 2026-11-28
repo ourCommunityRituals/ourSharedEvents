@@ -457,7 +457,7 @@ export const vi: Record<MessageKey, string> = {
   'privacy.purpose.register':
     'Chúng tôi thu thập tên và, nếu bạn muốn, email của bạn, để người tổ chức báo cho bạn nếu sự kiện thay đổi.',
   'privacy.purpose.checkin':
-    'Chúng tôi chỉ ghi <strong>một con số ẩn danh</strong> — không lưu dữ liệu cá nhân nào.',
+    'Chúng tôi chỉ ghi <strong>một con số ẩn danh</strong>, không bao giờ ghi tên bạn. Một mã ngẫu nhiên trong cookie trên thiết bị này đếm bạn một lần.',
   'privacy.purpose.survey':
     'Chúng tôi thu thập điểm đánh giá và nhận xét để làm các sự kiện sau tốt hơn.',
   'privacy.purpose.email':

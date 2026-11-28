@@ -439,7 +439,8 @@ export const zh_hans: Record<MessageKey, string> = {
   'privacy.summary.email': '你的邮箱会在 30 天后删除。',
   'privacy.purpose.register':
     '我们收集你的姓名，以及你愿意提供的邮箱，以便活动有变时主办方能联系你。',
-  'privacy.purpose.checkin': '我们只记录<strong>匿名人数</strong> —— 不保存任何个人数据。',
+  'privacy.purpose.checkin':
+    '我们只记录<strong>匿名人数</strong>，从不记录你的名字。这台设备上的一个 cookie 里存有随机编号，用来确保你只被计一次。',
   'privacy.purpose.survey': '我们收集你的评分和选填留言，用来改进以后的活动。',
   'privacy.purpose.email': '我们收集你的邮箱地址，用来通知你以后的社区活动。',
   'privacy.basisLabel': '法律依据：',

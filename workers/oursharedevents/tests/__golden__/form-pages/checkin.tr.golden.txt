@@ -164,7 +164,7 @@
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Gizlilik ayrıntıları</summary>
       <p>
-        <strong>Yalnızca isimsiz bir sayı</strong> kaydederiz — hiçbir kişisel veri saklanmaz. Hukuki dayanak: GDPR md. 6(1)(f) — katılım sayısını bilmede meşru menfaat. İsimsiz toplam sayılar yalnızca etkinlik raporu için saklanır.
+        <strong>Yalnızca isimsiz bir sayı</strong> kaydederiz, adınızı asla kaydetmeyiz. Bu cihazdaki bir çerezde bulunan rastgele bir kimlik sizi yalnızca bir kez sayar. Hukuki dayanak: GDPR md. 6(1)(f) — katılım sayısını bilmede meşru menfaat. İsimsiz toplam sayılar yalnızca etkinlik raporu için saklanır.
         Verilerinize erişme, onları düzeltme ya da silme ve şikâyette bulunma hakkınız var:
         <strong>yerel veri koruma denetim kurumu</strong>.
         

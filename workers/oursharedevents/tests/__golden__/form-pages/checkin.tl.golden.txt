@@ -164,7 +164,7 @@
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Detalye ng pagkapribado</summary>
       <p>
-        Nagtatala lang kami ng <strong>bilang na walang pangalan</strong> — walang personal na datos na iniimbak. Batayang legal: GDPR Art. 6(1)(f) — lehitimong interes na malaman ang bilang ng dumalo. Itinatago ang kabuuang bilang na walang pangalan para lang sa ulat ng kaganapan.
+        Nagtatala lang kami ng <strong>bilang na walang pangalan</strong>, hindi kailanman ang pangalan mo. Isang random na id sa cookie sa device na ito ang nagbibilang sa iyo nang isang beses lang. Batayang legal: GDPR Art. 6(1)(f) — lehitimong interes na malaman ang bilang ng dumalo. Itinatago ang kabuuang bilang na walang pangalan para lang sa ulat ng kaganapan.
         May karapatan kang makita, itama, o burahin ang datos mo, at magreklamo sa lokal na
         <strong>awtoridad sa proteksiyon ng datos</strong>.
         

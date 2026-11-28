@@ -458,7 +458,7 @@ export const tl: Record<MessageKey, string> = {
   'privacy.purpose.register':
     'Kinukuha namin ang pangalan mo at, kung gusto mo, ang email mo, para maabot ka ng tagapag-ayos kung magbago ang kaganapan.',
   'privacy.purpose.checkin':
-    'Nagtatala lang kami ng <strong>bilang na walang pangalan</strong> — walang personal na datos na iniimbak.',
+    'Nagtatala lang kami ng <strong>bilang na walang pangalan</strong>, hindi kailanman ang pangalan mo. Isang random na id sa cookie sa device na ito ang nagbibilang sa iyo nang isang beses lang.',
   'privacy.purpose.survey':
     'Kinukuha namin ang marka at mga puna mo para mapabuti ang mga susunod na kaganapan.',
   'privacy.purpose.email':

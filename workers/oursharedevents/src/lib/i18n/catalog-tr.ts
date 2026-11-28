@@ -455,7 +455,7 @@ export const tr: Record<MessageKey, string> = {
   'privacy.purpose.register':
     'Etkinlik değişirse düzenleyen size ulaşabilsin diye adınızı ve isterseniz e-postanızı alırız.',
   'privacy.purpose.checkin':
-    '<strong>Yalnızca isimsiz bir sayı</strong> kaydederiz — hiçbir kişisel veri saklanmaz.',
+    '<strong>Yalnızca isimsiz bir sayı</strong> kaydederiz, adınızı asla kaydetmeyiz. Bu cihazdaki bir çerezde bulunan rastgele bir kimlik sizi yalnızca bir kez sayar.',
   'privacy.purpose.survey':
     'Gelecek etkinlikleri iyileştirmek için puanlarınızı ve isteğe bağlı yorumlarınızı alırız.',
   'privacy.purpose.email':

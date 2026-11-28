@@ -164,7 +164,7 @@
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Szczegóły prywatności</summary>
       <p>
-        Zapisujemy <strong>tylko anonimową liczbę</strong>; nie przechowujemy danych osobowych. Podstawa prawna: RODO art. 6 ust. 1 lit. f: prawnie uzasadniony interes w poznaniu liczby uczestników. Anonimowe łączne liczby przechowujemy tylko do raportów z wydarzenia.
+        Zapisujemy <strong>tylko anonimową liczbę</strong>, nigdy Twojego imienia. Losowy identyfikator w pliku cookie na tym urządzeniu liczy Cię tylko raz. Podstawa prawna: RODO art. 6 ust. 1 lit. f: prawnie uzasadniony interes w poznaniu liczby uczestników. Anonimowe łączne liczby przechowujemy tylko do raportów z wydarzenia.
         Masz prawo dostępu do swoich danych, ich poprawienia lub usunięcia oraz prawo do złożenia skargi do
         <strong>organu ochrony danych osobowych</strong>.
         

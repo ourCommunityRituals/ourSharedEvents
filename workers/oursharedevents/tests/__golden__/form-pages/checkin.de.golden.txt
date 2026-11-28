@@ -164,7 +164,7 @@
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Details zum Datenschutz</summary>
       <p>
-        Wir erfassen <strong>nur eine anonyme Zahl</strong> — es werden keine persönlichen Daten gespeichert. Rechtsgrundlage: DSGVO Art. 6 Abs. 1 lit. f — berechtigtes Interesse, die Teilnehmerzahl zu kennen. Anonyme Gesamtzahlen werden nur für den Bericht zur Veranstaltung aufbewahrt.
+        Wir erfassen <strong>nur eine anonyme Zahl</strong>, nie Ihren Namen. Eine zufällige ID in einem Cookie auf diesem Gerät zählt Sie nur einmal. Rechtsgrundlage: DSGVO Art. 6 Abs. 1 lit. f — berechtigtes Interesse, die Teilnehmerzahl zu kennen. Anonyme Gesamtzahlen werden nur für den Bericht zur Veranstaltung aufbewahrt.
         Sie haben das Recht, Ihre Daten einzusehen, zu berichtigen oder zu löschen, und sich zu beschweren bei Ihrer
         <strong>örtlichen Datenschutzaufsichtsbehörde</strong>.
         

@@ -460,7 +460,7 @@ export const it: Record<MessageKey, string> = {
   'privacy.purpose.register':
     'Raccogliamo il tuo nome e, se vuoi, la tua email, così l’organizzatore può avvisarti se l’evento cambia.',
   'privacy.purpose.checkin':
-    'Registriamo <strong>solo un conteggio anonimo</strong> — nessun dato personale viene conservato.',
+    'Registriamo <strong>solo un conteggio anonimo</strong>, mai il tuo nome. Un id casuale in un cookie su questo dispositivo ti conta una volta sola.',
   'privacy.purpose.survey':
     'Raccogliamo i tuoi voti e i commenti facoltativi per migliorare i prossimi eventi.',
   'privacy.purpose.email':
