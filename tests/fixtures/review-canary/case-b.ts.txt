@@ -1,0 +1,12 @@
+// Review check fixture. Plain text: never imported, built or deployed.
+import { publishCount } from '../lib/count-floor';
+
+interface Env { DB: D1Database }
+
+export async function eventAttendance(eventId: string, env: Env): Promise<Response> {
+  const row = await env.DB.prepare('SELECT COUNT(*) AS n FROM scans WHERE event_id = ?1')
+    .bind(eventId)
+    .first<{ n: number }>();
+  const total = publishCount(row?.n ?? 0);
+  return Response.json({ eventId, checkIns: total });
+}
