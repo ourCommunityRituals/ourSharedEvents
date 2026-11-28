@@ -55,7 +55,7 @@ concurrency:
 jobs:
   review:
     timeout-minutes: 30 # [Claude] ceiling: no recent completed run to measure; generous on purpose
-    name: "Claude PR Review"
+    name: 'Claude PR Review'
     # pull_request only. Without this the job also starts on every PR comment,
     # and with a prompt set the action runs a full review there too (spend on
     # every comment). The @claude `respond` job is the only comment consumer.
@@ -77,7 +77,26 @@ jobs:
       - name: Harden runner
         uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2
         with:
-          egress-policy: audit
+          # These jobs hold the model credential, so they reach only the hosts the
+          # Claude action needs: the model API, GitHub, the Claude Code and Bun
+          # downloads, npm for the action's own packages, and the GitHub MCP image.
+          # A call to any other host fails; the job log names the host it refused.
+          egress-policy: block
+          allowed-endpoints: >
+            api.anthropic.com:443
+            claude.ai:443
+            downloads.claude.ai:443
+            storage.googleapis.com:443
+            github.com:443
+            api.github.com:443
+            uploads.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            raw.githubusercontent.com:443
+            registry.npmjs.org:443
+            bun.sh:443
+            ghcr.io:443
+            pkg-containers.githubusercontent.com:443
       - name: Pick reviewer and check auth
         id: check-key
         env:
@@ -295,7 +314,26 @@ jobs:
       - name: Harden runner
         uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2
         with:
-          egress-policy: audit
+          # These jobs hold the model credential, so they reach only the hosts the
+          # Claude action needs: the model API, GitHub, the Claude Code and Bun
+          # downloads, npm for the action's own packages, and the GitHub MCP image.
+          # A call to any other host fails; the job log names the host it refused.
+          egress-policy: block
+          allowed-endpoints: >
+            api.anthropic.com:443
+            claude.ai:443
+            downloads.claude.ai:443
+            storage.googleapis.com:443
+            github.com:443
+            api.github.com:443
+            uploads.github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            raw.githubusercontent.com:443
+            registry.npmjs.org:443
+            bun.sh:443
+            ghcr.io:443
+            pkg-containers.githubusercontent.com:443
       - name: Check auth
         id: check-key
         env:

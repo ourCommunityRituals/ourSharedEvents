@@ -113,12 +113,56 @@ function unhardened(doc, file, exempt = HARDEN_EXEMPT) {
     .filter(({ key }) => !(key in exempt))
     .filter(({ first }) => {
       const uses = String(first?.uses || '');
-      return !(HARDEN.test(uses) && first?.with?.['egress-policy'] === 'audit');
+      return !(HARDEN.test(uses) && egressRecordedOrBlocked(first));
     })
     .map(
       ({ key, first }) =>
         `${key}: first step is ${first?.uses || label(first, 0)}, not harden-runner (audit)`
     );
+}
+
+/** The step's endpoint allow-list, one host:port per entry; [] when there is none. */
+function allowedEndpoints(step) {
+  return String(step?.with?.['allowed-endpoints'] || '')
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+/**
+ * audit records every outbound call; block refuses every host not on its allow-list. A bare
+ * block, with no list, would refuse everything, so it does not count.
+ */
+function egressRecordedOrBlocked(step) {
+  const policy = step?.with?.['egress-policy'];
+  return policy === 'audit' || (policy === 'block' && allowedEndpoints(step).length > 0);
+}
+
+const CLAUDE_ACTION = /^anthropics\/claude-code-action@/;
+
+/**
+ * Jobs that run the Claude action hold a model credential, so their first step must be a
+ * SHA-pinned harden-runner in block mode with an explicit allow-list of host:port entries,
+ * no wildcards: a call to any other host fails instead of being recorded.
+ */
+function claudeJobsNotBlocked(doc, file) {
+  const out = [];
+  for (const [jid, job] of Object.entries(doc?.jobs || {})) {
+    const steps = job?.steps || [];
+    if (!steps.some((s) => CLAUDE_ACTION.test(String(s?.uses || '')))) continue;
+    const first = steps[0];
+    const list = allowedEndpoints(first);
+    const why = !HARDEN.test(String(first?.uses || ''))
+      ? 'first step is not a SHA-pinned harden-runner'
+      : first?.with?.['egress-policy'] !== 'block'
+        ? `egress-policy is ${first?.with?.['egress-policy'] || 'unset'}, not block`
+        : list.length === 0
+          ? 'block has no allowed-endpoints'
+          : list.find((e) => e.includes('*') || !/^[a-z0-9.-]+:\d+$/.test(e))
+            ? `allowed-endpoints entry ${list.find((e) => e.includes('*') || !/^[a-z0-9.-]+:\d+$/.test(e))} is not a plain host:port`
+            : '';
+    if (why) out.push(`${file} :: ${jid}: ${why}`);
+  }
+  return out;
 }
 
 function workflowFiles() {
@@ -228,6 +272,11 @@ jobs:
       - uses: ${HR}
         with: { egress-policy: block }
       - uses: ${CO}
+  allow-list:
+    steps:
+      - uses: ${HR}
+        with: { egress-policy: block, allowed-endpoints: 'github.com:443 api.github.com:443' }
+      - uses: ${CO}
   tag:
     steps:
       - uses: step-security/harden-runner@v2
@@ -281,5 +330,60 @@ jobs:
         `${key}: now hardened; drop the exemption`
       ).toBe(false);
     }
+  });
+});
+
+describe('jobs that run the Claude action block every host not on their list', () => {
+  const CL = 'anthropics/claude-code-action@f431adaf77e0fecf918431e75a2b5b45b85af002';
+
+  test('detector: catches audit, a bare block, a wildcard and a missing harden-runner', () => {
+    const doc = yaml.load(`
+on: pull_request
+jobs:
+  ok:
+    steps:
+      - uses: ${HR}
+        with: { egress-policy: block, allowed-endpoints: 'api.anthropic.com:443 github.com:443' }
+      - uses: ${CL}
+  audit:
+    steps:
+      - uses: ${HR}
+        with: { egress-policy: audit }
+      - uses: ${CL}
+  bare:
+    steps:
+      - uses: ${HR}
+        with: { egress-policy: block }
+      - uses: ${CL}
+  wild:
+    steps:
+      - uses: ${HR}
+        with: { egress-policy: block, allowed-endpoints: '*.anthropic.com:443' }
+      - uses: ${CL}
+  none:
+    steps:
+      - uses: ${CO}
+      - uses: ${CL}
+  not-claude:
+    steps:
+      - uses: ${CO}
+`);
+    expect(claudeJobsNotBlocked(doc, 'x.yml')).toEqual([
+      'x.yml :: audit: egress-policy is audit, not block',
+      'x.yml :: bare: block has no allowed-endpoints',
+      'x.yml :: wild: allowed-endpoints entry *.anthropic.com:443 is not a plain host:port',
+      'x.yml :: none: first step is not a SHA-pinned harden-runner',
+    ]);
+  });
+
+  test('every workflow', () => {
+    const files = workflowFiles();
+    const claudeJobs = files.flatMap((f) =>
+      Object.values(load(f)?.jobs || {}).filter((j) =>
+        (j?.steps || []).some((s) => CLAUDE_ACTION.test(String(s?.uses || '')))
+      )
+    );
+    expect(claudeJobs.length).toBeGreaterThan(0);
+    expect(files.flatMap((f) => claudeJobsNotBlocked(load(f), f.file))).toEqual([]);
   });
 });
