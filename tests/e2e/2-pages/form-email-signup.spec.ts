@@ -2,7 +2,7 @@
  * PAGE TESTS - Level 2: Email Signup Form Page
  *
  * Purpose: Test the public email signup form at /forms/{eventId}?type=email
- * Coverage: Email input, submission, success/duplicate states, error handling
+ * Coverage: Email input, submission, success state (one message for new and repeat sign-ups), error handling
  *
  * Public page - no authentication required.
  */
@@ -76,7 +76,7 @@ test.describe('Email Signup Form - Submission', () => {
     expect(successText).toMatch(/you.re on the list/i);
   });
 
-  test('duplicate email shows already-signed-up message', async ({ page }) => {
+  test('repeat email shows the same message as a new sign-up', async ({ page }) => {
     const duplicateEmail = 'duplicate-test@example.com';
 
     // First submission
@@ -100,7 +100,8 @@ test.describe('Email Signup Form - Submission', () => {
     await expect(success2).toBeVisible({ timeout: 10000 });
 
     const successText = await success2.textContent();
-    expect(successText).toMatch(/already signed up/i);
+    expect(successText).toMatch(/you.re on the list/i);
+    expect(successText).not.toMatch(/already/i);
   });
 
   test('API call is made to correct endpoint', async ({ page }) => {

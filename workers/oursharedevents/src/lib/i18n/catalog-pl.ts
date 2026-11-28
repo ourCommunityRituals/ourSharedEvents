@@ -443,7 +443,6 @@ export const pl: Record<MessageKey, string> = {
   'form.email.label': 'Twój e-mail',
   'form.email.placeholder': 'ty@przyklad.pl',
   'form.email.submit': 'Zapisz mnie',
-  'form.email.already': 'Już jesteś na liście!',
   'form.email.done': 'Jesteś na liście!',
   'form.error.invalidEventId':
     'Ten link do wydarzenia wygląda na błędny. Użyj oryginalnego linku lub skontaktuj się z organizatorem.',

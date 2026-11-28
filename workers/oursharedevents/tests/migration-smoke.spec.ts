@@ -65,6 +65,7 @@ const DB_TABLES = [
   'event_type_registry', // 0023
   'events', // 0001 + 0034 series_id column
   'export_manifest', // 0043 (OSE-556 D1→OCR export audit)
+  'fixture_lineups', // 0126 (leagues slice 2 — positions A to D per frame of a game; never a name)
   'fixture_results', // 0125 (leagues phase 1 — the two scores of a game, not a count of people)
   'fixtures', // 0125 (leagues phase 1 — one match on one event night)
   'node_hierarchy', // 0010
