@@ -53,6 +53,8 @@ describe('ci-stage-ocr-workspace.sh — pin must be on hub main (OSE-1394)', () 
     git(hub, 'init', '-q', '-b', 'main');
     git(hub, 'config', 'uploadpack.allowFilter', 'true');
     git(hub, 'config', 'uploadpack.allowAnySHA1InWant', 'true');
+    // The stage script requires @ocr/signals too (src/lib/log-redact.ts re-exports it).
+    commitFile(hub, 'packages/signals/package.json', '{"name":"@ocr/signals"}\n', 'signals');
     mainSha = commitFile(hub, 'packages/ui/package.json', '{"name":"@ocr/ui"}\n', 'main');
     git(hub, 'checkout', '-q', '-b', 'unmerged');
     sideSha = commitFile(hub, 'packages/ui/extra.txt', 'side\n', 'unmerged side commit');
