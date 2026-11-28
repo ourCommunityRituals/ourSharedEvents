@@ -9,6 +9,13 @@ docs: |-
   spot on the hall plan, and never a person (ADR-034 decision 5). A poster
   placement may point at a booth in use of its own event (`booth_id`).
 
+  Stamp passport (owner 2026-11-28, seq 192 to 198): the organizer turns the
+  live fair's passport on through the event's settings, the stalls read says
+  so, a stop page and the list carry the card (stops in use only, no cookie),
+  a value other than true or false is refused, and with it off the card goes.
+  The /q landing with #stamp is held at the mock layer only, because a scan
+  here would stop the fair from hard-deleting at the end.
+
   The public side (seq 180 to 191): GET /api/v2/events/:id carries the stalls
   in use beside the event (`booths`, six fields each; the list read carries
   none), and GET /events/:id/booths/:number is the public stall page. A draft

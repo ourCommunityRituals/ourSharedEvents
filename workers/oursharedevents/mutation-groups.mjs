@@ -60,6 +60,14 @@
 // 649 mutants, mostly module-level tables whose static mutants rerun every
 // spec the group runs, while landing-area.ts keeps its 549.
 //
+// menu was part of render until 2026-11-28. On PR 1594, which takes the
+// Language menu from 4 languages to 22, each with its picture, render was
+// cancelled at its 15 minutes (run 46101646708: 898 of 899 mutants after
+// 11 minutes, then one mutant waiting out its limit), while on main that day
+// it took 14 min 39 s (run 46098328337). The menu is the cut: one file, read by
+// the language-menu specs and the page renderers, whose module-level tables
+// make most of its mutants static, so they reran every render spec.
+//
 // The language layer is its own job too (stryker.language.conf.mjs), as before.
 //
 // RULES (each enforced below, so a mistake fails the run, never a quiet gap):
@@ -116,8 +124,8 @@ export const MUTATION_GROUPS = Object.freeze({
     'src/lib/street-map.ts',
     'src/handlers/map-areas.ts',
     'src/handlers/pages.ts',
-    'src/lib/i18n/language-menu.ts',
   ]),
+  menu: Object.freeze(['src/lib/i18n/language-menu.ts']),
   sponsors: Object.freeze(['src/lib/sponsor-logo.ts', 'src/handlers/sponsors.ts']),
   forms: Object.freeze(['src/handlers/form-pages.ts', 'src/lib/event-staleness.ts']),
   tiles: Object.freeze(['src/lib/mvt.ts', 'src/lib/pmtiles.ts']),

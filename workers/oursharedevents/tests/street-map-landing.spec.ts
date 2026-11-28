@@ -28,6 +28,7 @@ import { join, relative, sep } from 'node:path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { latLngToCell } from 'h3-js';
 import { OSM_COPYRIGHT_URL } from '../src/lib/attendee-map';
+import { fmt } from '../src/lib/i18n/catalog';
 import { LANGUAGES, type Lang } from '../src/lib/i18n/languages';
 import { TILE_LIMITS } from '../src/lib/mvt';
 import { MAX_TILE_UNPACKED_BYTES, resetPmtilesCache } from '../src/lib/pmtiles';
@@ -418,17 +419,37 @@ describe('street map | the landing page handler', () => {
 // does not require it).
 // @born-red street-map credit follows the page language | method: the new and changed cases seen failing before the change (6 red); then 7 faults injected one at a time in src/lib/attendee-map.ts (Spanish linked to the English page, both languages linked to the page with no language, the zoomed area without its credit, the landing map without its credit, the credit shown without streets, the credit always in English, a second module given the street layer); each turned cases here red. Protomaps in the credit: the 4 credit cases seen failing before it was added, then 4 more faults (left out, linked to another address, named with no link, a tile loaded from a Protomaps host beside the credit), each red | date: 2026-11-10
 describe('street map | the credit, in the page language, wherever streets are drawn', () => {
-  const CREDIT: Record<Lang, string> = {
+  // Written out by hand for the first four languages; the rest are built from
+  // the catalog the same way, so a missing or English credit still fails.
+  const HAND: Partial<Record<Lang, string>> = {
     en: '<p class="amap-credit" data-testid="amap-credit">Street map data © <a href="https://www.openstreetmap.org/copyright/en">OpenStreetMap</a> contributors, prepared by <a href="https://protomaps.com">Protomaps</a>.</p>',
     es: '<p class="amap-credit" data-testid="amap-credit">Datos del mapa de calles © colaboradores de <a href="https://www.openstreetmap.org/copyright/es">OpenStreetMap</a>, preparados por <a href="https://protomaps.com">Protomaps</a>.</p>',
     pl: '<p class="amap-credit" data-testid="amap-credit">Dane mapy ulic © współtwórcy <a href="https://www.openstreetmap.org/copyright/pl">OpenStreetMap</a>, przygotowane przez <a href="https://protomaps.com">Protomaps</a>.</p>',
     ar: '<p class="amap-credit" data-testid="amap-credit">بيانات خريطة الشوارع © المساهمون في <a href="https://www.openstreetmap.org/copyright/ar">OpenStreetMap</a>، من إعداد <a href="https://protomaps.com">Protomaps</a>.</p>',
   };
+  // OpenStreetMap names its Chinese and Brazilian Portuguese pages by region.
+  const OSM_TAG: Partial<Record<Lang, string>> = {
+    'zh-hans': 'zh-CN',
+    'zh-hant': 'zh-TW',
+    pt: 'pt-BR',
+  };
+  const osmUrl = (lang: Lang): string =>
+    `https://www.openstreetmap.org/copyright/${OSM_TAG[lang] ?? lang}`;
+  const CREDIT = Object.fromEntries(
+    LANGUAGES.map((lang) => [
+      lang,
+      HAND[lang] ??
+        `<p class="amap-credit" data-testid="amap-credit">${fmt(lang, 'map.credit', {
+          osm: `<a href="${osmUrl(lang)}">OpenStreetMap</a>`,
+          protomaps: '<a href="https://protomaps.com">Protomaps</a>',
+        })}</p>`,
+    ])
+  ) as Record<Lang, string>;
 
   it('every language has its own OpenStreetMap page, on openstreetmap.org over https', () => {
     expect(Object.keys(OSM_COPYRIGHT_URL).sort()).toEqual([...LANGUAGES].sort());
     for (const lang of LANGUAGES) {
-      expect(OSM_COPYRIGHT_URL[lang]).toBe(`https://www.openstreetmap.org/copyright/${lang}`);
+      expect(OSM_COPYRIGHT_URL[lang]).toBe(osmUrl(lang));
     }
   });
 

@@ -205,8 +205,10 @@ describe('the specs a group runs: every spec whose imports reach its files', () 
       expect(chosen.length, g).toBeGreaterThan(0);
       expect(chosen.length, g).toBeLessThan(specs.length);
     }
-    // Reads the whole Worker's import graph once per group: seconds on a loaded runner.
-  }, 60_000);
+    // Reads the whole Worker's import graph once per group: seconds a group on
+    // a loaded runner. With eleven groups (menu, 2026-11-28) it took 61 s in CI
+    // on PR 1594 and 45 s locally, so 120 s leaves room for a twelfth.
+  }, 120_000);
 });
 
 describe('the order the specs run in: decided by the mutated file, the same every run', () => {

@@ -24,6 +24,10 @@
 -- Never apply to production.
 
 -- ── the league the Bruno folder made on an earlier pass ──
+-- fixture_lineups (migration 0126) points at fixtures, so it goes first.
+DELETE FROM fixture_lineups WHERE fixture_id IN (
+  SELECT f.id FROM fixtures f JOIN competitions c ON c.id = f.competition_id
+   WHERE c.brand_id = 'lakeside-league' AND c.name = 'CI league (synthetic)');
 DELETE FROM fixture_results WHERE fixture_id IN (
   SELECT f.id FROM fixtures f JOIN competitions c ON c.id = f.competition_id
    WHERE c.brand_id = 'lakeside-league' AND c.name = 'CI league (synthetic)');
@@ -36,6 +40,7 @@ DELETE FROM competition_stages WHERE competition_id IN (
 DELETE FROM competitions WHERE brand_id = 'lakeside-league' AND name = 'CI league (synthetic)';
 
 -- ── the practice league, back to its start ──
+DELETE FROM fixture_lineups WHERE fixture_id LIKE 'fix_1a6e51de0c1b%';
 DELETE FROM fixture_results WHERE fixture_id LIKE 'fix_1a6e51de0c1b%';
 DELETE FROM fixtures WHERE competition_id = 'cmp_1a6e51de0c1b00000000000000000001';
 

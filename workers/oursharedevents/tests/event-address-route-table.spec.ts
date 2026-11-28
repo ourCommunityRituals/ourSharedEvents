@@ -158,6 +158,7 @@ const OUTSIDE_THE_FOLDER: Readonly<Record<string, { why: Why; reason: string }>>
     reason: 'Default event card image, the same for every event.',
   },
   'const:SPONSOR_DEFAULT_LOGO_PATH': { why: 'site', reason: 'Default sponsor image.' },
+  '/flags/*': { why: 'site', reason: 'The flag or letter badge beside a language name.' },
   '/sponsors/:param': {
     why: 'site',
     reason: "A sponsor's public card: the sponsor corner, not one event.",

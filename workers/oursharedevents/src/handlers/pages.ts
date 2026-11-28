@@ -8,6 +8,7 @@
  *   Replace the embedded strings with a fetch() call to Firebase Hosting URL.
  */
 
+import { partnerOnSql, renderPartnerLine, type PartnerOnShow } from '../lib/event-partners';
 import { ICON_SLIDER_SCRIPT, renderIconSlider } from '../lib/category-slider.js';
 import { BUSINESS_KINDS, BUSINESS_KIND_ICONS } from '../lib/business-kinds.js';
 import { fetchNextEventsAtVenue, MAX_NEXT_AT_VENUE, type NextEventRow } from '../lib/next-at-venue';
@@ -91,6 +92,7 @@ import {
 import { categoryByTypeId, type TypeCategory } from '../lib/event-type-catalog.js';
 import { eventTypeName } from '../lib/i18n/event-type-names.js';
 import { readEventTypeCatalog } from '../lib/event-type-catalog-read.js';
+import { resolveAllowedMaxTier, type ClearanceEnv } from '../lib/template-clearance.js';
 import { loadStreetLayer, type StreetMapEnv } from '../lib/street-map.js';
 import { renderShareButton } from '../lib/share-button.js';
 import { fetchPlaceLinks } from '../lib/map-place-links.js';
@@ -1077,6 +1079,8 @@ interface EventPageSocialData {
   walkInCount?: number;
   surveyCount: number;
   emailCount: number;
+  /** Partner links on show (both sides accept; lib/event-partners.ts). */
+  partners?: PartnerOnShow[];
 }
 
 /**
@@ -1098,7 +1102,7 @@ interface EventPageSocialData {
  * or, with no https website, to the sponsor's own card. Never tier-shaped
  * (#25): nothing here reads a tier or a spend.
  */
-function renderSponsorItem(s: SponsorBasicRow): string {
+function renderSponsorItem(s: SponsorBasicRow, lang: Lang = DEFAULT_LANG): string {
   const name = esc(sponsorTitle(s));
   // Stryker disable next-line StringLiteral: equivalent (OSE-1952). `url` is read
   // only by startsWith('https://') and, past it, in the https branch; '' and any
@@ -1126,7 +1130,7 @@ function renderSponsorItem(s: SponsorBasicRow): string {
   // (sponsor-signal-never-who) reads these tags from source to prove rel=noreferrer.
   return url.startsWith('https://')
     ? `<a href="${esc(url)}" class="sponsor-panel-main" rel="noopener noreferrer nofollow">${inner}</a>`
-    : `<a href="${esc(sponsorCardPath(s.id))}" class="sponsor-panel-main" data-testid="sponsor-card-link">${inner}</a>`;
+    : `<a href="${esc(sponsorCardPath(s.id, lang))}" class="sponsor-panel-main" data-testid="sponsor-card-link">${inner}</a>`;
 }
 
 /**
@@ -1135,11 +1139,11 @@ function renderSponsorItem(s: SponsorBasicRow): string {
  * same 3:1 frame, so no sponsor stands out. Compact (two across on a phone,
  * three on a wide screen): the first phone screen belongs to the event.
  */
-function renderSponsorList(sponsors: SponsorBasicRow[]): string {
+function renderSponsorList(sponsors: SponsorBasicRow[], lang: Lang = DEFAULT_LANG): string {
   const items = sponsors
     .map(
       (s) =>
-        `<li class="sponsor-panel-block" data-testid="sponsor-item">${renderSponsorItem(s)}</li>`
+        `<li class="sponsor-panel-block" data-testid="sponsor-item">${renderSponsorItem(s, lang)}</li>`
     )
     .join('');
   return `<ul class="sponsor-panel ose-sponsor-list" data-testid="sponsor-list">${items}</ul>`;
@@ -1191,15 +1195,15 @@ function renderEventTopbar(
  */
 const EVENT_ACTIONS_CSS =
   `
-    .ose-event-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: flex-start; margin: 1rem 0 0.5rem; }
-    .ose-share-btn, .ose-calendar-link { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 0.75rem; border-radius: 6px; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 44px; margin: 0; text-decoration: none; flex: 1 1 120px; }
+    .ose-event-actions { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: stretch; margin: 1rem 0 0.5rem; }
+    .ose-share-btn, .ose-calendar-link { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--ose-accent); border: 1.5px solid var(--ose-accent); padding: 0.65rem 0.75rem; border-radius: 6px; font-size: 1rem; font-weight: 600; line-height: 1.25; text-align: center; font-family: inherit; box-sizing: border-box; cursor: pointer; min-height: 44px; margin: 0; text-decoration: none; flex: 1 1 120px; }
     .ose-share-btn:hover, .ose-calendar-link:hover, .ose-calendar-option:hover { background: var(--ose-accent-tint); }
     .ose-share-btn:focus, .ose-calendar-link:focus, .ose-calendar-option:focus { outline: 3px solid var(--ose-focus); outline-offset: 2px; }
-    .ose-calendar-menu { flex: 1 1 120px; }
-    .ose-calendar-summary { width: 100%; list-style: none; cursor: pointer; }
+    .ose-calendar-menu { flex: 1 1 120px; position: relative; display: flex; flex-direction: column; }
+    .ose-calendar-summary { width: 100%; flex: 1 1 auto; list-style: none; cursor: pointer; }
     .ose-calendar-summary::-webkit-details-marker { display: none; }
-    .ose-calendar-options { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; }
-    .ose-calendar-option { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0.65rem 1rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; color: var(--ose-accent); text-decoration: none; font-weight: 600; font-size: 1rem; }` +
+    .ose-calendar-options { position: absolute; top: 100%; inset-inline: 0; z-index: 2; display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.5rem; padding: 0.5rem; background: var(--ose-card); border-radius: 6px; }
+    .ose-calendar-option { display: inline-flex; align-items: center; justify-content: center; text-align: center; line-height: 1.25; min-height: 44px; padding: 0.65rem 1rem; border: 1.5px solid var(--ose-accent); border-radius: 6px; color: var(--ose-accent); text-decoration: none; font-weight: 600; font-size: 1rem; }` +
   BACK_BUTTON_CSS +
   LANGUAGE_SWITCH_CSS +
   LANGUAGE_MENU_CSS +
@@ -1359,7 +1363,7 @@ function renderSponsorStrip(
   if (!sponsors.length) return '';
   return `<section class="ose-sponsor-strip" data-testid="${testid}" aria-label="${msg(lang, 'sponsors.label')}">
     <p class="ose-sponsor-label">${heading}</p>
-    ${renderSponsorList(sponsors)}
+    ${renderSponsorList(sponsors, lang)}
   </section>`;
 }
 
@@ -1425,10 +1429,23 @@ function attendanceModeLine(
     : `<p>${label}</p>`;
 }
 
-function venueMapImg(row: PublicEventRow, testId: string, lang: Lang = DEFAULT_LANG): string {
+function venueMapImg(
+  row: PublicEventRow,
+  testId: string,
+  lang: Lang = DEFAULT_LANG,
+  nonce: string = ''
+): string {
   const venue = row.location || row.where_address;
   if (!venue) return '';
-  return `<img src="/api/v2/maps/venue-image?event=${encodeURIComponent(row.id)}" alt="${fmt(lang, 'map.alt', { venue: esc(venue) })}" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="${testId}" />`;
+  // A map that fails to load is taken off the page, so a reader never sees a
+  // broken image (owner 2026-11-28). The image route answers an error when the
+  // map service refuses, so this one listener covers every failure. Inline
+  // onerror= is blocked by the page's CSP, and 'error' does not bubble, so it
+  // listens in capture. It removes the image and nothing else.
+  const hide = nonce
+    ? `<script nonce="${esc(nonce)}">document.addEventListener('error',function(e){var t=e.target;if(t&&t.classList&&t.classList.contains('ose-venue-map'))t.remove();},true);</script>`
+    : '';
+  return `<img src="/api/v2/maps/venue-image?event=${encodeURIComponent(row.id)}" alt="${fmt(lang, 'map.alt', { venue: esc(venue) })}" class="ose-venue-map" loading="lazy" width="600" height="240" data-testid="${testId}" />${hide}`;
 }
 
 // NOTE on CSP + the nonce parameter (added 2026-05-14 after code review):
@@ -1491,7 +1508,7 @@ export function renderPreEventHtml(
   const startHuman = formatEventWhen(row, lang);
   // OSE-474: "Starts in 5 hours" under the labelled when line, pre-event only.
   const countdown = renderEventCountdown(row, nonce, undefined, lang);
-  const mapImg = preview ? '' : venueMapImg(row, 'venue-map', lang);
+  const mapImg = preview ? '' : venueMapImg(row, 'venue-map', lang, nonce);
   // OSE-2196 (owner 2026-11-19): no route to an event that is off the map or
   // private. Directions only when the event is routable (listed and live); a
   // draft preview answers for the event once published.
@@ -1556,7 +1573,7 @@ ${SPONSOR_LIST_CSS}
       <h1 id="event-title" data-testid="event-title">${isolateTyped(lang, title)}</h1>
       ${renderEventTypeMeta(row, 'event-type', lang)}
       ${startHuman ? `<p class="ose-meta" data-testid="event-when">${esc(startHuman)}${countdown.html}</p>${countdown.script}` : ''}
-      ${renderTrustLine(row, 'event-trust', lang)}
+      ${renderTrustLine(row, 'event-trust', lang)}${social?.partners?.length ? renderPartnerLine(social.partners, 'event-partners', lang) : ''}
     </header>
     ${social ? renderSponsorStrip('pre-sponsor-strip', social.sponsors, msg(lang, 'sponsors.supportedBy'), lang) : ''}
 
@@ -1712,7 +1729,7 @@ export function renderEventLiveHtml(
   const howDetails = esc(row.how_details);
   const whereAddress = esc(row.where_address) || esc(row.location);
   const venueDisplay = esc(row.location);
-  const mapImg = venueMapImg(row, 'venue-map-live', lang);
+  const mapImg = venueMapImg(row, 'venue-map-live', lang, nonce);
   // OSE-2196: the same routable rule as the pre-event page.
   const geoLink = isRoutable(row)
     ? renderEventGeoLink(row, msg(lang, 'directions.live'), 'geo-link-live')
@@ -1782,7 +1799,7 @@ ${SPONSOR_LIST_CSS}
       <h1 id="event-title" data-testid="event-title-live">${isolateTyped(lang, title)}</h1>
       ${renderEventTypeMeta(row, 'event-type-live', lang)}
       ${liveWhen ? `<p class="ose-meta" data-testid="event-when-live">${esc(liveWhen)}</p>` : ''}
-      ${renderTrustLine(row, 'event-trust-live', lang)}
+      ${renderTrustLine(row, 'event-trust-live', lang)}${social?.partners?.length ? renderPartnerLine(social.partners, 'event-partners-live', lang) : ''}
     </header>
     ${social ? renderSponsorStrip('live-sponsor-strip', social.sponsors, msg(lang, 'sponsors.supportedBy'), lang) : ''}
 
@@ -2001,7 +2018,7 @@ export function renderPostEventHtml(
   // HOW MUCH — the event's own price, display-only (#6 inert_monetization holds:
   // it is a label, never a payment primitive). Same source the pre/live renders use.
   const howMuch = formatEventPrice(row, lang);
-  const mapImg = venueMapImg(row, 'venue-map-post', lang);
+  const mapImg = venueMapImg(row, 'venue-map-post', lang, nonce);
   // Archived before its day: it never happened. Same page shape (nothing to
   // join), but no "Happened", no "wrap" and no numbers that say it took place.
   const calledOff = archivedBeforeStart(row);
@@ -2087,7 +2104,7 @@ ${SPONSOR_LIST_CSS}
       social && social.sponsors.length
         ? `<section class="ose-sponsor-strip ose-sponsor-thanks" data-testid="post-sponsor-thanks" aria-labelledby="thanks-heading">
             <h2 id="thanks-heading">${msg(lang, 'sponsors.thanks')}</h2>
-            ${renderSponsorList(social.sponsors)}
+            ${renderSponsorList(social.sponsors, lang)}
           </section>`
         : ''
     }
@@ -2245,6 +2262,8 @@ export async function fetchEventPageSocialData(
     emailCount: 0,
   };
 
+  // Partner links on show (owner 2026-11-28): read beside the statements below.
+  const partnersP = readPartnersOnShow(env, eventId);
   const [sponsorsResult, regResult, checkinResult, surveyResult, emailResult, walkInResult] =
     await Promise.allSettled([
       env.DB
@@ -2341,7 +2360,35 @@ export async function fetchEventPageSocialData(
     walkInCount: walkInResult.status === 'fulfilled' ? (walkInResult.value?.walk_in_count ?? 0) : 0,
     surveyCount: surveyResult.status === 'fulfilled' ? (surveyResult.value?.cnt ?? 0) : 0,
     emailCount: emailResult.status === 'fulfilled' ? (emailResult.value?.cnt ?? 0) : 0,
+    partners: await partnersP,
   };
+}
+
+/**
+ * Partner links on show (owner 2026-11-28, lib/event-partners.ts): both sides
+ * accept. A group's name and kind only. Fails to [], so a database behind
+ * migration 0128 loses only this line.
+ */
+async function readPartnersOnShow(env: PublicEventEnv, eventId: string): Promise<PartnerOnShow[]> {
+  if (!env.DB) return [];
+  try {
+    const rs = await env.DB.prepare(
+      `SELECT p.partner_name AS name, p.kind AS kind, p.is_public_body AS is_public_body
+         FROM event_partners p
+        WHERE p.event_id = ? AND ${partnerOnSql('p')}
+        ORDER BY p.created_at, p.id
+        LIMIT 12`
+    )
+      .bind(eventId)
+      .all<{ name: string; kind: string; is_public_body: number }>();
+    return (rs.results ?? []).map((r) => ({
+      name: String(r.name),
+      kind: r.kind === 'co_host' ? ('co_host' as const) : ('partner' as const),
+      is_public_body: Number(r.is_public_body) === 1,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -3172,7 +3219,9 @@ export async function handleLandingPage(
     // read only folds every event into "Other" (one choice, so no row); the
     // cards still show. tests/landing-category-scenarios.spec.ts.
     const typeCategoriesRead: Promise<Map<string, TypeCategory> | undefined> = (async () =>
-      categoryByTypeId(await readEventTypeCatalog(db)))().catch(() => undefined);
+      categoryByTypeId(
+        await readEventTypeCatalog(db, resolveAllowedMaxTier(env as ClearanceEnv))
+      ))().catch(() => undefined);
     const dp = getDataProvider(env as LandingEnv, ctx ?? null);
     const result = await dp.listEvents('root');
     // OSE-2012: an online event is link only. It has no cell, so it could never

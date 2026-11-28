@@ -1,0 +1,43 @@
+info:
+  name: "Passport | a stop page carries the card and its script"
+  type: http
+  seq: 194
+
+# Mock-layer twin: workers/oursharedevents/tests/passport-route.spec.ts.
+
+http:
+  method: GET
+  url: "{{baseUrl}}/events/{{boothLiveFairId}}/booths/l1"
+  headers:
+    - name: Accept
+      value: text/html
+    - name: X-OCR-CI
+      value: "{{ocrCiEdgeToken}}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        var edge = res.getStatus() === 403 && (res.getHeader('cf-mitigated') || '').length > 0;
+        if (edge) { test('EDGE: the page read was challenged before the Worker ran (OSE-939); nothing below was checked', function () { expect(edge).to.equal(true); }); }
+        var body = typeof res.getBody() === 'string' ? res.getBody() : JSON.stringify(res.getBody());
+        if (!edge) {
+          test('Passport page: 200 with the card for this stop', function () {
+            expect(res.getStatus()).to.eql(200);
+            expect(body).to.include('data-testid="passport"');
+            expect(body).to.include('data-passport-stop="L1"');
+            expect(body).to.include('Stamp passport');
+          });
+          test('Passport page: the stops in use only (L3 is out of use)', function () { expect(body).to.include('data-passport-stops="[&quot;L2&quot;,&quot;L1&quot;]"'); });
+          test('Passport page: the script carries the page nonce', function () { expect(body).to.match(/<script nonce="[^"]+">\s*\(function \(\) \{\s*var card/); });
+          test('Passport page: no cookie', function () { expect(!res.getHeader('set-cookie')).to.equal(true); });
+          test('Passport page: exactly one <h1>', function () { expect((body.match(/<h1[\s>]/gi) || []).length).to.eql(1); });
+        }
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

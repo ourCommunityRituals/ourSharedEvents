@@ -47,11 +47,28 @@ function parse(header: string): Entry[] {
   return entries.sort((a, b) => b.q - a.q || a.order - b.order);
 }
 
+/**
+ * Tags browsers send for a language we list under another tag: Chinese by
+ * region (a browser says `zh-CN` or `zh-TW`, rarely `zh-Hans`), and Filipino,
+ * whose standard tag is `fil` while the pages use `tl` (owner 2026-11-28).
+ */
+const ALIASES: Readonly<Record<string, Lang>> = {
+  zh: 'zh-hans',
+  'zh-cn': 'zh-hans',
+  'zh-sg': 'zh-hans',
+  'zh-my': 'zh-hans',
+  'zh-tw': 'zh-hant',
+  'zh-hk': 'zh-hant',
+  'zh-mo': 'zh-hant',
+  fil: 'tl',
+};
+
 /** `zh-hans-cn` is tried as `zh-hans-cn`, `zh-hans`, then `zh`. */
 function match(tag: string): Lang | null {
   let candidate = tag;
   for (;;) {
     if ((LANGUAGES as readonly string[]).includes(candidate)) return candidate as Lang;
+    if (Object.hasOwn(ALIASES, candidate)) return ALIASES[candidate];
     const cut = candidate.lastIndexOf('-');
     // Stryker disable next-line EqualityOperator: equivalent mutant (OSE-1970) — at cut 0 the next candidate is '', which is never a language, so stopping one step early returns the same null.
     if (cut < 0) return null;

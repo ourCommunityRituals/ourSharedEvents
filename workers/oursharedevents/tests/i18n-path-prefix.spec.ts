@@ -20,6 +20,7 @@ import {
   parseLangPrefix,
   withLangPrefix,
 } from '../src/lib/i18n/path-prefix';
+import { LANGUAGES } from '../src/lib/i18n/languages';
 import { renderLanguageSwitch } from '../src/lib/i18n/language-switch';
 
 describe('OSE-1761 parseLangPrefix | what is a prefix', () => {
@@ -42,8 +43,8 @@ describe('OSE-1761 parseLangPrefix | what is a prefix', () => {
   });
 
   it('an unsupported or unlisted language is not a prefix', () => {
-    expect(parseLangPrefix('/fr/events/abc')).toBeNull();
-    expect(parseLangPrefix('/zh-hans/events/abc')).toBeNull();
+    expect(parseLangPrefix('/nl/events/abc')).toBeNull();
+    expect(parseLangPrefix('/zh-cn/events/abc')).toBeNull();
     expect(parseLangPrefix('/xx/events/abc')).toBeNull();
   });
 
@@ -192,7 +193,7 @@ describe('OSE-1761 matchLanguagePage | the pages that exist under a prefix', () 
       '/display',
       '/poster',
       '/privacy',
-      '/sponsors/abc',
+      '/sponsors/abc/more',
       '/forms/abc',
       '/admin',
       '/api/v2/events',
@@ -221,8 +222,10 @@ describe('OSE-1761 languageAlternates', () => {
     expect(languageAlternates('https://oursharedevents.com', '/events/abc/spring')).toEqual([
       { hreflang: 'en', href: 'https://oursharedevents.com/events/abc/spring' },
       { hreflang: 'es', href: 'https://oursharedevents.com/es/events/abc/spring' },
-      { hreflang: 'pl', href: 'https://oursharedevents.com/pl/events/abc/spring' },
-      { hreflang: 'ar', href: 'https://oursharedevents.com/ar/events/abc/spring' },
+      ...LANGUAGES.filter((l) => l !== 'en' && l !== 'es').map((l) => ({
+        hreflang: l,
+        href: `https://oursharedevents.com/${l}/events/abc/spring`,
+      })),
       { hreflang: 'x-default', href: 'https://oursharedevents.com/events/abc/spring' },
     ]);
   });
@@ -271,5 +274,18 @@ describe('OSE-1761 renderLanguageSwitch', () => {
     const html = renderLanguageSwitch({ lang: 'en', path: '/events/"><script>x</script>' });
     expect(html).not.toContain('<script>');
     expect(html).toContain('&quot;');
+  });
+});
+
+describe('the sponsor card joins the language layer (owner 2026-11-28)', () => {
+  it('/sponsors/<id> is a page under a prefix, and keeps its id', () => {
+    expect(matchLanguagePage('/sponsors/sp_37274e8d-a2d9')).toEqual({
+      kind: 'sponsor',
+      id: 'sp_37274e8d-a2d9',
+    });
+    expect(matchLanguagePage('/sponsors/')).toBeNull();
+    expect(matchLanguagePage('/sponsors/a.b')).toBeNull();
+    // Anchored at the start too: a sponsor path inside another path is not the card.
+    expect(matchLanguagePage('/x/sponsors/abc')).toBeNull();
   });
 });

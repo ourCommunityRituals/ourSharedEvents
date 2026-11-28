@@ -745,7 +745,10 @@ describe('/q and scan counting are untouched by booths', () => {
     ).toHaveLength(1);
   });
 
-  test('the scan path source never reads a booth', () => {
+  // Stamp passport (owner 2026-11-28): the scan path reads a booth in one
+  // place only, lib/passport.ts's passportStopSql, to choose where a stop's
+  // code lands. It never writes one and no scan row carries one (above).
+  test('the scan path source never reads a booth except through the passport landing', () => {
     const sources: Record<string, string> = JSON.parse(tenv.TEST_SOURCE_FILES_JSON);
     const scanFiles = Object.entries(sources).filter(([p]) =>
       /src\/handlers\/qr-scan\.ts$|src\/lib\/scan-/.test(p)
@@ -754,6 +757,11 @@ describe('/q and scan counting are untouched by booths', () => {
     for (const [path, content] of scanFiles) {
       expect(content, path).not.toMatch(/booth/i);
     }
+    const passport = Object.entries(sources).find(([p]) => /src\/lib\/passport\.ts$/.test(p));
+    expect(passport, 'src/lib/passport.ts').toBeTruthy();
+    const sql = passport![1];
+    expect(sql).not.toMatch(/\b(INSERT|UPDATE|DELETE|REPLACE)\b[^']*\bevent_booths\b/i);
+    expect(sql).not.toMatch(/scan_placement_events/);
   });
 });
 

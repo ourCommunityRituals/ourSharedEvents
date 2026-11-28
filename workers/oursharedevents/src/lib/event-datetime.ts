@@ -161,8 +161,18 @@ export function formatEventTime(
     hour: 'numeric',
     minute: '2-digit',
     timeZoneName: 'short',
+    ...TIME_IN_SCRIPT[lang],
   }).format(d);
 }
+
+/**
+ * Urdu's short time reads "7:00 PM GMT -6", in Latin letters on a right-to-left
+ * page. Its 24-hour clock with the zone's name is all in Urdu script:
+ * "19:00 سنٹرل اسٹینڈرڈ ٹائم".
+ */
+const TIME_IN_SCRIPT: Partial<Record<Lang, Intl.DateTimeFormatOptions>> = {
+  ur: { hourCycle: 'h23', timeZoneName: 'long' },
+};
 
 /**
  * Format a date-only value ("YYYY-MM-DD") for humans WITHOUT a timezone shift.

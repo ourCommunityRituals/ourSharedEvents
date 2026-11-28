@@ -84,7 +84,7 @@ import { CORRIDOR_RES, NODE_RES } from './h3-tagging.js';
 import type { StreetLayer } from './street-map.js';
 import { toPublicEvent } from './public-event-projection.js';
 import { fmt, msg } from './i18n/catalog.js';
-import { categoryName } from './i18n/event-type-names.js';
+import { rowLabel } from './i18n/event-type-names.js';
 import { AREA_FILTERS_STYLE, FILTERS_TOGGLE_ID } from './area-filters-style.js';
 import { AREA_TABS_STYLE } from './area-tabs-style.js';
 import { AREA_TABS_SCRIPT } from './area-tabs-script.js';
@@ -191,8 +191,8 @@ function slugify(raw: string): string {
 /** The slug every event without a known category shares. */
 const OTHER_SLUG = 'cat-other';
 
-// The category's name in the page's language (lib/i18n/event-type-names.ts),
-// else the catalog's own ("Arts, Culture & Live Music"). "Other" is ours, so
+// The bucket's short name in the page's language (lib/i18n/event-type-names.ts),
+// else the catalog's own ("Sports & Rec"). "Other" is ours, so
 // it is in the page's language, and it always sorts last.
 function categoryOf(
   item: LandingAreaItem,
@@ -211,7 +211,7 @@ function categoryOf(
   return {
     slug: `cat-${slugify(cat.code)}`,
     code: cat.code,
-    label: categoryName(lang, cat.code, cat.name),
+    label: rowLabel(lang, cat.code, cat.name, cat.short),
     order: cat.order,
   };
 }
@@ -685,7 +685,9 @@ function buildAreaMarkup(args: {
   const typeSlider = showTypes
     ? renderIconSlider({
         label: msg(lang, 'area.kinds'),
-        showLabel: true,
+        // Owner 2026-11-28 (event type buckets, D5): no visible heading, the
+        // pictures say it; a screen reader still hears the name.
+        showLabel: false,
         testid: 'toggle-type',
         prevLabel: msg(lang, 'slider.prev'),
         nextLabel: msg(lang, 'slider.next'),

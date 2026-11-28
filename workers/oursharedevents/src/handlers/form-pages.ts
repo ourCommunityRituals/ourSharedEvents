@@ -55,7 +55,6 @@ import {
   turnstileClientEnabled,
   TURNSTILE_HOST,
 } from '../lib/turnstile';
-import { ANON_COOKIE_NAME } from '../lib/anonymous-id';
 
 export interface FormPagesEnv {
   // OSE-R-007 (2026-05-15): event title must come from the canonical
@@ -101,20 +100,19 @@ function buildSecurityHeaders(nonce: string, env?: FormPagesEnv): Record<string,
  * The one line under each form: what that form keeps, and for how long. Each
  * line matches the retention in the details below it (owner 2026-10-11).
  *
- * OSE-1850: these lines are privacy text, so they stay in English until a human
- * translation and a legal read. The check-in line is the one exception: it is
- * the same promise the event page's check-in choice already makes in every
- * language (`choices.checkinNote`), so the reader who tapped it reads it again
- * here in the same words.
+ * Owner 2026-11-28: the privacy text shows in the page's language. The English
+ * text stays the official one: on a page not in English the notice says so, and
+ * the English text sits under it, marked `lang="en"`. The check-in line is the
+ * promise the event page's check-in choice already makes (`choices.checkinNote`).
  */
-function privacySummary(formType: NoticeForm): string {
+function privacySummary(formType: NoticeForm, lang: Lang): string {
   switch (formType) {
     case 'survey':
-      return 'Comments are cleaned of personal details within 24 hours.';
+      return msg(lang, 'privacy.summary.survey');
     case 'email':
-      return 'Your email is deleted after 30 days.';
+      return msg(lang, 'privacy.summary.email');
     default:
-      return 'Your name and email are cleared the day after the event.';
+      return msg(lang, 'privacy.summary.register');
   }
 }
 
@@ -127,71 +125,50 @@ function privacySummary(formType: NoticeForm): string {
  */
 type NoticeForm = 'register' | 'checkin' | 'survey' | 'email';
 
-function privacyNotice(formType: NoticeForm, legalTier = 1, lang: Lang = DEFAULT_LANG): string {
-  let purpose: string;
-  let legalBasis: string;
-  let retention: string;
-
-  switch (formType) {
-    case 'checkin':
-      purpose = `We record an <strong>anonymous count only</strong>, never your name. A random id in the <strong>${ANON_COOKIE_NAME}</strong> cookie counts you once.`;
-      legalBasis = 'GDPR Art. 6(1)(f) — legitimate interest in knowing attendance numbers.';
-      retention = 'Anonymous aggregate counts are kept for event reporting only.';
-      break;
-    case 'survey':
-      purpose = 'We collect your ratings and optional comments to improve future events.';
-      legalBasis = 'GDPR Art. 6(1)(a) — your <strong>consent</strong>.';
-      retention =
-        'Comments are scrubbed of personal information within <strong>24</strong> hours. Aggregate ratings are kept indefinitely.';
-      break;
-    case 'email':
-      purpose = 'We collect your email address to notify you about future community events.';
-      legalBasis =
-        'GDPR Art. 6(1)(a) — your <strong>consent</strong>. You can <strong>withdraw consent</strong> at any time.';
-      retention =
-        'Your email is encrypted at rest and automatically deleted after <strong>30</strong> days.';
-      break;
-    default: // register
-      // Owner 2026-10-11: the email is optional and only lets the organizer
-      // reach you about this event (a new date, a cancellation).
-      purpose =
-        'We collect your name and, if you choose, your email, so the organizer can reach you if this event changes.';
-      legalBasis = 'GDPR Art. 6(1)(a) — your <strong>consent</strong>.';
-      retention =
-        'Your name and email are encrypted, and <strong>cleared the day after the event</strong>. The rest of the registration is deleted 90 days after you register, or the day after the event if that is later.';
-  }
-
+/** The notice's paragraph in one language. */
+function privacyText(formType: NoticeForm, legalTier: number, lang: Lang): string {
+  const form = formType === 'email' ? 'email' : formType;
+  const purpose = msg(lang, `privacy.purpose.${form}` as MessageKey);
+  const legalBasis = msg(lang, `privacy.basis.${form}` as MessageKey);
+  const retention = msg(lang, `privacy.retention.${form}` as MessageKey);
   let addenda = '';
   if (legalTier >= 2) {
-    addenda += `<br/><strong>Commerce notice:</strong> Payment data is handled by our PCI DSS-compliant processor and never stored by us. `;
+    addenda += `<br/>${msg(lang, 'privacy.commerce')} `;
   }
   // Tiers 4 and 5 (HIPAA, COPPA) are declined regimes (ADR-018): no notice may
   // promise their safeguards. The tier is capped at 3, so these never render.
+  return `${purpose} ${msg(lang, 'privacy.basisLabel')} ${legalBasis} ${retention}
+        ${msg(lang, 'privacy.rights')}
+        <strong>${msg(lang, 'privacy.authority')}</strong>.
+        ${addenda}
+        <a href="/privacy" data-testid="privacy-policy-link">${msg(lang, 'privacy.policyLink')}</a>`;
+}
 
-  // OSE-1850: on a page not in English, the legal text below keeps its English
-  // and says so (`lang="en"`, so a screen reader reads it as English), and a
-  // plain note in the page's language explains why. No machine translation.
+function privacyNotice(formType: NoticeForm, legalTier = 1, lang: Lang = DEFAULT_LANG): string {
   const translated = lang !== DEFAULT_LANG;
-  const en = translated ? ' lang="en"' : '';
   const summary =
     formType === 'checkin'
       ? `<p class="privacy-summary" data-testid="privacy-summary">${msg(lang, 'choices.checkinNote')}</p>`
-      : `<p class="privacy-summary" data-testid="privacy-summary"${en}>${privacySummary(formType)}</p>`;
-  const note = translated
-    ? `\n    <p class="privacy-lang-note" data-testid="privacy-english-note">${msg(lang, 'form.privacy.englishNote')}</p>`
+      : `<p class="privacy-summary" data-testid="privacy-summary">${privacySummary(formType, lang)}</p>`;
+  // Not in English: the translation, then the official English text.
+  const official = translated
+    ? `
+      <p class="privacy-lang-note" data-testid="privacy-english-note">${msg(lang, 'form.privacy.englishNote')}</p>
+      <details class="privacy-official" data-testid="privacy-official-english">
+        <summary>${msg(lang, 'privacy.officialEnglish')}</summary>
+        <p lang="en" dir="ltr">
+        ${privacyText(formType, legalTier, DEFAULT_LANG)}
+        </p>
+      </details>`
     : '';
 
   return `<div class="privacy-notice" data-testid="privacy-notice">
-    ${summary}${note}
+    ${summary}
     <details class="privacy-details" data-testid="privacy-details">
       <summary>${msg(lang, 'form.privacy.details')}</summary>
-      <p${en}>
-        ${purpose} Legal basis: ${legalBasis} ${retention}
-        You have the right to access, correct, or erase your data, and to lodge a complaint with your local data protection
-        <strong>supervisory authority</strong>.
-        ${addenda}
-        <a href="/privacy" data-testid="privacy-policy-link">Full privacy policy</a>
-      </p>
+      <p>
+        ${privacyText(formType, legalTier, lang)}
+      </p>${official}
     </details>
   </div>`;
 }
@@ -205,6 +182,7 @@ const FORM_CSS = `
   body { line-height: 1.4; }
   header { background: var(--surface); color: var(--text); border-bottom: 1px solid var(--border); padding: 1rem 1.5rem; text-align: center; }
   header h1 { overflow-wrap: anywhere; font-size: 1.1rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
+  header h1 .ose-tagline { display: block; font-size: .75rem; font-weight: 400; text-transform: none; letter-spacing: 0; }
   header .event-name { font-size: 1.4rem; font-weight: 700; margin-top: .25rem; overflow-wrap: anywhere; }
   main { max-width: 480px; margin: 0 auto; padding: 1.5rem 1rem; }
   .form-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem; }
@@ -246,7 +224,7 @@ const FORM_CSS = `
   .rating-row button { width: auto; flex: 1; padding: .5rem; min-height: 44px; font-size: 1.1rem; background: var(--surface); color: var(--text); border: 2px solid var(--border-strong); }
   .rating-row button.selected { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
   .checkin-tap { text-align: center; padding: 3rem 1rem; }
-  .checkin-tap button { font-size: 1.5rem; padding: 1.5rem; border-radius: 50%; width: 180px; height: 180px; margin: 1rem auto; display: block; -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: transform 0.1s, opacity 0.1s; user-select: none; }
+  .checkin-tap button { font-size: 1.35rem; line-height: 1.2; padding: 1.25rem; overflow-wrap: break-word; hyphens: auto; border-radius: 50%; width: 200px; height: 200px; margin: 1rem auto; display: block; -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: transform 0.1s, opacity 0.1s; user-select: none; }
   .walk-in-row { color: var(--text-muted); font-size: .9rem; }
   .checkin-tap .walk-in-btn { width: auto; height: auto; min-height: 44px; margin: .5rem auto 0; padding: .6rem 1.1rem; border-radius: 8px; font-size: 1rem; background: var(--surface); color: var(--text); border: 1.5px solid var(--border-strong); }
   .checkin-tap .count { font-size: 2rem; font-weight: 700; color: var(--text); margin-top: 1rem; }
@@ -914,7 +892,7 @@ function formPage(
     <div class="form-topbar" data-testid="form-topbar">
     ${renderLanguageMenu({ lang, path: menuPath, nonce })}
     </div>
-    <h1>OurSharedEvents</h1>
+    <h1>OurSharedEvents<span class="ose-tagline" data-testid="brand-tagline">${msg(lang, 'brand.tagline')}</span></h1>
     <div class="event-name" data-testid="form-event-name">${isolateTyped(lang, eventName)}</div>
   </header>
   <!-- OSE-222: sponsor logo strip — hidden by default. Populated on

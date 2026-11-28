@@ -33,7 +33,7 @@ on:
   # needs the run is decided inside each job, by scripts/ci/mutation-paths.mjs:
   # the list that used to be written here twice, with its reasons, moved there.
   # A change that touches nothing on the list passes in seconds without running
-  # Stryker, and says so in the job summary. The run itself is ten jobs side by
+  # Stryker, and says so in the job summary. The run itself is eleven jobs side by
   # side on the node project: the main pass cut into six groups by cost
   # (workers/oursharedevents/mutation-groups.mjs), and the language layer's pass
   # (stryker.language.conf.mjs). If you add a mutate target in stryker.conf.mjs,
@@ -68,13 +68,19 @@ jobs:
   mutation-group:
     name: mutation (${{ matrix.group }})
     runs-on: ubuntu-24.04
-    # 15: the limit a group is cut to fit, not one to raise. The slowest group
-    # is how long a pull request waits for this check, so a group that nears
-    # the limit is cut in two (mutation-groups.mjs: forms on 2026-11-12, sponsors
-    # out of render on 2026-11-25, tiles
-    # out of render on 2026-11-15, when render was cancelled here at 15 minutes
-    # on main and on PR 1295).
-    timeout-minutes: 15
+    # 20: the limit a group is cut to fit. The slowest group is how long a pull
+    # request waits for this check, so a group that nears the limit is cut in
+    # two (mutation-groups.mjs: forms on 2026-11-12, tiles out of render on
+    # 2026-11-15, when render was cancelled here at 15 minutes on main and on
+    # PR 1295, sponsors out of render on 2026-11-25, menu out of render on
+    # 2026-11-28).
+    # Raised from 15 to 20 by the owner on 2026-11-28 (PR 1594). landing is one
+    # file and cannot be cut (14 min 30 s on that PR's earlier push), and
+    # render, 14 min 39 s on main that day, is almost all street-map.ts. On PR 1594 both were cancelled at 15 minutes
+    # with no mutant left alive; run alone on a 4-core machine they took 12 min
+    # 3 s and 10 min 44 s. A group that nears 20 is still cut or made faster,
+    # not given more time.
+    timeout-minutes: 20
     strategy:
       # Every group reports, so one red group does not hide another's result.
       fail-fast: false
@@ -92,6 +98,8 @@ jobs:
             script: test:mutation
           - group: sponsors
             script: test:mutation
+          - group: menu
+            script: test:mutation
           - group: forms
             script: test:mutation
           - group: tiles
@@ -104,7 +112,7 @@ jobs:
       run:
         working-directory: workers/oursharedevents
     # No job-level `if:` and no `needs:`, so every group starts on every pull
-    # request; the required check is `mutation` below, which waits for all ten.
+    # request; the required check is `mutation` below, which waits for all eleven.
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@aebdcf6156ab6691adf63218240e476564a1ed4c # v2
@@ -180,7 +188,7 @@ jobs:
 
   # The required check. It waits for every group and for the CI-scripts pass,
   # fails if any of them did not succeed, then scores every file against its own
-  # floor over all ten group reports (mutation-file-floor.mjs refuses a file
+  # floor over all eleven group reports (mutation-file-floor.mjs refuses a file
   # missing from them, or in two). mutation-ci-scripts is not a required check
   # of its own: owner ruling 2026-11-06 makes mutation testing required, and this
   # job is that check, so a red CI-scripts pass blocks a merge here.
@@ -242,8 +250,8 @@ jobs:
         if: steps.scope.outputs.run != 'false'
         # The break threshold in stryker.conf.mjs is per run; this fails when any
         # one guard file is under its own floor (admin.ts: 100%). OSE-1801, CCR S-2.
-        # All ten reports: a floored file missing from all, or in two, fails.
-        run: node scripts/ci/mutation-file-floor.mjs reports/mutation-group-map/mutation.json reports/mutation-group-landing/mutation.json reports/mutation-group-catalog/mutation.json reports/mutation-group-guards/mutation.json reports/mutation-group-render/mutation.json reports/mutation-group-sponsors/mutation.json reports/mutation-group-forms/mutation.json reports/mutation-group-tiles/mutation.json reports/mutation-group-zip/mutation.json reports/mutation-group-language/mutation.json
+        # All eleven reports: a floored file missing from all, or in two, fails.
+        run: node scripts/ci/mutation-file-floor.mjs reports/mutation-group-map/mutation.json reports/mutation-group-landing/mutation.json reports/mutation-group-catalog/mutation.json reports/mutation-group-guards/mutation.json reports/mutation-group-render/mutation.json reports/mutation-group-sponsors/mutation.json reports/mutation-group-menu/mutation.json reports/mutation-group-forms/mutation.json reports/mutation-group-tiles/mutation.json reports/mutation-group-zip/mutation.json reports/mutation-group-language/mutation.json
 
   # OSE-1695 — mutation testing of the CI security rules in scripts/ci (repository root, not the
   # Worker). A surviving mutant in branch-push-secret-exposure.mjs means the test that keeps

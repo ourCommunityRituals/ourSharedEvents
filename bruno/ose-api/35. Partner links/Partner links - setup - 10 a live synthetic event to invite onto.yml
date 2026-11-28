@@ -1,0 +1,36 @@
+info:
+  name: "Partner links | setup | a live synthetic event, off the map"
+  type: http
+  seq: 10
+
+# Mock-layer twin: workers/oursharedevents/tests/event-partners-route.spec.ts.
+
+http:
+  method: POST
+  url: "{{baseUrl}}/api/v2/admin/events"
+  headers:
+    - name: CF-Access-Client-Id
+      value: "{{cfAccessClientId}}"
+    - name: CF-Access-Client-Secret
+      value: "{{cfAccessClientSecret}}"
+    - name: Content-Type
+      value: "application/json"
+  body:
+    type: json
+    data: "{\"attendance_mode\":\"in_person\",\"location\":\"Partner links Hall\",\"title\":\"Partner links walk (staging, synthetic)\",\"status\":\"active\",\"is_published\":false,\"data_class\":\"synthetic\",\"start_date\":\"2099-01-01\",\"start_time\":\"18:00\",\"timezone\":\"America/Chicago\",\"event_type_id\":\"etr-rec-bocce\"}"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        const b = res.getBody() || {};
+        test('Partner links setup: the event is created', function () { expect(res.getStatus()).to.eql(201); expect(b.id).to.be.a('string'); });
+        bru.setVar('partnerEventId', b.id || 'missing-partner-event');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

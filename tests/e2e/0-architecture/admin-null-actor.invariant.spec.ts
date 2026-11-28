@@ -171,6 +171,12 @@ const SITES: Record<string, { kind: Kind; count: number; why: string }> = {
     count: 1,
     why: 'Argument to resolveAdminBrandScopeAsync on the line above.',
   },
+  'handlers/event-partners.ts: const scope = await resolveAdminBrandScopeAsync(extractAdminActor(request, env), env);':
+    {
+      kind: 'scope-denies-null',
+      count: 1,
+      why: 'Partner links (owner 2026-11-28): the actor goes straight to resolveAdminBrandScopeAsync, which denies null; a deny answers 404 or an empty list.',
+    },
   'handlers/sponsor-home.ts: const actor = extractAdminActor(request, env);': {
     kind: 'scope-denies-null',
     count: 2,

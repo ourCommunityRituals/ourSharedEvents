@@ -51,6 +51,8 @@
  *   GET /es/events/:id/register|checkin|survey|updates → the form page in that language
  *                                  (OSE-1850); /es stands for any listed language. The form posts
  *                                  to the unprefixed API; no language is stored.
+ *   GET /es/sponsors/:id         → the public sponsor card in that language (owner 2026-11-28);
+ *                                  the same gate and read limit as /sponsors/:id
  *   GET /events                  → the public events list page; limited per caller, its own scope
  *   GET /events/:id              → the public event page (any path under /events/ with one segment)
  *   GET /events/:id/:name        → the same page at its readable address (OSE-1684); a name that
@@ -118,6 +120,12 @@
  *   PUT    /api/v2/admin/events/:id/booths/:boothId → change a booth of this event (auth, audited)
  *   DELETE /api/v2/admin/events/:id/booths/:boothId → take a booth out of use; never removed, its placements stay (auth, audited)
  *   GET    /api/v2/admin/events/:id/booths/counts → scans per stall, per category, for placements with no stall, and the fair's total, each a FlooredCount from the floored poster-hour cells; any_withheld is a boolean (auth, plan-capped like the poster list, OSE-2004)
+ *   GET    /api/v2/admin/events/:id/partners → the event's partner links, each with both sides' answers (auth, owner 2026-11-28, migration 0128)
+ *   POST   /api/v2/admin/events/:id/partners → invite another brand as partner or co-host (a public body is always a co-host); a second invite re-offers (auth, audited)
+ *   POST   /api/v2/admin/events/:id/partners/:linkId/withdraw → the organizer ends a link (auth, audited)
+ *   GET    /api/v2/admin/partner-links → links offered to the caller's brands, with the event's title and date (auth, scoped by the link's partner brand)
+ *   POST   /api/v2/admin/partner-links/:linkId/respond → the partner accepts or declines; another brand's link is 404 (auth, audited)
+ *   GET    /api/v2/admin/partner-links/:linkId/counts → while both accept, the event's scan total as a FlooredCount, nothing else (auth)
  *   GET    /api/v2/admin/events/:id/votables → the event's vote set and its objects; no count, no T or V, no epoch (auth, OSE-2127, OSE ADR-040)
  *   POST   /api/v2/admin/events/:id/votables → make the event's one vote set, played by objects or teams (auth, audited)
  *   POST   /api/v2/admin/events/:id/votables/code → make the room's vote code, or return the one in use; its token is in no public answer (auth, audited, OSE-2140)
@@ -217,6 +225,7 @@
  *   GET    /sponsors/:id                       → public sponsor card: title, location, contact (0083)
  *   GET    /sponsor?t=<token>                  → the sponsor's own page (token-gated, read-limited)
  *   GET    /sponsor-default-logo.svg           → the OSE default sponsor image (0083)
+ *   GET    /flags/:lang.svg                    → the flag or letter badge beside a language's name
  *   GET    /event-default-thumb.svg            → the OSE default event card image
  *   POST   /api/v2/events/:id/sponsors/:sid/impression → log impression
  *   POST   /api/v2/events/:id/sponsors/:sid/click      → log click
@@ -337,6 +346,7 @@ import {
   type PublicReadLimitEnv,
 } from './lib/public-read-limit.js';
 import { SPONSOR_DEFAULT_LOGO_PATH, sponsorDefaultLogoResponse } from './lib/sponsor-card.js';
+import { flagLangFromPath, languageFlagResponse } from './lib/i18n/language-flags.js';
 import { EVENT_DEFAULT_THUMB_PATH, eventDefaultThumbResponse } from './lib/event-thumb.js';
 import { handleSponsorCardPage } from './handlers/sponsor-card.js';
 import {
@@ -435,6 +445,14 @@ import { handleCompetitionPage } from './handlers/competition-page';
 import { handleScoreScreen } from './handlers/competition-score-screen';
 import { handleBoothListPage } from './handlers/booth-list-page';
 import { handleAdminBoothCounts } from './handlers/booth-counts';
+import {
+  handleInviteEventPartner,
+  handleListEventPartners,
+  handleListPartnerLinks,
+  handlePartnerLinkCounts,
+  handleRespondPartnerLink,
+  handleWithdrawEventPartner,
+} from './handlers/event-partners';
 import { handleBriefingPage } from './handlers/briefing';
 import { handleDemoIndex, handleDemoSite } from './handlers/demo';
 import { handleBocceDemo } from './handlers/demo-bocce';
@@ -958,6 +976,11 @@ export async function route(
         (req) => pageLimitResponse(req, langPrefix.lang, '/events')
       )(request, env);
     }
+    if (page?.kind === 'sponsor') {
+      // The same card as /sponsors/<id>, in the path's language. The handler
+      // keeps its own public read limit, so a prefix is no second allowance.
+      return handleSponsorCardPage(request, env, page.id, langPrefix.lang);
+    }
     if (page?.kind === 'share') {
       // The same count and per-caller limit as /e/<code>: a share open, what + when.
       return publicCountLimited('event-code-share', (req, e: typeof env, countable) =>
@@ -1009,6 +1032,11 @@ export async function route(
   // OSE default sponsor image (0083) — static, same-origin, locked down.
   if (pathname === SPONSOR_DEFAULT_LOGO_PATH && method === 'GET') {
     return sponsorDefaultLogoResponse();
+  }
+  // The flag or letter badge beside a language's name — static, same-origin.
+  if (method === 'GET' && pathname.startsWith('/flags/')) {
+    const flagLang = flagLangFromPath(pathname);
+    if (flagLang) return languageFlagResponse(flagLang);
   }
 
   if (pathname === '/ui.css') {
@@ -1772,6 +1800,73 @@ export async function route(
     const ref = _withReference(res, reqId);
     _audit(ref.ref, 'READ_PAST_PLAN', _auditOutcome(res), 'event', id);
     return ref.res;
+  }
+
+  // /api/v2/admin/events/:id/partners — partner links (owner 2026-11-28,
+  // lib/event-partners.ts). The event in the path is brand-scoped by
+  // guardAdminObjectScope above; every write is audited against the event.
+  const adminEventPartnersMatch = pathname.match(/^\/api\/v2\/admin\/events\/([^/]+)\/partners$/);
+  if (adminEventPartnersMatch && (method === 'GET' || method === 'POST')) {
+    const partnerEventId = adminEventPartnersMatch[1];
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const authRes = await requireAdmin(request, env, reqId);
+    if (authRes) {
+      if (method === 'POST') _audit(reqId, 'INVITE_PARTNER', 'denied', 'event', partnerEventId);
+      return authRes;
+    }
+    if (method === 'GET') return handleListEventPartners(request, env, partnerEventId);
+    const response = await handleInviteEventPartner(request, env, partnerEventId);
+    _audit(reqId, 'INVITE_PARTNER', _auditOutcome(response), 'event', partnerEventId);
+    return response;
+  }
+
+  const adminEventPartnerWithdrawMatch = pathname.match(
+    /^\/api\/v2\/admin\/events\/([^/]+)\/partners\/([^/]+)\/withdraw$/
+  );
+  if (adminEventPartnerWithdrawMatch && method === 'POST') {
+    const [, partnerEventId, linkId] = adminEventPartnerWithdrawMatch;
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const authRes = await requireAdmin(request, env, reqId);
+    if (authRes) {
+      _audit(reqId, 'WITHDRAW_PARTNER', 'denied', 'event', partnerEventId);
+      return authRes;
+    }
+    const response = await handleWithdrawEventPartner(request, env, partnerEventId, linkId);
+    _audit(reqId, 'WITHDRAW_PARTNER', _auditOutcome(response), 'event', partnerEventId);
+    return response;
+  }
+
+  // /api/v2/admin/partner-links — the partner's side. Not under /admin/events,
+  // so the handler scopes each link by its partner brand (out of scope = 404).
+  if (pathname === '/api/v2/admin/partner-links' && method === 'GET') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const authRes = await requireAdmin(request, env, reqId);
+    if (authRes) return authRes;
+    return handleListPartnerLinks(request, env);
+  }
+
+  const partnerLinkMatch = pathname.match(
+    /^\/api\/v2\/admin\/partner-links\/([^/]+)\/(respond|counts)$/
+  );
+  if (partnerLinkMatch) {
+    const [, linkId, what] = partnerLinkMatch;
+    if (what === 'respond' && method === 'POST') {
+      const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+      const authRes = await requireAdmin(request, env, reqId);
+      if (authRes) {
+        _audit(reqId, 'ANSWER_PARTNER', 'denied', 'partner_link', linkId);
+        return authRes;
+      }
+      const response = await handleRespondPartnerLink(request, env, linkId);
+      _audit(reqId, 'ANSWER_PARTNER', _auditOutcome(response), 'partner_link', linkId);
+      return response;
+    }
+    if (what === 'counts' && method === 'GET') {
+      const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+      const authRes = await requireAdmin(request, env, reqId);
+      if (authRes) return authRes;
+      return handlePartnerLinkCounts(request, env, linkId);
+    }
   }
 
   // /api/v2/admin/events/:id/booths — a booth is part of a fair (OSE-1998, OSE ADR-034).

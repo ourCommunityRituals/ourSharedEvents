@@ -42,7 +42,7 @@ describe('injectTestSiteNotice', () => {
     expect(out).not.toContain('endorsement');
   });
 
-  test.each([['en'], ['fr'], ['ES-us'], ['']])(
+  test.each([['en'], ['nl'], ['ES-us'], ['']])(
     'a page with lang="%s" gets the band in English',
     async (lang) => {
       const out = await injectTestSiteNotice(html(pageIn(lang)), { WORKER_ENV: 'staging' }).text();

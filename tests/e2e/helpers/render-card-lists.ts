@@ -15,6 +15,7 @@ const WORKER_DIR = resolve(__dirname, '../../../workers/oursharedevents');
 interface Bundle {
   renderSponsorHomePage: (input: unknown) => string;
   renderBoothListPage: (input: unknown) => string;
+  renderBoothPage: (input: unknown) => string;
   serveCss: () => Response;
 }
 
@@ -30,6 +31,7 @@ function load(): Promise<Bundle> {
         contents:
           "export { renderSponsorHomePage } from './src/lib/sponsor-home-render.ts';\n" +
           "export { renderBoothListPage } from './src/lib/booth-list-render.ts';\n" +
+          "export { renderBoothPage } from './src/lib/booth-page-render.ts';\n" +
           "export { serveCss } from '@ocr/ui';\n",
         resolveDir: WORKER_DIR,
         loader: 'ts',
@@ -108,6 +110,47 @@ export async function renderStalls(food: number, craft: number): Promise<string>
     ],
     sponsors: [],
     noindex: true,
+  });
+}
+
+/** The stops of the passport walk the passport component spec drives. */
+export const PASSPORT_WALK = {
+  id: 'walk_component',
+  stops: ['1', '2', '3'],
+} as const;
+
+const walkStop = (n: string) => ({
+  id: `stop${n}`,
+  number: n,
+  name: `Gallery ${n}`,
+  category: 'art',
+  hall_x: null,
+  hall_y: null,
+});
+
+/** One stop's page on a walk with the stamp passport on (or off, for the control). */
+export async function renderPassportStop(stop: string, passport = true): Promise<string> {
+  const b = await load();
+  return b.renderBoothPage({
+    event: { id: PASSPORT_WALK.id, title: 'First Friday Art Walk', slug: null },
+    when: 'Friday, June 4',
+    booth: walkStop(stop),
+    sponsors: [],
+    noindex: true,
+    passportStops: passport ? [...PASSPORT_WALK.stops] : null,
+  });
+}
+
+/** The walk's list of stops, passport on. */
+export async function renderPassportList(): Promise<string> {
+  const b = await load();
+  return b.renderBoothListPage({
+    event: { id: PASSPORT_WALK.id, title: 'First Friday Art Walk', slug: null },
+    when: 'Friday, June 4',
+    booths: PASSPORT_WALK.stops.map(walkStop),
+    sponsors: [],
+    noindex: true,
+    passport: true,
   });
 }
 

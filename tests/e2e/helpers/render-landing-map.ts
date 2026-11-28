@@ -278,7 +278,7 @@ export function fakeCatalogDb(
   types: { id: string; uec_code: string; name: string; category_code: string }[]
 ): unknown {
   const answer = (sql: string) =>
-    /event_type_category_registry/.test(sql)
+    /event_type_bucket|event_type_category_registry/.test(sql)
       ? categories.map((c) => ({ ...c, is_active: 1 }))
       : /event_type_registry/.test(sql)
         ? types.map((t) => ({ ...t, description: null, is_active: 1 }))

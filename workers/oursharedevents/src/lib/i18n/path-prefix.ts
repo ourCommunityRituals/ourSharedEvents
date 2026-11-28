@@ -50,11 +50,14 @@ export type LanguagePage =
   | { kind: 'map' }
   | { kind: 'events' }
   // OSE-1850: an event's form screens (register, check in, feedback, updates).
-  | { kind: 'form'; id: string; screen: EventFormScreen };
+  | { kind: 'form'; id: string; screen: EventFormScreen }
+  // The public sponsor card (owner 2026-11-28: a tap on a sponsor keeps the language).
+  | { kind: 'sponsor'; id: string };
 
 const EVENT_PAGE = /^\/events\/([A-Za-z0-9_-]{1,128})$/;
 const EVENT_PAGE_NAMED = /^\/events\/([A-Za-z0-9_-]{1,128})\/([a-z0-9-]{1,100})$/;
 const SHARE_LINK = /^\/e\/([^/]{1,40})$/;
+const SPONSOR_CARD = /^\/sponsors\/([A-Za-z0-9_-]{1,128})$/;
 // The same shape as the router's own form route: /events/<id>/<screen>.
 const EVENT_FORM = /^\/events\/([A-Za-z0-9_-]{1,128})\/(register|checkin|survey|updates)$/;
 
@@ -80,6 +83,8 @@ export function matchLanguagePage(rest: string): LanguagePage | null {
   }
   const share = rest.match(SHARE_LINK);
   if (share) return { kind: 'share', code: share[1] };
+  const sponsor = rest.match(SPONSOR_CARD);
+  if (sponsor) return { kind: 'sponsor', id: sponsor[1] };
   return null;
 }
 

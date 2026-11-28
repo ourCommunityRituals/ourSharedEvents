@@ -125,7 +125,7 @@ const config = {
     rangeOf(
       'src/handlers/pages.ts',
       'const typeCategoriesRead',
-      'categoryByTypeId(await readEventTypeCatalog(db))'
+      'await readEventTypeCatalog(db, resolveAllowedMaxTier(env as ClearanceEnv))'
     ),
     rangeOf('src/handlers/pages.ts', 'const zoomCell = zoom.cell;', 'const areaOpts = {'),
     rangeOf(
