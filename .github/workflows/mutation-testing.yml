@@ -68,13 +68,19 @@ jobs:
   mutation-group:
     name: mutation (${{ matrix.group }})
     runs-on: ubuntu-24.04
-    # 15: the limit a group is cut to fit, not one to raise. The slowest group
-    # is how long a pull request waits for this check, so a group that nears
-    # the limit is cut in two (mutation-groups.mjs: forms on 2026-11-12, sponsors
-    # out of render on 2026-11-25, menu out of render on 2026-11-28, tiles
-    # out of render on 2026-11-15, when render was cancelled here at 15 minutes
-    # on main and on PR 1295).
-    timeout-minutes: 15
+    # 20: the limit a group is cut to fit. The slowest group is how long a pull
+    # request waits for this check, so a group that nears the limit is cut in
+    # two (mutation-groups.mjs: forms on 2026-11-12, tiles out of render on
+    # 2026-11-15, when render was cancelled here at 15 minutes on main and on
+    # PR 1295, sponsors out of render on 2026-11-25, menu out of render on
+    # 2026-11-28).
+    # Raised from 15 to 20 by the owner on 2026-11-28 (PR 1594). landing is one
+    # file and cannot be cut (14 min 30 s on that PR's earlier push), and
+    # render, 14 min 39 s on main that day, is almost all street-map.ts. On PR 1594 both were cancelled at 15 minutes
+    # with no mutant left alive; run alone on a 4-core machine they took 12 min
+    # 3 s and 10 min 44 s. A group that nears 20 is still cut or made faster,
+    # not given more time.
+    timeout-minutes: 20
     strategy:
       # Every group reports, so one red group does not hide another's result.
       fail-fast: false
