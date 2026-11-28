@@ -1,7 +1,7 @@
 /**
  * Category and type names in every page language (lib/i18n/event-type-names.ts).
  *
- * Buckets (migration 0126, owner approval 2026-11-28): the landing row shows the
+ * Buckets (migration 0127, owner approval 2026-11-28): the landing row shows the
  * 9 buckets by their short names, so every bucket needs a full and a short name
  * in every language too.
  *

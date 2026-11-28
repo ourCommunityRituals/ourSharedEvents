@@ -61,11 +61,12 @@ const DB_TABLES = [
   'event_codes', // 0096 (OSE-1684 — one short code per event, every screen)
   'event_series', // 0033 (OSE-272 SharedReport pipeline)
   'event_templates', // 0014
-  'event_type_bucket', // 0126 (event type buckets — the 9 plain groups the landing and picker show)
+  'event_type_bucket', // 0127 (event type buckets — the 9 plain groups the landing and picker show)
   'event_type_category_registry', // 0076 (OSE-1344 — Category → Type picker lookup)
   'event_type_registry', // 0023
   'events', // 0001 + 0034 series_id column
   'export_manifest', // 0043 (OSE-556 D1→OCR export audit)
+  'fixture_lineups', // 0126 (leagues slice 2 — positions A to D per frame of a game; never a name)
   'fixture_results', // 0125 (leagues phase 1 — the two scores of a game, not a count of people)
   'fixtures', // 0125 (leagues phase 1 — one match on one event night)
   'node_hierarchy', // 0010

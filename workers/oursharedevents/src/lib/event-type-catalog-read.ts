@@ -5,7 +5,7 @@
  * them the same way, through this one query pair. Grouping stays in the pure
  * lib/event-type-catalog.ts.
  *
- * BUCKETS (migration 0126, owner 2026-11-28). The catalog's groups are the 9
+ * BUCKETS (migration 0127, owner 2026-11-28). The catalog's groups are the 9
  * plain buckets (event_type_bucket), not the 15 categories. Each type's
  * bucket_code is read as the catalog's `category_code`, so the grouping, the
  * landing row and the picker need no second shape. The 15 categories stay in

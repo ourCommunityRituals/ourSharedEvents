@@ -38,14 +38,14 @@ beforeAll(async () => {
 const TIER2 = "('etr-ent-bingo', 'etr-fnd-charity', 'etr-civ-parade', 'etr-rec-camp')";
 
 describe('REG-1: Phase 1 event type seed', () => {
-  test('exactly 69 event types seeded (47 from 0024 + Watch Party from 0097 + Storytime from 0115 + 20 from 0126)', async () => {
+  test('exactly 69 event types seeded (47 from 0024 + Watch Party from 0097 + Storytime from 0115 + 20 from 0127)', async () => {
     const result = await tenv()
       .DB.prepare('SELECT COUNT(*) as cnt FROM event_type_registry')
       .first<{ cnt: number }>();
     expect(result?.cnt).toBe(69);
   });
 
-  // 0126: Bingo, Charity Night, Parade and Camp can need a licence or permit, so
+  // 0127: Bingo, Charity Night, Parade and Camp can need a licence or permit, so
   // they are phase 2 / tier 2 and wait for the clearance ceiling (owner D3, 2026-11-28).
   test('all seeded types have phase=1, except the four that can need a licence', async () => {
     const result = await tenv()

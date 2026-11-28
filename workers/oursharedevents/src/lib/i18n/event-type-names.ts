@@ -8,8 +8,8 @@
  * all selected, available languages").
  *
  * WHAT. One table per language, keyed by the registry's own keys: the bucket
- * code (migration 0126), the category code (migration 0076) and the type id
- * (migrations 0024, 0097, 0115, 0126). English
+ * code (migration 0127), the category code (migration 0076) and the type id
+ * (migrations 0024, 0097, 0115, 0127). English
  * is the registry's own name, so its table is empty. The registry rows do not
  * change; this is only what a visitor reads. A code or id with no entry falls
  * back to the registry's English name, never to nothing.
@@ -130,7 +130,7 @@ const TYPE_ES: Names = {
   'etr-tab-rpg': 'Noche de juegos de rol',
   'etr-fit-running': 'Club de corredores',
   'etr-lit-bookclub': 'Club de lectura',
-  // Migration 0126 (event type buckets).
+  // Migration 0127 (event type buckets).
   'etr-rec-soccer': 'Fútbol',
   'etr-rec-barleague': 'Liga de bar (dardos, billar)',
   'etr-rec-shuffleboard': 'Tejo de mesa',
@@ -203,7 +203,7 @@ const TYPE_PL: Names = {
   'etr-tab-rpg': 'Wieczór gier fabularnych',
   'etr-fit-running': 'Spotkanie klubu biegowego',
   'etr-lit-bookclub': 'Spotkanie klubu książki',
-  // Migration 0126 (event type buckets).
+  // Migration 0127 (event type buckets).
   'etr-rec-soccer': 'Piłka nożna',
   'etr-rec-barleague': 'Liga barowa (rzutki, bilard)',
   'etr-rec-shuffleboard': 'Shuffleboard',
@@ -276,7 +276,7 @@ const TYPE_AR: Names = {
   'etr-tab-rpg': 'أمسية ألعاب أدوار',
   'etr-fit-running': 'لقاء نادي الجري',
   'etr-lit-bookclub': 'لقاء نادي الكتاب',
-  // Migration 0126 (event type buckets).
+  // Migration 0127 (event type buckets).
   'etr-rec-soccer': 'كرة القدم',
   'etr-rec-barleague': 'دوري الحانة (السهام، البلياردو)',
   'etr-rec-shuffleboard': 'لعبة شفلبورد',
@@ -299,7 +299,7 @@ const TYPE_AR: Names = {
   'etr-fnd-charity': 'أمسية خيرية',
 };
 
-// The 9 buckets (migration 0126): the full name (picker) and the short name
+// The 9 buckets (migration 0127): the full name (picker) and the short name
 // (landing row). English is the bucket table's own display_name / short_name.
 const BUCKET_ES: Names = {
   SPT: 'Deportes y recreación',
@@ -411,7 +411,7 @@ function pick(table: Readonly<Record<Lang, Names>>, lang: Lang, key: string): st
 }
 
 /**
- * A catalog group's name in `lang`: a bucket (0126) or a category (0076) code.
+ * A catalog group's name in `lang`: a bucket (0127) or a category (0076) code.
  * The registry's own name when the code is unknown.
  */
 export function categoryName(lang: Lang, code: string, registryName: string): string {

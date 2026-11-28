@@ -21,7 +21,7 @@ runtime:
         const json = res.getBody() || {};
         // Part of OSE-2155 (migration 0115): Storytime is adults telling stories
         // aloud, a type of its own beside an unchanged Storytelling Night. Since
-        // migration 0126 the picker groups by bucket: both are in Music & Shows (SHW).
+        // migration 0127 the picker groups by bucket: both are in Music & Shows (SHW).
         const per = (json.categories || []).find(function (c) { return c.code === 'SHW'; }) || { types: [] };
         const find = function (uec) {
           return per.types.find(function (t) { return t.uec_code === uec; });

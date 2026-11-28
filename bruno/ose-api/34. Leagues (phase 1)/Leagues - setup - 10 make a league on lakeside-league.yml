@@ -28,6 +28,9 @@ runtime:
           expect(b.id).to.match(/^cmp_[0-9a-f]{32}$/);
           expect(b.competition.status).to.eql('draft');
           expect(b.competition.source).to.eql('native');
+          expect(b.competition.rules.target).to.eql(null);
+          expect(b.competition.rules.tiebreak).to.eql(['wins', 'diff', 'scored']);
+          expect(b.competition.rules.says).to.match(/^A win is 1 point\./);
         });
         bru.setVar('leagueId', b.id || 'cmp_missing');
 

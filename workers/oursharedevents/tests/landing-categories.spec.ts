@@ -37,7 +37,7 @@ async function applyMigrations(): Promise<void> {
 }
 
 // Two types under one bucket (Music & Shows), one under another (Learn & Connect),
-// one event with no type at all. Since migration 0126 the row shows the 9 buckets
+// one event with no type at all. Since migration 0127 the row shows the 9 buckets
 // by their short names (owner approval 2026-11-28).
 const EVENTS = [
   { id: 'cat-test-music', title: 'Category Test Music Night', type: 'etr-art-music' },

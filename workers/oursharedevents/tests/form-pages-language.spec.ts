@@ -649,7 +649,8 @@ describe('H9 | confirmations after register, survey and updates', () => {
         );
         await settle();
         expect(d.querySelector('[data-testid="form-success"] h2')?.textContent).toBe(
-          msg(lang, duplicate ? 'form.email.already' : 'form.email.done')
+          // One message either way: the page never says an address was already listed.
+          msg(lang, 'form.email.done')
         );
       });
     }

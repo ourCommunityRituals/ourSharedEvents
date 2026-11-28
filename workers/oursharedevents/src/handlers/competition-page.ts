@@ -102,7 +102,7 @@ export async function handleCompetitionPage(
     if (!c || (c.status !== 'active' && c.status !== 'finished')) return competitionNotFound();
     const entries = await readEntries(db, c.id);
     const fixtures = await readFixtures(db, c.id);
-    const ruleset = rulesetOf(c.ruleset);
+    const ruleset = rulesetOf(c.ruleset, c.rules);
     const labels = new Map(entries.map((e) => [e.id, e.label]));
     const nights = await readNights(db, c.brand_id, [
       ...new Set(fixtures.map((f) => f.event_id).filter((v): v is string => !!v)),

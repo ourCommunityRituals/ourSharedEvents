@@ -1,4 +1,4 @@
--- Migration 0126: event type buckets, 20 new types, plain names.
+-- Migration 0127: event type buckets, 20 new types, plain names.
 --
 -- WHY. The owner approved the event type buckets proposal on 2026-11-28
 -- (OCR-docs docs/proposals/PROPOSAL_event-type-buckets.md, D1 to D6, "Yes, all
@@ -31,7 +31,7 @@
 -- Invariant compliance:
 --   #3  — category codes are existing clusters; template rows are sourced FROM
 --         the registry WHERE is_active = 1, so a typo inserts nothing.
---   #19 — > 0125, unique prefix, append-only, no table drop, no rename.
+--   #19 — > 0126, unique prefix, append-only, no table drop, no rename.
 --   ADR-001 — MAIN DB only.
 
 -- ── 1. The buckets ──────────────────────────────────────────────────────────

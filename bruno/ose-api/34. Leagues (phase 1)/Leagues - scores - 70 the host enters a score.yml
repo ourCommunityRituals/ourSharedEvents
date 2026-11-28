@@ -26,7 +26,7 @@ runtime:
         test('leagues score: 200, confirmed at once, the match is played', function () {
           expect(res.getStatus()).to.eql(200);
           expect(b.fixture.status).to.eql('played');
-          expect(b.fixture.result).to.eql({ score_a: 12, score_b: 5, state: 'confirmed', entered_by: 'host' });
+          expect(b.fixture.result).to.eql({ score_a: 12, score_b: 5, state: 'confirmed', entered_by: 'host', frames: [] });
         });
 
 settings:

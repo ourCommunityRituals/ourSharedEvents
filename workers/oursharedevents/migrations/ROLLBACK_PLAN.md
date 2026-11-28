@@ -7,7 +7,7 @@
 This document covers all migrations applied to both D1 databases bound to
 the OSE Worker:
 
-- `DB` — main / anonymous public surface (highest migration: 0126; the entries below do not cover every migration after 0083, see the note at 0104)
+- `DB` — main / anonymous public surface (highest migration: 0127; the entries below do not cover every migration after 0083, see the note at 0104)
 - `FORMS_DB` — identified-user surface (13 migrations: 0001–0013)
 
 > **Three structural restructures land in the 0062–0067 window — read their reverse
@@ -110,7 +110,7 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
--- 0126: event_type_bucket, event_type_registry.bucket_code, 20 new types, the
+-- 0127: event_type_bucket, event_type_registry.bucket_code, 20 new types, the
 -- licensed_gathering template, plain display names for 17 types (event type
 -- buckets, owner approval 2026-11-28). Additive: one table, one column, one
 -- index, new rows. Ids, uec_code and category_code are unchanged. THE ROLLBACK
@@ -120,11 +120,24 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 -- already uses one keeps it.
 --
 -- To put the 17 old display names back (only if the plain names must go), run
--- the UPDATEs in 0126 section 4 with the names from 0024.
+-- the UPDATEs in 0127 section 4 with the names from 0024.
 --
 -- Surgical reverse of the table, only if it must go:
 DROP INDEX IF EXISTS idx_event_type_registry_bucket;
 DROP TABLE IF EXISTS event_type_bucket;
+
+-- 0126: competitions.rules, competition_entries.team_size and the new table
+-- fixture_lineups (leagues slice 2). Additive: two nullable columns and one
+-- table, no index. THE ROLLBACK IS: revert the Worker and LEAVE THEM. The older
+-- Worker never reads them (it plays every league by its preset ruleset and
+-- shows no lineup). Rows left behind hold no person: positions A to D, ends and
+-- ball counts.
+--
+-- Surgical reverse, only if they must go (every lineup and rule change is lost;
+-- D1 supports DROP COLUMN):
+DROP TABLE IF EXISTS fixture_lineups;
+ALTER TABLE competition_entries DROP COLUMN team_size;
+ALTER TABLE competitions DROP COLUMN rules;
 
 -- 0125: competitions, competition_stages, competition_entries, fixtures,
 -- fixture_results (leagues phase 1, OSE-525). Additive: five new tables, four
@@ -136,6 +149,7 @@ DROP TABLE IF EXISTS event_type_bucket;
 --
 -- Surgical reverse, only if the tables themselves must go (every league,
 -- schedule and score is lost):
+DROP TABLE IF EXISTS fixture_lineups;
 DROP TABLE IF EXISTS fixture_results;
 DROP TABLE IF EXISTS fixtures;
 DROP TABLE IF EXISTS competition_entries;

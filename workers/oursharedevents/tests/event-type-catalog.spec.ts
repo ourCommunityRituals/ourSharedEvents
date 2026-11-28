@@ -75,7 +75,7 @@ describe('acceptance criterion — no orphaned types after 0076', () => {
     expect(row?.n).toBe(0);
   });
 
-  test('every type has the category of its UEC prefix (47 seeded + Watch Party, 0097 + Storytime, 0115 + 20 new, 0126)', async () => {
+  test('every type has the category of its UEC prefix (47 seeded + Watch Party, 0097 + Storytime, 0115 + 20 new, 0127)', async () => {
     const row = await env.DB.prepare(
       `SELECT COUNT(*) AS total,
               SUM(CASE WHEN category_code = substr(uec_code, 1, instr(uec_code, '-') - 1) THEN 1 ELSE 0 END) AS matched
@@ -189,7 +189,7 @@ describe('GET /api/v2/admin/event-types', () => {
     expect(res.status).toBe(401);
   });
 
-  // 0126: the picker groups by the 9 buckets. 65 types are offered; the four
+  // 0127: the picker groups by the 9 buckets. 65 types are offered; the four
   // tier-2 types (Bingo, Charity Night, Parade, Camp) wait for the ceiling.
   test('returns the grouped catalog: 9 buckets, 65 types, 0 orphans, Sports > Bocce', async () => {
     const res = await SELF.fetch('https://t.test/api/v2/admin/event-types', {
@@ -221,7 +221,7 @@ describe('GET /api/v2/admin/event-types', () => {
 // Owner request 2026-10-10 (migration 0097): Watch Party is a type of its own,
 // under Social & Community Dining, and a sponsor can reach it.
 describe('Watch Party (0097)', () => {
-  test('the picker lists it under Parties & Festivals (its bucket since 0126)', async () => {
+  test('the picker lists it under Parties & Festivals (its bucket since 0127)', async () => {
     const res = await SELF.fetch('https://t.test/api/v2/admin/event-types', {
       headers: ADMIN_HEADERS,
     });
@@ -267,7 +267,7 @@ describe('Watch Party (0097)', () => {
 // Storytelling Night itself is an assumption, not an owner ruling.
 // @born-red OSE-2155 | method: run with 0115 removed, every test here fails | date: 2026-11-21
 describe('Storytime (0115)', () => {
-  test('the picker lists it under Music & Shows (its bucket since 0126), beside an unchanged Storytelling Night', async () => {
+  test('the picker lists it under Music & Shows (its bucket since 0127), beside an unchanged Storytelling Night', async () => {
     const res = await SELF.fetch('https://t.test/api/v2/admin/event-types', {
       headers: ADMIN_HEADERS,
     });
@@ -463,8 +463,8 @@ describe('admin.html — the picker is on BOTH create paths', () => {
 
 // Owner approval 2026-11-28 (OCR-docs PROPOSAL_event-type-buckets.md, D1 to D6):
 // the 9 buckets are a display layer. Ids, uec_code and category_code stay.
-// @born-red | method: run with 0126 removed, every test here fails | date: 2026-11-28
-describe('event type buckets (0126)', () => {
+// @born-red | method: run with 0127 removed, every test here fails | date: 2026-11-28
+describe('event type buckets (0127)', () => {
   const BUCKET_OF: Record<string, string> = {
     'etr-rec-bocce': 'SPT',
     'etr-fit-running': 'SPT',

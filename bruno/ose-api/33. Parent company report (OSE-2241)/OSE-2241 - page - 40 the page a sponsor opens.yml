@@ -12,7 +12,13 @@ runtime:
   scripts:
     - type: after-response
       code: |-
-        const html = String(res.getBody() || '');
+        // The page as the Worker sent it: the script the edge adds for its JavaScript
+        // check (it names window.__CF$cv$params) is taken out, as in folder 19. The
+        // page's own CSP (script-src 'none') keeps that script from running.
+        const html = String(res.getBody() || '').replace(
+          /<script\b[^>]*>(?:(?!<\/script>)[\s\S])*?window\.__CF\$cv\$params(?:(?!<\/script>)[\s\S])*?<\/script>/g,
+          ''
+        );
         test('OSE-2241 page: 200, no-store, no-referrer, no framing, no script', function () {
           expect(res.getStatus()).to.eql(200);
           expect(String(res.getHeader('cache-control'))).to.contain('no-store');

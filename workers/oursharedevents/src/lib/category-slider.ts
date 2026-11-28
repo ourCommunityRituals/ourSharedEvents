@@ -23,7 +23,7 @@
  * keyboard focus scrolls its label into view.
  *
  * ICONS. Line drawings on a 24 px grid in `currentColor`, drawn for this product
- * (not copied from any icon set or site). Every bucket (migration 0126) and every
+ * (not copied from any icon set or site). Every bucket (migration 0127) and every
  * event category (migration 0076) has its own; a code added later shows the
  * general tag until it gets one, and tests/category-slider.spec.ts fails until it does.
  */
@@ -70,7 +70,7 @@ export const CATEGORY_ICONS: Readonly<Record<string, string>> = {
   LIT: '<path d="M12 6.5C10.3 5 7.8 4.5 4 4.5v13c3.8 0 6.3.5 8 2 1.7-1.5 4.2-2 8-2v-13c-3.8 0-6.3.5-8 2zM12 6.5v13"/>',
   // Faith Community: a lit candle (no one faith's symbol).
   FAI: '<path d="M12 3c1.6 1.9 2 3.1 2 4a2 2 0 0 1-4 0c0-.9.4-2.1 2-4z"/><rect x="9" y="11" width="6" height="9.5" rx="1"/><path d="M6 20.5h12"/>',
-  // ── The 9 buckets (migration 0126), what the landing row shows. ──
+  // ── The 9 buckets (migration 0127), what the landing row shows. ──
   // Sports & Recreation: a soccer ball.
   SPT: '<circle cx="12" cy="12" r="8.5"/><path d="M12 8l3 2.2-1.1 3.6h-3.8L9 10.2zM12 8V3.5M15 10.2l4.6-1.4M13.9 13.8l2.8 3.9M10.1 13.8l-2.8 3.9M9 10.2l-4.6-1.4"/>',
   // Games & Trivia: two playing cards.

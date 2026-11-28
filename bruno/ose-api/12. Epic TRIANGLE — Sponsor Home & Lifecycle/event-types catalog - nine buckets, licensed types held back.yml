@@ -20,7 +20,7 @@ runtime:
         test('200 OK', function () { expect(res.getStatus()).to.eql(200); });
         const json = res.getBody() || {};
         const cats = json.categories || [];
-        // Migration 0126 (owner approval 2026-11-28): the picker groups by the
+        // Migration 0127 (owner approval 2026-11-28): the picker groups by the
         // 9 plain buckets. Ids and codes do not change.
         test('the 9 buckets, in order', function () {
           expect(cats.map(function (c) { return c.code; })).to.eql(

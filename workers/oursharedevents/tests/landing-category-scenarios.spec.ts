@@ -113,7 +113,7 @@ function fakeDb(opts: { results?: 'missing'; fail?: boolean } = {}) {
         all: async () => {
           if (opts.fail) throw new Error('D1 down');
           if (opts.results === 'missing') return {};
-          // The catalog's groups are the buckets (0126).
+          // The catalog's groups are the buckets (0127).
           if (/FROM event_type_bucket\b/.test(q) && /is_active = 1/.test(q))
             return { results: CATS };
           if (/FROM event_type_registry\b/.test(q) && /is_active = 1/.test(q))
@@ -136,7 +136,7 @@ describe('readEventTypeCatalog', () => {
     expect(cat.categories.map((c) => c.code)).toEqual(['REC', 'ART']);
     expect(cat.orphans).toBe(0);
     expect(sql).toHaveLength(2);
-    // Groups are the 9 buckets (0126), read as the catalog's category_code.
+    // Groups are the 9 buckets (0127), read as the catalog's category_code.
     for (const col of [
       'bucket_code AS category_code',
       'display_name',

@@ -24,7 +24,7 @@ const MIGRATION = readFileSync(
 );
 const SEEDED = [...MIGRATION.matchAll(/\('([A-Z]{3})',\s*'[^']+',\s*\d+\)/g)].map((m) => m[1]);
 const BUCKET_MIGRATION = readFileSync(
-  new URL('../migrations/0126_event_type_buckets.sql', import.meta.url),
+  new URL('../migrations/0127_event_type_buckets.sql', import.meta.url),
   'utf8'
 );
 const BUCKETS = [
@@ -36,7 +36,7 @@ describe('the icon set', () => {
     expect(SEEDED).toHaveLength(15);
   });
 
-  it('reads the 9 buckets from migration 0126', () => {
+  it('reads the 9 buckets from migration 0127', () => {
     expect(BUCKETS).toHaveLength(9);
   });
 

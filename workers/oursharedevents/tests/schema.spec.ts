@@ -35,7 +35,7 @@ const EXPECTED_TABLES = [
   'event_templates',
   'event_type_registry',
   'event_type_category_registry', // 0076 (OSE-1344 — Category → Type picker)
-  'event_type_bucket', // 0126 (event type buckets)
+  'event_type_bucket', // 0127 (event type buckets)
   'events',
   'node_hierarchy',
   'poster_deployments',
@@ -102,7 +102,7 @@ const EXPECTED_INDEXES = [
   'idx_event_type_registry_phase',
   'idx_event_type_registry_uec',
   'idx_event_type_registry_category', // 0076 (OSE-1344)
-  'idx_event_type_registry_bucket', // 0126 (event type buckets)
+  'idx_event_type_registry_bucket', // 0127 (event type buckets)
   'idx_corridor_regulatory_status_corridor',
   // Admin audit log (migration 0026 — OSE-212)
   'idx_admin_audit_log_created_at',
@@ -203,7 +203,7 @@ const EXPECTED_COLUMN_COUNTS: Record<string, number> = {
   // sponsor_displays: 7 (pre-OSE-635) + 1 (h3_res7, migration 0048) = 8.
   sponsor_displays: 8,
   // + category_code (migration 0076, OSE-1344) = 11.
-  event_type_registry: 12, // +1 bucket_code (0126)
+  event_type_registry: 12, // +1 bucket_code (0127)
   corridor_regulatory_status: 5,
   // OSE-240 (migration 0030): code TEXT PK, event_id TEXT FK, created_at TEXT,
   // clicks INTEGER, last_clicked_at TEXT = 5; +target_url +kind (migration 0073, Rb) = 7.
@@ -378,7 +378,7 @@ describe('Gate 5: Index verification', () => {
 
     const names = indexes.results.map((r: Record<string, unknown>) => r.name);
     // + 2 (idx_events_status_updated, idx_events_created_by — migration 0075) = 72.
-    expect(names.length).toBe(100); // +1 0126 idx_event_type_registry_bucket; +4 0125 idx_competitions_brand + idx_competition_entries_competition + idx_fixtures_competition + idx_fixtures_event; +1 0124 idx_vote_access_passes_set; +3 0120 idx_venues_brand + idx_venue_operators_brand + idx_events_host_venue; +1 0118 idx_brand_parents_parent; +1 0113 idx_poster_deployments_one_vote_code; +2 0112 idx_sponsor_business_created_by + idx_campaigns_created_by; +2 0111 idx_votable_objects_event_id + idx_votable_objects_set_group; +1 0110 idx_events_campaign_id; +2 0109 idx_event_booths_event_id + idx_poster_deployments_booth_id; +2 0104 idx_events_venue_canonical + idx_events_event_correlation; +1 0101 idx_snr_event_anon_bucket; +1 0092 idx_anon_id_returns_pepper_epoch; +2 0090 idx_anon_id_returns_last_seen + idx_anon_id_returns_computed_at; +1 0089 idx_snr_country_nonnull; +1 0088 idx_admin_audit_log_brand_created; +1 0087 idx_scan_cell_aggregates_event_cell; +1 0076 idx_event_type_registry_category; // 0070 idx_events_published_brand_h3res7_start; 0073 idx_shortlinks_event_kind (Rb); 0075 ×2
+    expect(names.length).toBe(100); // +1 0127 idx_event_type_registry_bucket; +4 0125 idx_competitions_brand + idx_competition_entries_competition + idx_fixtures_competition + idx_fixtures_event; +1 0124 idx_vote_access_passes_set; +3 0120 idx_venues_brand + idx_venue_operators_brand + idx_events_host_venue; +1 0118 idx_brand_parents_parent; +1 0113 idx_poster_deployments_one_vote_code; +2 0112 idx_sponsor_business_created_by + idx_campaigns_created_by; +2 0111 idx_votable_objects_event_id + idx_votable_objects_set_group; +1 0110 idx_events_campaign_id; +2 0109 idx_event_booths_event_id + idx_poster_deployments_booth_id; +2 0104 idx_events_venue_canonical + idx_events_event_correlation; +1 0101 idx_snr_event_anon_bucket; +1 0092 idx_anon_id_returns_pepper_epoch; +2 0090 idx_anon_id_returns_last_seen + idx_anon_id_returns_computed_at; +1 0089 idx_snr_country_nonnull; +1 0088 idx_admin_audit_log_brand_created; +1 0087 idx_scan_cell_aggregates_event_cell; +1 0076 idx_event_type_registry_category; // 0070 idx_events_published_brand_h3res7_start; 0073 idx_shortlinks_event_kind (Rb); 0075 ×2
     EXPECTED_INDEXES.forEach((idx) => expect(names).toContain(idx));
   });
 });
