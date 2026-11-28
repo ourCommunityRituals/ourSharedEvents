@@ -164,7 +164,7 @@
     <details class="privacy-details" data-testid="privacy-details">
       <summary>隱私詳情</summary>
       <p>
-        我們只記錄<strong>匿名人數</strong> —— 不儲存任何個人資料。 法律依據： GDPR 第 6(1)(f) 條 —— 了解到場人數的正當利益。 匿名彙總人數只用於活動報告。
+        我們只記錄<strong>匿名人數</strong>，從不記錄你的名字。這台裝置上的一個 cookie 裡存有隨機編號，用來確保你只被計算一次。 法律依據： GDPR 第 6(1)(f) 條 —— 了解到場人數的正當利益。 匿名彙總人數只用於活動報告。
         你有權查看、更正或刪除你的資料，也有權向當地的資料保護
         <strong>主管機關申訴</strong>.
         

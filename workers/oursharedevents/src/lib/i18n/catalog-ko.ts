@@ -448,7 +448,7 @@ export const ko: Record<MessageKey, string> = {
   'privacy.purpose.register':
     '행사가 바뀌면 주최자가 연락할 수 있도록 이름과, 원하면 이메일을 받아요.',
   'privacy.purpose.checkin':
-    '<strong>익명 인원수만</strong> 기록해요 — 개인 데이터는 저장하지 않아요.',
+    '<strong>익명 인원수만</strong> 기록하고, 이름은 절대 기록하지 않아요. 이 기기의 쿠키에 있는 무작위 ID로 한 번만 세요.',
   'privacy.purpose.survey': '다음 행사를 더 좋게 만들려고 평점과 선택 의견을 받아요.',
   'privacy.purpose.email': '다가오는 동네 행사를 알려 드리려고 이메일 주소를 받아요.',
   'privacy.basisLabel': '법적 근거:',

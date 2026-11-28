@@ -164,7 +164,7 @@
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Detalhes de privacidade</summary>
       <p>
-        Registramos <strong>só uma contagem anônima</strong> — nenhum dado pessoal é guardado. Base legal: RGPD art. 6(1)(f) — interesse legítimo em saber o número de participantes. As contagens anônimas totais são guardadas só para o relatório do evento.
+        Registramos <strong>só uma contagem anônima</strong>, nunca o seu nome. Um id aleatório em um cookie neste aparelho conta você uma única vez. Base legal: RGPD art. 6(1)(f) — interesse legítimo em saber o número de participantes. As contagens anônimas totais são guardadas só para o relatório do evento.
         Você tem o direito de ver, corrigir ou apagar seus dados, e de fazer uma reclamação à sua
         <strong>autoridade local de proteção de dados</strong>.
         

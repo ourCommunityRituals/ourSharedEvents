@@ -459,7 +459,7 @@ export const fr: Record<MessageKey, string> = {
   'privacy.purpose.register':
     'Nous recueillons votre nom et, si vous le voulez, votre e-mail, pour que l’organisateur puisse vous joindre si l’événement change.',
   'privacy.purpose.checkin':
-    'Nous notons <strong>seulement un nombre anonyme</strong> — aucune donnée personnelle n’est gardée.',
+    'Nous notons <strong>seulement un nombre anonyme</strong>, jamais votre nom. Un identifiant au hasard dans un cookie sur cet appareil vous compte une seule fois.',
   'privacy.purpose.survey':
     'Nous recueillons vos notes et vos commentaires facultatifs pour améliorer les prochains événements.',
   'privacy.purpose.email':

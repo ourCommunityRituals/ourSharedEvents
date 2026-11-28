@@ -1034,7 +1034,7 @@ const es: Record<MessageKey, string> = {
   'privacy.purpose.register':
     'Pedimos tu nombre y, si quieres, tu correo, para que el organizador pueda avisarte si este evento cambia.',
   'privacy.purpose.checkin':
-    'Solo guardamos un <strong>conteo anónimo</strong>; no se guardan datos personales.',
+    'Solo guardamos un <strong>conteo anónimo</strong>, nunca tu nombre. Un id aleatorio en una cookie de este dispositivo te cuenta una sola vez.',
   'privacy.purpose.survey':
     'Pedimos tus calificaciones y comentarios opcionales para mejorar los próximos eventos.',
   'privacy.purpose.email': 'Pedimos tu correo para avisarte de próximos eventos de la comunidad.',

@@ -456,7 +456,7 @@ export const id: Record<MessageKey, string> = {
   'privacy.purpose.register':
     'Kami mengumpulkan nama Anda dan, jika Anda mau, email Anda, agar penyelenggara bisa menghubungi Anda jika acara berubah.',
   'privacy.purpose.checkin':
-    'Kami hanya mencatat <strong>jumlah tanpa nama</strong> — tidak ada data pribadi yang disimpan.',
+    'Kami hanya mencatat <strong>jumlah tanpa nama</strong>, tidak pernah nama Anda. Sebuah id acak di cookie pada perangkat ini menghitung Anda satu kali.',
   'privacy.purpose.survey':
     'Kami mengumpulkan nilai dan komentar Anda untuk memperbaiki acara berikutnya.',
   'privacy.purpose.email':

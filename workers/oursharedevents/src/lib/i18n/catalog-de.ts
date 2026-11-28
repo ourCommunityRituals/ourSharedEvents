@@ -466,7 +466,7 @@ export const de: Record<MessageKey, string> = {
   'privacy.purpose.register':
     'Wir erheben Ihren Namen und, wenn Sie möchten, Ihre E-Mail, damit der Veranstalter Sie erreichen kann, falls sich etwas ändert.',
   'privacy.purpose.checkin':
-    'Wir erfassen <strong>nur eine anonyme Zahl</strong> — es werden keine persönlichen Daten gespeichert.',
+    'Wir erfassen <strong>nur eine anonyme Zahl</strong>, nie Ihren Namen. Eine zufällige ID in einem Cookie auf diesem Gerät zählt Sie nur einmal.',
   'privacy.purpose.survey':
     'Wir erheben Ihre Bewertungen und freiwilligen Kommentare, um künftige Veranstaltungen zu verbessern.',
   'privacy.purpose.email':

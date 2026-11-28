@@ -164,7 +164,7 @@
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Rincian privasi</summary>
       <p>
-        Kami hanya mencatat <strong>jumlah tanpa nama</strong> — tidak ada data pribadi yang disimpan. Dasar hukum: GDPR Pasal 6(1)(f) — kepentingan sah untuk mengetahui jumlah kehadiran. Jumlah gabungan tanpa nama disimpan hanya untuk laporan acara.
+        Kami hanya mencatat <strong>jumlah tanpa nama</strong>, tidak pernah nama Anda. Sebuah id acak di cookie pada perangkat ini menghitung Anda satu kali. Dasar hukum: GDPR Pasal 6(1)(f) — kepentingan sah untuk mengetahui jumlah kehadiran. Jumlah gabungan tanpa nama disimpan hanya untuk laporan acara.
         Anda berhak melihat, memperbaiki, atau menghapus data Anda, dan mengajukan keluhan kepada
         <strong>otoritas perlindungan data setempat</strong>.
         

@@ -164,7 +164,7 @@
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Détails sur la confidentialité</summary>
       <p>
-        Nous notons <strong>seulement un nombre anonyme</strong> — aucune donnée personnelle n’est gardée. Base légale : RGPD art. 6(1)(f) — intérêt légitime à connaître le nombre de participants. Les nombres anonymes regroupés sont gardés uniquement pour le bilan de l’événement.
+        Nous notons <strong>seulement un nombre anonyme</strong>, jamais votre nom. Un identifiant au hasard dans un cookie sur cet appareil vous compte une seule fois. Base légale : RGPD art. 6(1)(f) — intérêt légitime à connaître le nombre de participants. Les nombres anonymes regroupés sont gardés uniquement pour le bilan de l’événement.
         Vous avez le droit de consulter, corriger ou effacer vos données, et de porter plainte auprès de votre
         <strong>autorité locale de protection des données</strong>.
         

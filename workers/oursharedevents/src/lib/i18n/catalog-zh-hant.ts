@@ -439,7 +439,8 @@ export const zh_hant: Record<MessageKey, string> = {
   'privacy.summary.email': '你的電子郵件會在 30 天後刪除。',
   'privacy.purpose.register':
     '我們蒐集你的姓名，以及你願意提供的電子郵件，以便活動有變時主辦人能聯絡你。',
-  'privacy.purpose.checkin': '我們只記錄<strong>匿名人數</strong> —— 不儲存任何個人資料。',
+  'privacy.purpose.checkin':
+    '我們只記錄<strong>匿名人數</strong>，從不記錄你的名字。這台裝置上的一個 cookie 裡存有隨機編號，用來確保你只被計算一次。',
   'privacy.purpose.survey': '我們蒐集你的評分和選填留言，用來改善之後的活動。',
   'privacy.purpose.email': '我們蒐集你的電子郵件地址，用來通知你之後的社區活動。',
   'privacy.basisLabel': '法律依據：',
