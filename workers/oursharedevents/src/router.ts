@@ -261,6 +261,11 @@
  *   PUT    /api/v2/admin/venues/:id/operators           → list a brand at the venue: on_platform or grandfathered (owner only, audited)
  *   DELETE /api/v2/admin/venues/:id/operators/:brand    → take a brand off the venue's list; its events stop counting (owner only, audited)
  *   GET    /api/v2/admin/venues/:id/rollup              → floored scans, taps and sponsors at the venue, per operator and in total (owner only)
+ *   Parent company report (auth required — OSE-2241; the parent and every venture below it):
+ *   GET    /api/v2/admin/brands/:brand/family-report           → floored traffic, events, sponsor traffic and footprint over the family (brand in scope; else 404)
+ *   POST   /api/v2/admin/brands/:brand/family-report/mint-link → a signed link to share it, 1 to 90 days (audited)
+ *   GET    /api/v2/family-report                → the family report by signed link (Bearer token; rate-limited per token)
+ *   GET    /family-report?token=…               → the family report page a corporate sponsor opens (no script, no-store)
  *   PUT    /api/v2/admin/events/:id/venue               → hold the event at a venue that lists its brand, or clear it (auth, audited)
  *   PUT    /api/v2/admin/venues/:id/room-ceiling        → the voting room-size ceiling: indoor fire-marshal capacity or outdoor permit limit (platform admins only, audited; OSE-2234)
  *
@@ -369,6 +374,13 @@ import { handleAccessPage, handleAccessRedeem } from './handlers/vote-access';
 import { handleVotePage } from './handlers/vote-page';
 import { votingEnabled, type VotingSwitchEnv } from './lib/voting-switch';
 import { handlePortfolioRollup } from './handlers/portfolio-rollup';
+import {
+  familyReportBucketKey,
+  handleAdminFamilyReport,
+  handleAdminMintFamilyLink,
+  handleFamilyReportPage,
+  handlePublicFamilyReport,
+} from './handlers/family-report';
 import {
   handleOperationsDashboard,
   handleCorridorDashboard,
@@ -1404,6 +1416,43 @@ export async function route(
     const deny = await requireAdmin(request, env, reqId);
     const id = venueRollupMatch[1];
     return _venueCall(reqId, deny, null, id, () => handleVenueRollup(request, env, id));
+  }
+
+  // /api/v2/admin/brands/:brand/family-report — OSE-2241. The parent company's
+  // one report over every venture below it. The handler reads a brand only
+  // when it is in the caller's scope (a miss is 404). Minting a link is audited.
+  const familyReportMatch = pathname.match(/^\/api\/v2\/admin\/brands\/([^/]+)\/family-report$/);
+  if (familyReportMatch && method === 'GET') {
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) return deny;
+    return handleAdminFamilyReport(request, env, familyReportMatch[1]);
+  }
+  const familyLinkMatch = pathname.match(
+    /^\/api\/v2\/admin\/brands\/([^/]+)\/family-report\/mint-link$/
+  );
+  if (familyLinkMatch && method === 'POST') {
+    const brand = familyLinkMatch[1];
+    if (env.RATE_LIMIT_KV) {
+      const key = `family-mint:${clientIp(request)}:${brand}`;
+      if (await checkRateLimit(env, key, RATE_LIMIT_MINT_MAX)) return rateLimitResponse();
+    }
+    const reqId = crypto.randomUUID?.() ?? `req-${Date.now()}`;
+    const deny = await requireAdmin(request, env, reqId);
+    if (deny) {
+      _audit(reqId, 'MINT_FAMILY_REPORT_LINK', 'denied', 'brand', brand);
+      return deny;
+    }
+    const res = await handleAdminMintFamilyLink(request, env, brand);
+    _audit(
+      reqId,
+      'MINT_FAMILY_REPORT_LINK',
+      _auditOutcome(res),
+      'brand',
+      brand,
+      res.ok ? brand : null
+    );
+    return res;
   }
 
   // PUT /api/v2/admin/events/:id/venue — OSE-2221. The event is brand-scoped by
@@ -2848,6 +2897,18 @@ export async function route(
     return handleBatchSharedReports(request, env, ctx, () => readReportPlan(env.FORMS_DB));
   }
 
+  // GET /api/v2/family-report — OSE-2241. A parent company's family report by
+  // its signed link (Authorization: Bearer). Limited per token, like the event
+  // SharedReport read.
+  if (pathname === '/api/v2/family-report' && method === 'GET') {
+    return publicReadLimited(
+      'family-report',
+      handlePublicFamilyReport,
+      RATE_LIMIT_MAX,
+      familyReportBucketKey
+    )(request, env);
+  }
+
   // GET /api/v2/events/:id/shared-report
   // Signed-link-authenticated single-event SharedReport read.
   const sharedReportMatch = pathname.match(/^\/api\/v2\/events\/([^/]+)\/shared-report$/);
@@ -3427,6 +3488,17 @@ export async function route(
     // posterProductForPath() and attach data-poster-format to body.
     return limitedPage('poster-page', pathname, undefined, (req, e: typeof env) =>
       handlePosterPage(e, req)
+    )(request, env);
+  }
+
+  // GET /family-report?token=… — OSE-2241. The page a corporate sponsor opens
+  // from the parent company's link. Server-rendered, no script, never cached.
+  if (pathname === '/family-report' && (method === 'GET' || method === 'HEAD')) {
+    return publicReadLimited(
+      'family-report-page',
+      handleFamilyReportPage,
+      RATE_LIMIT_MAX,
+      familyReportBucketKey
     )(request, env);
   }
 

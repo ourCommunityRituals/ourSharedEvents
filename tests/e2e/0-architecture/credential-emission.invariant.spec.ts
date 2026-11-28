@@ -982,6 +982,15 @@ const MINT_SITES: ReadonlyArray<{
     runtime: 'shared-report\\/mint-link',
   },
   {
+    file: 'handlers/family-report.ts',
+    callee: 'mintFamilyToken',
+    product:
+      'POST /api/v2/admin/brands/:brand/family-report/mint-link answers the parent company with ' +
+      'its family report link, under `token` and `path`. Admin only, brand in scope, ' +
+      'rate-limited, audited.',
+    runtime: 'family-report\\/mint-link',
+  },
+  {
     file: 'handlers/sponsor-home.ts',
     callee: 'mintSponsorHomeToken',
     product:
@@ -1106,6 +1115,7 @@ test.describe('Invariant: the Worker never emits a credential', () => {
     expect(REAL.readers, JSON.stringify(REAL.why)).toEqual([
       'bearer', // handlers/sponsors-draft.ts: the draft's bearer, compared with the stored draft
       'bearerToken', // handlers/upload.ts: the same, for a draft's uploads
+      'familyReportBucketKey', // handlers/family-report.ts: a rate-limit key, hashed before it is stored
       'getAdminKey', // auth/admin.ts: the admin key binding, compared in constant time
       'getOrCreateAnonId', // lib/anonymous-id.ts: the anonymous cookie's id
       'sharedReportBucketKey', // handlers/shared-report-read.ts: a rate-limit key, hashed before it is stored

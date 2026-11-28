@@ -344,3 +344,13 @@ export function handleBocceDemo(site: string): Response {
   ${phoneSection()}`;
   return demoHtml(body, 200, cfg.brand);
 }
+
+/**
+ * The stand-in name of a practice bocce brand, or null for any other brand.
+ * The family report (handlers/family-report.ts) uses it so the Lakeside
+ * practice tree reads by name on staging; a real brand reads by its id.
+ */
+export function bocceBrandName(brand: string): string | null {
+  for (const s of BOCCE_SITE_ORDER) if (SITES[s].brand === brand) return SITES[s].name;
+  return null;
+}

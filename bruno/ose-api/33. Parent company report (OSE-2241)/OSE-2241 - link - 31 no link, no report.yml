@@ -1,0 +1,28 @@
+info:
+  name: "OSE-2241 | rainy | link | no token and a made-up token are 401"
+  type: http
+  seq: 31
+
+http:
+  method: GET
+  url: "{{baseUrl}}/api/v2/family-report"
+  headers:
+    - name: Authorization
+      value: "Bearer eyJraW5kIjoiZmFtaWx5IiwiYnJhbmQiOiJsYWtlc2lkZS1jbyIsImRjIjoiYWxsIiwiZXhwIjo5OTk5OTk5OTk5fQ.0000000000000000000000000000000000000000000000000000000000000000"
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('OSE-2241 rainy: a made-up token is 401 and shows nothing', function () {
+          expect(res.getStatus()).to.eql(401);
+          expect(JSON.stringify(res.getBody())).to.not.contain('lakeside');
+        });
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: false
+  maxRedirects: 0
+  forwardAuthorizationHeader: false

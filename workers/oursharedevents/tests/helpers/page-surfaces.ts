@@ -171,6 +171,10 @@ export const PAGE_SURFACES: Readonly<Record<string, PageSurface>> = {
 
   // ── SharedReport ─────────────────────────────────────────────────────────
   '/sharedReport': page('SharedReport shell.', '/sharedReport'),
+  '/family-report': page(
+    "A parent company's report over its ventures (OSE-2241); with no valid link it says so.",
+    '/family-report'
+  ),
   '/report': page('Alias of /sharedReport.', '/report'),
   '/reports': page('Alias of /sharedReport.', '/reports'),
   '/analytics': page('Alias of /sharedReport.', '/analytics'),
