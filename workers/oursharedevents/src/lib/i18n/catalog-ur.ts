@@ -423,7 +423,6 @@ export const ur: Record<MessageKey, string> = {
   'form.email.label': 'آپ کا ای میل',
   'form.email.placeholder': 'name@example.com',
   'form.email.submit': 'سبسکرائب کریں',
-  'form.email.already': 'آپ پہلے سے سبسکرائب ہیں!',
   'form.email.done': 'آپ فہرست میں شامل ہو گئے!',
   'form.error.invalidEventId':
     'اس تقریب کا لنک درست نہیں لگتا۔ اصل لنک آزمائیں یا منتظم سے رابطہ کریں۔',

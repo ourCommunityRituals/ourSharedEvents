@@ -426,7 +426,6 @@ export const ru: Record<MessageKey, string> = {
   'form.email.label': 'Ваша почта',
   'form.email.placeholder': 'vy@primer.ru',
   'form.email.submit': 'Подписаться',
-  'form.email.already': 'Вы уже подписаны!',
   'form.email.done': 'Вы в списке!',
   'form.error.invalidEventId':
     'Ссылка на событие выглядит неверной. Попробуйте исходную ссылку или свяжитесь с организатором.',

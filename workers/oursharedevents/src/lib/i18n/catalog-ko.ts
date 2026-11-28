@@ -422,7 +422,6 @@ export const ko: Record<MessageKey, string> = {
   'form.email.label': '내 이메일',
   'form.email.placeholder': 'na@example.kr',
   'form.email.submit': '등록하기',
-  'form.email.already': '이미 등록했어요!',
   'form.email.done': '명단에 올랐어요!',
   'form.error.invalidEventId':
     '행사 링크가 맞지 않는 것 같아요. 원래 링크를 써 보거나 주최자에게 연락하세요.',

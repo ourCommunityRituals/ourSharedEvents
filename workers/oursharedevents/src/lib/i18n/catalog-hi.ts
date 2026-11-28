@@ -419,7 +419,6 @@ export const hi: Record<MessageKey, string> = {
   'form.email.label': 'आपका ईमेल',
   'form.email.placeholder': 'aap@udaharan.in',
   'form.email.submit': 'मुझे जोड़ें',
-  'form.email.already': 'आप पहले से जुड़े हैं!',
   'form.email.done': 'आप सूची में हैं!',
   'form.error.invalidEventId': 'यह कार्यक्रम लिंक ठीक नहीं लग रहा। असली लिंक आज़माएँ या आयोजक से संपर्क करें।',
   'form.error.invalidBody': 'हम आपका जवाब पढ़ नहीं सके। पेज दोबारा खोलकर फिर कोशिश करें।',

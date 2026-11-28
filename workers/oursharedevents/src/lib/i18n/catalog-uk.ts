@@ -425,7 +425,6 @@ export const uk: Record<MessageKey, string> = {
   'form.email.label': 'Ваша пошта',
   'form.email.placeholder': 'vy@pryklad.ua',
   'form.email.submit': 'Підписатися',
-  'form.email.already': 'Ви вже підписані!',
   'form.email.done': 'Ви в списку!',
   'form.error.invalidEventId':
     'Посилання на подію виглядає неправильним. Спробуйте початкове посилання або зв’яжіться з організатором.',

@@ -426,7 +426,6 @@ export const ja: Record<MessageKey, string> = {
   'form.email.label': 'メールアドレス',
   'form.email.placeholder': 'anata@example.jp',
   'form.email.submit': '登録する',
-  'form.email.already': 'すでに登録されています！',
   'form.email.done': '登録しました！',
   'form.error.invalidEventId':
     'このイベントのリンクが正しくないようです。元のリンクを試すか、主催者に連絡してください。',

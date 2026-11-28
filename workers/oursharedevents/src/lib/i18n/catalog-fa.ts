@@ -424,7 +424,6 @@ export const fa: Record<MessageKey, string> = {
   'form.email.label': 'ایمیل شما',
   'form.email.placeholder': 'name@example.com',
   'form.email.submit': 'اشتراک',
-  'form.email.already': 'شما از قبل مشترک هستید!',
   'form.email.done': 'به فهرست اضافه شدید!',
   'form.error.invalidEventId':
     'پیوند این رویداد درست به نظر نمی‌رسد. پیوند اصلی را امتحان کنید یا با برگزارکننده تماس بگیرید.',

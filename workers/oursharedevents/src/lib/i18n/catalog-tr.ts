@@ -428,7 +428,6 @@ export const tr: Record<MessageKey, string> = {
   'form.email.label': 'E-postanız',
   'form.email.placeholder': 'siz@ornek.com',
   'form.email.submit': 'Beni kaydet',
-  'form.email.already': 'Zaten kayıtlısınız!',
   'form.email.done': 'Listedesiniz!',
   'form.error.invalidEventId':
     'Bu etkinlik bağlantısı doğru görünmüyor. Asıl bağlantıyı deneyin ya da düzenleyenle iletişime geçin.',

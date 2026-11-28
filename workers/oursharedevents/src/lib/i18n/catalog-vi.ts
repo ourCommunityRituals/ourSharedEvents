@@ -429,7 +429,6 @@ export const vi: Record<MessageKey, string> = {
   'form.email.label': 'Email của bạn',
   'form.email.placeholder': 'ban@vidu.com',
   'form.email.submit': 'Đăng ký cho tôi',
-  'form.email.already': 'Bạn đã đăng ký rồi!',
   'form.email.done': 'Bạn đã có trong danh sách!',
   'form.error.invalidEventId':
     'Liên kết sự kiện này có vẻ không đúng. Hãy thử liên kết gốc hoặc liên hệ người tổ chức.',

@@ -429,7 +429,6 @@ export const id: Record<MessageKey, string> = {
   'form.email.label': 'Email Anda',
   'form.email.placeholder': 'anda@contoh.com',
   'form.email.submit': 'Daftarkan saya',
-  'form.email.already': 'Anda sudah terdaftar!',
   'form.email.done': 'Anda sudah masuk daftar!',
   'form.error.invalidEventId':
     'Tautan acara ini tampak salah. Coba tautan aslinya atau hubungi penyelenggara.',

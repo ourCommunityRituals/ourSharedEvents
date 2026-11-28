@@ -420,7 +420,6 @@ export const bn: Record<MessageKey, string> = {
   'form.email.label': 'আপনার ইমেইল',
   'form.email.placeholder': 'apni@udaharon.com',
   'form.email.submit': 'আমাকে যুক্ত করুন',
-  'form.email.already': 'আপনি আগেই যুক্ত আছেন!',
   'form.email.done': 'আপনি তালিকায় আছেন!',
   'form.error.invalidEventId':
     'এই অনুষ্ঠানের লিংক ঠিক মনে হচ্ছে না। আসল লিংক চেষ্টা করুন বা আয়োজকের সাথে যোগাযোগ করুন।',

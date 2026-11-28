@@ -429,7 +429,6 @@ export const tl: Record<MessageKey, string> = {
   'form.email.label': 'Email mo',
   'form.email.placeholder': 'ikaw@halimbawa.com',
   'form.email.submit': 'Ipatala ako',
-  'form.email.already': 'Nakatala ka na!',
   'form.email.done': 'Nasa listahan ka na!',
   'form.error.invalidEventId':
     'Mukhang mali ang link ng kaganapan na ito. Subukan ang orihinal na link o kontakin ang punong-abala.',

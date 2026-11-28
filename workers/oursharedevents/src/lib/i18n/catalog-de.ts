@@ -434,7 +434,6 @@ export const de: Record<MessageKey, string> = {
   'form.email.label': 'Ihre E-Mail',
   'form.email.placeholder': 'sie@beispiel.de',
   'form.email.submit': 'Eintragen',
-  'form.email.already': 'Sie sind schon eingetragen!',
   'form.email.done': 'Sie stehen auf der Liste!',
   'form.error.invalidEventId':
     'Dieser Veranstaltungslink scheint nicht zu stimmen. Versuchen Sie den ursprünglichen Link oder fragen Sie den Gastgeber.',

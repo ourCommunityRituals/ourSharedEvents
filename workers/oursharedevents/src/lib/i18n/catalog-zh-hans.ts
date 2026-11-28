@@ -415,7 +415,6 @@ export const zh_hans: Record<MessageKey, string> = {
   'form.email.label': '你的邮箱',
   'form.email.placeholder': 'ni@example.com',
   'form.email.submit': '订阅',
-  'form.email.already': '你已经订阅了！',
   'form.email.done': '你已加入名单！',
   'form.error.invalidEventId': '这个活动链接好像不对。请试试原来的链接，或联系主办人。',
   'form.error.invalidBody': '我们无法读取你的回复。请刷新页面后再试。',

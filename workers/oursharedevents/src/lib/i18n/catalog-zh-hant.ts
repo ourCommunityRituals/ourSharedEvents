@@ -415,7 +415,6 @@ export const zh_hant: Record<MessageKey, string> = {
   'form.email.label': '你的電子郵件',
   'form.email.placeholder': 'ni@example.com',
   'form.email.submit': '訂閱',
-  'form.email.already': '你已經訂閱了！',
   'form.email.done': '你已加入名單！',
   'form.error.invalidEventId': '這個活動連結好像不對。請試試原本的連結，或聯絡主辦人。',
   'form.error.invalidBody': '我們無法讀取你的回覆。請重新整理頁面後再試。',

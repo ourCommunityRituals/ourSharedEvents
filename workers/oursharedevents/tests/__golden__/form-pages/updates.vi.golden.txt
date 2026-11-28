@@ -334,16 +334,15 @@
 
       async function handleEmail(e) {
         e.preventDefault();
-        let body;
         try {
-          body = await submitForm("evt_form_golden", 'email-signup', {
+          await submitForm("evt_form_golden", 'email-signup', {
             email: document.getElementById('email').value,
             sourcePlacementId: "dep_golden1",
           });
         } catch (_) {
           return; // the friendly error is already on screen
         }
-        showSuccess(body.duplicate ? "Bạn đã đăng ký rồi!" : "Bạn đã có trong danh sách!");
+        showSuccess("Bạn đã có trong danh sách!");
       }
       document.querySelector('[data-testid="email-form"]').addEventListener('submit', handleEmail);
     </script><template id="form-next-step" data-testid="form-next-step"><div class="next-step" data-testid="email-next-step">
