@@ -110,12 +110,12 @@ so roll the Worker back first (`docs/runbooks/ROLLBACK.md`).
 #### B.1 — `DB` (main database)
 
 ```sql
--- 0127: event_type_bucket, event_type_registry.bucket_code, 20 new types, the
+-- 0127: event_type_bucket, event_type_registry.bucket_code, 25 new types, the
 -- licensed_gathering template, plain display names for 17 types (event type
 -- buckets, owner approval 2026-11-28). Additive: one table, one column, one
 -- index, new rows. Ids, uec_code and category_code are unchanged. THE ROLLBACK
 -- IS: revert the Worker and LEAVE IT ALL. The older Worker groups by the 15
--- categories again and never reads the bucket table or column. The 20 new
+-- categories again and never reads the bucket table or column. The 25 new
 -- types stay in the older picker under their home category; an event that
 -- already uses one keeps it.
 --

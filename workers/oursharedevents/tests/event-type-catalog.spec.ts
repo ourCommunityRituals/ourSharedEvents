@@ -75,14 +75,14 @@ describe('acceptance criterion — no orphaned types after 0076', () => {
     expect(row?.n).toBe(0);
   });
 
-  test('every type has the category of its UEC prefix (47 seeded + Watch Party, 0097 + Storytime, 0115 + 20 new, 0127)', async () => {
+  test('every type has the category of its UEC prefix (47 seeded + Watch Party, 0097 + Storytime, 0115 + 25 new, 0127)', async () => {
     const row = await env.DB.prepare(
       `SELECT COUNT(*) AS total,
               SUM(CASE WHEN category_code = substr(uec_code, 1, instr(uec_code, '-') - 1) THEN 1 ELSE 0 END) AS matched
          FROM event_type_registry`
     ).first<{ total: number; matched: number }>();
-    expect(row?.total).toBe(69);
-    expect(row?.matched).toBe(69);
+    expect(row?.total).toBe(74);
+    expect(row?.matched).toBe(74);
   });
 
   test('15 categories, and every one has at least one type', async () => {
@@ -191,7 +191,7 @@ describe('GET /api/v2/admin/event-types', () => {
 
   // 0127: the picker groups by the 9 buckets. 65 types are offered; the four
   // tier-2 types (Bingo, Charity Night, Parade, Camp) wait for the ceiling.
-  test('returns the grouped catalog: 9 buckets, 65 types, 0 orphans, Sports > Bocce', async () => {
+  test('returns the grouped catalog: 9 buckets, 70 types, 0 orphans, Sports > Bocce', async () => {
     const res = await SELF.fetch('https://t.test/api/v2/admin/event-types', {
       headers: ADMIN_HEADERS,
     });
@@ -210,7 +210,7 @@ describe('GET /api/v2/admin/event-types', () => {
       'GIV',
       'CMT',
     ]);
-    expect(body.categories.reduce((n, c) => n + c.types.length, 0)).toBe(65);
+    expect(body.categories.reduce((n, c) => n + c.types.length, 0)).toBe(70);
     const rec = body.categories.find((c) => c.code === 'SPT');
     expect(rec?.name).toBe('Sports & Recreation');
     expect(rec?.types.some((t) => t.uec_code === 'REC-BOCCE-001')).toBe(true);
@@ -481,6 +481,11 @@ describe('event type buckets (0127)', () => {
     'etr-civ-parade': 'PTY',
     'etr-mkt-craft': 'BGN',
     'etr-mkt-yardsale': 'BGN',
+    'etr-mkt-farmers': 'BGN',
+    'etr-mkt-sidewalk': 'BGN',
+    'etr-art-walk': 'SHW',
+    'etr-civ-housewalk': 'CMT',
+    'etr-soc-restaurantweek': 'CMT',
     'etr-soc-kidsparty': 'KID',
     'etr-rec-camp': 'KID',
     'etr-biz-network': 'LRN',
@@ -560,6 +565,37 @@ describe('event type buckets (0127)', () => {
         WHERE r.legal_clearance_tier > 1`
     ).all<{ template_id: string }>();
     expect(raised.results.map((r) => r.template_id)).toEqual(['licensed_gathering']);
+  });
+
+  // The markets-and-walks test account found five gaps (owner: build fully, 2026-11-28).
+  test('the five markets-and-walks types are offered, each in its bucket and on a template', async () => {
+    const want: Record<string, [string, string]> = {
+      'etr-mkt-farmers': ['BGN', 'Farmers Market'],
+      'etr-mkt-sidewalk': ['BGN', 'Sidewalk Sale'],
+      'etr-art-walk': ['SHW', 'Art Walk'],
+      'etr-civ-housewalk': ['CMT', 'House and Garden Walk'],
+      'etr-soc-restaurantweek': ['CMT', 'Restaurant Week'],
+    };
+    const res = await SELF.fetch('https://t.test/api/v2/admin/event-types', {
+      headers: ADMIN_HEADERS,
+    });
+    const body = (await res.json()) as Catalog;
+    for (const [id, [bucket, name]] of Object.entries(want)) {
+      const cat = body.categories.find((c) => c.types.some((t) => t.id === id));
+      expect(cat?.code, id).toBe(bucket);
+      expect(cat?.types.find((t) => t.id === id)?.name, id).toBe(name);
+      const tpl = await env.DB.prepare(
+        `SELECT COUNT(*) AS n FROM template_event_types t
+           JOIN event_type_registry r ON r.uec_code = t.uec_code WHERE r.id = ?`
+      )
+        .bind(id)
+        .first<{ n: number }>();
+      expect(tpl?.n, id).toBeGreaterThan(0);
+    }
+    const farm = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM template_event_types WHERE template_id = 'farmers_market' AND uec_code = 'MKT-FARMERS-001'"
+    ).first<{ n: number }>();
+    expect(farm?.n).toBe(1);
   });
 
   test('drinking games are never a type', async () => {

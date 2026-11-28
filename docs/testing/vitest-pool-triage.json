@@ -1427,7 +1427,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch, env.DB",
-      "testCount": 30
+      "testCount": 31
     },
     {
       "file": "workers/oursharedevents/tests/event-type-names.spec.ts",

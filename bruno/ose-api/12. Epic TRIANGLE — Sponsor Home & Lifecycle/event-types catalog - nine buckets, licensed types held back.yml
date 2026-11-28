@@ -32,6 +32,15 @@ runtime:
         test('a new tier-1 type is offered (Soccer)', function () {
           expect(ids).to.include('etr-rec-soccer');
         });
+        test('the markets-and-walks types are offered, each in its bucket', function () {
+          const where = {};
+          cats.forEach(function (c) { (c.types || []).forEach(function (t) { where[t.id] = c.code; }); });
+          expect(where['etr-mkt-farmers']).to.eql('BGN');
+          expect(where['etr-mkt-sidewalk']).to.eql('BGN');
+          expect(where['etr-art-walk']).to.eql('SHW');
+          expect(where['etr-civ-housewalk']).to.eql('CMT');
+          expect(where['etr-soc-restaurantweek']).to.eql('CMT');
+        });
         test('types that can need a licence are not offered yet', function () {
           ['etr-ent-bingo', 'etr-fnd-charity', 'etr-civ-parade', 'etr-rec-camp'].forEach(function (id) {
             expect(ids, id).to.not.include(id);

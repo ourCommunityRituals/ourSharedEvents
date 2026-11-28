@@ -151,6 +151,11 @@ const TYPE_ES: Names = {
   'etr-rec-camp': 'Campamento',
   'etr-biz-class': 'Clase o lección',
   'etr-fnd-charity': 'Noche benéfica',
+  'etr-mkt-farmers': 'Mercado de agricultores',
+  'etr-mkt-sidewalk': 'Venta en la acera',
+  'etr-art-walk': 'Paseo de arte',
+  'etr-civ-housewalk': 'Paseo de casas y jardines',
+  'etr-soc-restaurantweek': 'Semana de restaurantes',
 };
 
 const TYPE_PL: Names = {
@@ -224,6 +229,11 @@ const TYPE_PL: Names = {
   'etr-rec-camp': 'Obóz',
   'etr-biz-class': 'Zajęcia lub lekcja',
   'etr-fnd-charity': 'Wieczór charytatywny',
+  'etr-mkt-farmers': 'Targ rolniczy',
+  'etr-mkt-sidewalk': 'Wyprzedaż na chodniku',
+  'etr-art-walk': 'Spacer po sztuce',
+  'etr-civ-housewalk': 'Spacer po domach i ogrodach',
+  'etr-soc-restaurantweek': 'Tydzień restauracji',
 };
 
 const TYPE_AR: Names = {
@@ -297,6 +307,11 @@ const TYPE_AR: Names = {
   'etr-rec-camp': 'مخيم',
   'etr-biz-class': 'درس أو حصة',
   'etr-fnd-charity': 'أمسية خيرية',
+  'etr-mkt-farmers': 'سوق المزارعين',
+  'etr-mkt-sidewalk': 'تخفيضات على الرصيف',
+  'etr-art-walk': 'جولة فنية',
+  'etr-civ-housewalk': 'جولة البيوت والحدائق',
+  'etr-soc-restaurantweek': 'أسبوع المطاعم',
 };
 
 // The 9 buckets (migration 0127): the full name (picker) and the short name

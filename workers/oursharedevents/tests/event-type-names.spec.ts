@@ -60,10 +60,10 @@ for (const f of files) {
 }
 
 describe('what the migrations seed', () => {
-  it('finds the 9 buckets, 15 categories and 69 types', () => {
+  it('finds the 9 buckets, 15 categories and 74 types', () => {
     expect(BUCKETS.size).toBe(9);
     expect(CATEGORIES.size).toBe(15);
-    expect(TYPES.size).toBe(69);
+    expect(TYPES.size).toBe(74);
   });
 
   it('English is the registry name itself, so its tables stay empty', () => {

@@ -1,4 +1,4 @@
--- Migration 0127: event type buckets, 20 new types, plain names.
+-- Migration 0127: event type buckets, 25 new types, plain names.
 --
 -- WHY. The owner approved the event type buckets proposal on 2026-11-28
 -- (OCR-docs docs/proposals/PROPOSAL_event-type-buckets.md, D1 to D6, "Yes, all
@@ -16,7 +16,9 @@
 --   1. event_type_bucket: the 9 buckets (code, name, short name for the row,
 --      order). Names in other languages live in lib/i18n/event-type-names.ts.
 --   2. event_type_registry.bucket_code, set for every type.
---   3. 20 new types (D2). Each takes a home category_code from today's 15 and a
+--   3. 25 new types (D2, and five more the markets-and-walks test account
+--      found: farmers market, sidewalk sale, art walk, house and garden walk,
+--      restaurant week). Each takes a home category_code from today's 15 and a
 --      uec_code with that prefix, so reports keep grouping the same way.
 --      Bingo, Charity Night, Parade and Camp can need a licence or permit (D3):
 --      they are tier 2, above the launch ceiling, so the picker hides them and
@@ -58,7 +60,7 @@ INSERT OR IGNORE INTO event_type_bucket (bucket_code, display_name, short_name, 
 -- ── 2. Each type's bucket ───────────────────────────────────────────────────
 ALTER TABLE event_type_registry ADD COLUMN bucket_code TEXT;
 
--- ── 3. The 20 new types ─────────────────────────────────────────────────────
+-- ── 3. The 25 new types ─────────────────────────────────────────────────────
 INSERT OR IGNORE INTO event_type_registry
   (id, uec_code, name, description, phase, legal_clearance_tier, regulatory_notes, is_active, category_code)
 VALUES
@@ -101,7 +103,17 @@ VALUES
   ('etr-biz-class',        'BIZ-CLASS-001',        'Class or Lesson',
    'A class or lesson on any skill.', 1, 1, 'LLC + ToS only', 1, 'BIZ'),
   ('etr-fnd-charity',      'FND-CHARITY-001',      'Charity Night',
-   'A night out that raises money for a cause. A raffle can need a licence.', 2, 2, 'Raffle licence may be required', 1, 'FND');
+   'A night out that raises money for a cause. A raffle can need a licence.', 2, 2, 'Raffle licence may be required', 1, 'FND'),
+  ('etr-mkt-farmers',      'MKT-FARMERS-001',      'Farmers Market',
+   'Local farmers and makers selling food and goods.', 1, 1, 'LLC + ToS only', 1, 'MKT'),
+  ('etr-mkt-sidewalk',     'MKT-SIDEWALK-001',     'Sidewalk Sale',
+   'Shops put deals out on the sidewalk for a day.', 1, 1, 'LLC + ToS only', 1, 'MKT'),
+  ('etr-art-walk',         'ART-WALK-001',         'Art Walk',
+   'Walk from gallery to gallery and shop to shop to see art.', 1, 1, 'LLC + ToS only', 1, 'ART'),
+  ('etr-civ-housewalk',    'CIV-HOUSEWALK-001',    'House and Garden Walk',
+   'Walk the neighborhood and visit homes and gardens that open for the day.', 1, 1, 'LLC + ToS only', 1, 'CIV'),
+  ('etr-soc-restaurantweek', 'SOC-RESTAURANTWEEK-001', 'Restaurant Week',
+   'Local restaurants offer special menus for a week.', 1, 1, 'LLC + ToS only', 1, 'SOC');
 
 -- Buckets follow the category, then the exceptions the proposal lists.
 UPDATE event_type_registry SET bucket_code = 'SPT' WHERE bucket_code IS NULL AND category_code IN ('REC', 'FIT');
@@ -110,14 +122,16 @@ UPDATE event_type_registry SET bucket_code = 'GAM' WHERE bucket_code IS NULL AND
 UPDATE event_type_registry SET bucket_code = 'SHW' WHERE bucket_code IS NULL AND (category_code IN ('PER', 'ART')
   OR id IN ('etr-ent-film', 'etr-ent-karaoke')) AND id <> 'etr-art-cultural';
 UPDATE event_type_registry SET bucket_code = 'PTY' WHERE bucket_code IS NULL AND (category_code = 'SOC'
-  OR id IN ('etr-art-cultural', 'etr-gar-harvest', 'etr-civ-parade')) AND id <> 'etr-soc-kidsparty';
+  OR id IN ('etr-art-cultural', 'etr-gar-harvest', 'etr-civ-parade'))
+  AND id NOT IN ('etr-soc-kidsparty', 'etr-soc-restaurantweek');
 UPDATE event_type_registry SET bucket_code = 'BGN' WHERE bucket_code IS NULL AND category_code = 'MKT';
 UPDATE event_type_registry SET bucket_code = 'KID' WHERE id IN ('etr-soc-kidsparty', 'etr-rec-camp');
 UPDATE event_type_registry SET bucket_code = 'LRN' WHERE bucket_code IS NULL AND category_code IN ('LIT', 'BIZ');
 UPDATE event_type_registry SET bucket_code = 'GIV' WHERE bucket_code IS NULL AND (category_code IN ('FND', 'VOL')
   OR id = 'etr-gar-planting');
 UPDATE event_type_registry SET bucket_code = 'SPT' WHERE bucket_code IS NULL AND id IN ('etr-gar-trail', 'etr-gar-daytrip');
-UPDATE event_type_registry SET bucket_code = 'CMT' WHERE bucket_code IS NULL AND category_code IN ('CIV', 'FAI');
+UPDATE event_type_registry SET bucket_code = 'CMT' WHERE bucket_code IS NULL AND (category_code IN ('CIV', 'FAI')
+  OR id = 'etr-soc-restaurantweek');
 
 CREATE INDEX IF NOT EXISTS idx_event_type_registry_bucket ON event_type_registry(bucket_code);
 
@@ -176,7 +190,18 @@ INSERT OR IGNORE INTO template_event_types (template_id, uec_code)
 INSERT OR IGNORE INTO template_event_types (template_id, uec_code)
   SELECT t.template_id, n.uec_code FROM template_event_types t, event_type_registry n
   WHERE t.uec_code = 'MKT-FLEA-001' AND n.is_active = 1
-    AND n.uec_code IN ('MKT-YARDSALE-001', 'MKT-RESALE-001');
+    AND n.uec_code IN ('MKT-YARDSALE-001', 'MKT-RESALE-001', 'MKT-FARMERS-001', 'MKT-SIDEWALK-001');
+INSERT OR IGNORE INTO template_event_types (template_id, uec_code)
+  SELECT 'farmers_market', uec_code FROM event_type_registry
+  WHERE uec_code = 'MKT-FARMERS-001' AND is_active = 1
+    AND EXISTS (SELECT 1 FROM event_templates WHERE id = 'farmers_market');
+INSERT OR IGNORE INTO template_event_types (template_id, uec_code)
+  SELECT t.template_id, n.uec_code FROM template_event_types t, event_type_registry n
+  WHERE t.uec_code = 'ART-GALLERY-001' AND n.is_active = 1
+    AND n.uec_code IN ('ART-WALK-001', 'CIV-HOUSEWALK-001');
+INSERT OR IGNORE INTO template_event_types (template_id, uec_code)
+  SELECT t.template_id, n.uec_code FROM template_event_types t, event_type_registry n
+  WHERE t.uec_code = 'SOC-BLOCK-001' AND n.is_active = 1 AND n.uec_code = 'SOC-RESTAURANTWEEK-001';
 INSERT OR IGNORE INTO template_event_types (template_id, uec_code)
   SELECT t.template_id, n.uec_code FROM template_event_types t, event_type_registry n
   WHERE t.uec_code = 'BIZ-WORKSHOP-001' AND n.is_active = 1 AND n.uec_code = 'BIZ-CLASS-001';
