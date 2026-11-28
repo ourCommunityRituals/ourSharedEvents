@@ -52,6 +52,12 @@ export function isTurnstileEnabled(env: TurnstileEnv): boolean {
 // Pure string builders. A page renders the widget ONLY when enforcement is on
 // AND a sitekey is configured; otherwise every builder returns '' (zero markup).
 
+/**
+ * The Turnstile action the Online Pick's widget and siteverify must agree on
+ * (owner, 2026-11-28, OSE ADR-040 decision 13, D3).
+ */
+export const ONLINE_PICK_TURNSTILE_ACTION = 'online-pick';
+
 /** Turnstile edge host — added to script-src + frame-src when the widget renders. */
 export const TURNSTILE_HOST = 'https://challenges.cloudflare.com';
 
@@ -105,13 +111,8 @@ function parseHostnames(raw: string | undefined): Set<string> {
  * Canonical siteverify call. Fail-closed by contract: any network error, non-2xx
  * status, or non-JSON body THROWS (the caller treats a throw as a denial).
  */
-export async function siteverify(
-  token: string,
-  secret: string,
-  remoteip?: string
-): Promise<SiteverifyResult> {
+export async function siteverify(token: string, secret: string): Promise<SiteverifyResult> {
   const params = new URLSearchParams({ secret, response: token });
-  if (remoteip) params.set('remoteip', remoteip);
   const res = await fetch(SITEVERIFY_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -175,10 +176,11 @@ export async function guardTurnstile(
     return deny(request);
   }
 
-  const remoteip = request.headers.get('CF-Connecting-IP') ?? undefined;
+  // The visitor's address is never sent to siteverify (AGENTS.md invariant 3,
+  // place not person); siteverify works without remoteip.
   let result: SiteverifyResult;
   try {
-    result = await siteverify(token, secret, remoteip);
+    result = await siteverify(token, secret);
   } catch {
     return deny(request); // network / non-2xx / non-JSON → fail closed
   }
