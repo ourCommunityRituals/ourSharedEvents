@@ -298,7 +298,8 @@ describe('every page | no English of ours left in another language', () => {
     for (const lang of LANGUAGES) {
       for (const page of PAGES) RENDERS.set(`${lang}|${page}`, pieces(await render(lang, page)));
     }
-  });
+    // Every page in all 22 languages: about 8 s alone, longer on a busy CI shard.
+  }, 90_000);
 
   for (const lang of LANGUAGES.filter((l) => l !== DEFAULT_LANG)) {
     for (const page of PAGES) {
