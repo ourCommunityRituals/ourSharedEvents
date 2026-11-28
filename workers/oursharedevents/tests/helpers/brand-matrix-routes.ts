@@ -500,6 +500,10 @@ export const MATRIX_ROUTES: readonly MatrixRoute[] = [
 export const ROUTE_EXEMPTIONS: Readonly<Record<string, string>> = {
   '/api/v2/admin/addons':
     'Platform only (key actor or platform brand, AUD-3): a brand cannot read or turn on add-ons, its own or another. Held by tests/brand-addons.spec.ts (OSE-2232).',
+  '/api/v2/admin/brands/:id/family-report':
+    "A brand tree is not one of the matrix fixtures; its isolation is held by tests/family-report.spec.ts (OSE-2241): a brand is read only when it is in the caller's scope, so a venture's member, another company and the public and platform brands get the same 404 as an unknown brand.",
+  '/api/v2/admin/brands/:id/family-report/mint-link':
+    "A brand tree is not one of the matrix fixtures; its isolation is held by tests/family-report.spec.ts (OSE-2241): a brand is read only when it is in the caller's scope, so a venture's member, another company and the public and platform brands get the same 404 as an unknown brand.",
   '/api/v2/admin/venues':
     'A venue is not one of the matrix fixtures; its isolation is held by tests/venues.spec.ts (OSE-2221): only the owner brand reaches a venue by id, another brand gets the same 404 as an unknown venue, and a list shows a brand only the venues it owns or is listed at.',
   '/api/v2/admin/venues/:id/operators':

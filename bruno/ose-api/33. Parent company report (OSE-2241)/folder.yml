@@ -1,0 +1,19 @@
+info:
+  name: Parent company report (OSE-2241)
+  type: folder
+request: {}
+docs: |-
+  The staging layer of OSE-2241: one report for a parent company over every
+  venture below it, and the signed link it shares with a corporate sponsor.
+
+  Fixtures: bruno/fixtures/lakeside-brand-tree-seed.sql (the practice tree,
+  lakeside-co over four ventures) and lakeside-family-report-seed.sql (stand-in
+  demo traffic, unpublished events, two agreed sponsors and one the organizer
+  has not agreed to). Every read here uses data_class=all, because the
+  fixture's traffic is practice data.
+
+  The key actor reads every brand by name (scope mode all). Seq 20 mints a
+  one-day link; 30 and 40 read it as a corporate sponsor would. Nothing else
+  is written.
+
+  Mock-layer twin: workers/oursharedevents/tests/family-report.spec.ts.
