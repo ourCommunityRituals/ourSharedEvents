@@ -33,7 +33,7 @@ test.describe('publish loop: draft → preview → publish → undo → republis
   // OSE-1515: the keyboard-only path from the front door to step 4. Buttons
   // are focused directly (WebKit's Tab skips them unless the system setting is
   // on) and pressed with Enter; the fields move on with Enter.
-  test('keyboard only: front door to step 4, and step 1 says why it will not move on', async ({
+  test('keyboard only: front door to the share screen, and step 1 says why it will not move on', async ({
     page,
   }) => {
     test.setTimeout(90_000);
@@ -67,12 +67,10 @@ test.describe('publish loop: draft → preview → publish → undo → republis
     await page.keyboard.press('Enter');
     await expect(page.getByTestId('wizard-step-2')).toBeVisible();
 
-    // Steps 2 and 3 with the keyboard; step 3's Next creates the draft.
-    for (const step of [3, 4]) {
-      await page.getByTestId('wizard-next-btn').focus();
-      await page.keyboard.press('Enter');
-      await expect(page.getByTestId(`wizard-step-${step}`)).toBeVisible();
-    }
+    // Step 2 with the keyboard: Save draft creates the draft (owner 2026-11-27: two steps).
+    await page.getByTestId('wizard-save-draft-btn').focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('wizard-step-3')).toBeVisible();
     await expect(page.getByTestId('wizard-preview-public')).toBeVisible();
     expect(pageErrors, 'no script error on the way').toEqual([]);
   });
@@ -88,30 +86,32 @@ test.describe('publish loop: draft → preview → publish → undo → republis
     const pageErrors: string[] = [];
     page.on('pageerror', (e) => pageErrors.push(e.message));
 
-    // ── Steps 1–3: name, place, when ────────────────────────────────────────
+    // ── Step 1: name, place, when, what kind ────────────────────────────────
     await page.goto('/admin', { waitUntil: 'domcontentloaded' });
     await page.getByTestId('admin-path-wizard').click();
     const title = `Loop night ${Date.now()}`;
     await page.getByTestId('wizard-event-name').fill(title);
     await page.locator('#wizard-event-venue').fill('Eagles Hall');
-    // OSE-1560: a new event is off the map unless the organizer says otherwise; this journey puts it on.
-    await page.getByTestId('wizard-publish-yes').click();
     const start = new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10);
     await page.getByTestId('wizard-event-date').fill(start);
     // OSE-1560: leaving draft needs a start time and an event type.
     await page.getByTestId('wizard-event-time').fill('18:30');
-    await page.getByTestId('wizard-next-btn').click();
     await page.getByTestId('wizard-category').selectOption({ index: 1 });
     await page.getByTestId('wizard-event-type').selectOption({ index: 1 });
-    for (let i = 0; i < 2; i++) await page.getByTestId('wizard-next-btn').click();
+    await page.getByTestId('wizard-next-btn').click();
+    // ── Step 2: OSE-1560, a new event is off the map unless the organizer says otherwise; this journey puts it on.
+    await page.getByTestId('wizard-publish-yes').click();
+    await page.getByTestId('wizard-save-draft-btn').click();
 
-    // ── Step 4: the event exists as a draft; see it before publishing ───────
+    // ── Share screen: the event exists as a draft; see it before publishing ─
     const previewPublic = page.getByTestId('wizard-preview-public');
     await expect(previewPublic).toBeVisible();
     const href = await previewPublic.getAttribute('href');
     const id = /\/events\/([^/]+)\/preview$/.exec(href ?? '')?.[1];
     expect(id, `preview href ${href}`).toBeTruthy();
 
+    // The TV settings are folded on the share screen.
+    await page.getByTestId('wizard-tv-details').locator('summary').click();
     for (const t of ['wizard-preview-public', 'wizard-preview-poster', 'wizard-tv-demo-toggle']) {
       expect(await tall(page, t), `${t} touch target`).toBeGreaterThanOrEqual(MIN_TOUCH);
     }
@@ -132,8 +132,7 @@ test.describe('publish loop: draft → preview → publish → undo → republis
     await expect(page.getByTestId('wizard-tv-summary')).toContainText('30 seconds');
     await expect(page.getByTestId('wizard-tv-msg')).toContainText(/saved/i);
 
-    // ── Step 5: publish ─────────────────────────────────────────────────────
-    await page.getByTestId('wizard-next-btn').click();
+    // ── Publish, on the same screen ─────────────────────────────────────────
     const goLive = page.getByTestId('wizard-go-live-btn');
     await expect(goLive).toBeVisible();
     expect(await tall(page, 'wizard-go-live-btn')).toBeGreaterThanOrEqual(MIN_TOUCH);
@@ -169,12 +168,11 @@ test.describe('publish loop: draft → preview → publish → undo → republis
     expect((await request.get(`/events/${id}`)).status()).toBe(404);
     expect(await listed()).toBe(false);
 
-    // ── Back to step 4, change the TV, forward, publish again ───────────────
-    await page.getByTestId('wizard-back-btn').click();
+    // ── Change the TV on the same screen, publish again ─────────────────────
+    await expect(page.getByTestId('wizard-back-btn')).toBeHidden();
     await expect(page.getByTestId('wizard-tv-summary')).toBeVisible();
     await page.locator('label[for="wizard-tv-speed-8"]').click();
     await expect(page.getByTestId('wizard-tv-summary')).toContainText('8 seconds');
-    await page.getByTestId('wizard-next-btn').click();
     await goLive.click();
     await expect(msg).toContainText('published');
 
@@ -193,5 +191,50 @@ test.describe('publish loop: draft → preview → publish → undo → republis
     await expect.poll(listed, { timeout: 90_000, intervals: [5_000] }).toBe(true);
 
     expect(pageErrors, pageErrors.join('\n')).toEqual([]);
+  });
+
+  test('Publish on step 2 saves and publishes in one tap', async ({ page, request }) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize(MOBILE);
+    await page.setExtraHTTPHeaders({ Authorization: `Bearer ${ADMIN_BEARER}` });
+    await page.goto('/admin', { waitUntil: 'domcontentloaded' });
+    await page.getByTestId('admin-path-wizard').click();
+    await page.getByTestId('wizard-event-name').fill(`One tap night ${Date.now()}`);
+    await page.getByTestId('wizard-event-venue').fill('Eagles Hall');
+    await page.getByTestId('wizard-when-tomorrow').click();
+    await page.getByTestId('wizard-event-time').fill('19:00');
+    await page.getByTestId('wizard-category').selectOption({ index: 1 });
+    await page.getByTestId('wizard-event-type').selectOption({ index: 1 });
+    await page.getByTestId('wizard-next-btn').click();
+    await expect(page.getByTestId('wizard-next-btn')).toHaveText('Publish');
+    await page.getByTestId('wizard-next-btn').click();
+    await expect(page.getByTestId('wizard-step-3')).toBeVisible();
+    await expect(page.getByTestId('wizard-go-live-msg')).toContainText('published');
+    const href = await page.getByTestId('wizard-preview-public').getAttribute('href');
+    const id = /\/events\/([^/]+)\/preview$/.exec(href ?? '')?.[1];
+    expect(id, `preview href ${href}`).toBeTruthy();
+    expect((await request.get(`/events/${id}`)).status()).toBe(200);
+  });
+
+  test('Publish without a time or type goes back to step 1 and saves nothing', async ({ page }) => {
+    await page.setViewportSize(MOBILE);
+    await page.setExtraHTTPHeaders({ Authorization: `Bearer ${ADMIN_BEARER}` });
+    await page.goto('/admin', { waitUntil: 'domcontentloaded' });
+    await page.getByTestId('admin-path-wizard').click();
+    await page.getByTestId('wizard-event-name').fill(`No time night ${Date.now()}`);
+    await page.getByTestId('wizard-event-venue').fill('Eagles Hall');
+    await page.getByTestId('wizard-next-btn').click();
+    const sent: string[] = [];
+    page.on('request', (r) => {
+      if (r.method() === 'POST' && r.url().endsWith('/api/v2/admin/events')) sent.push(r.url());
+    });
+    await page.getByTestId('wizard-next-btn').click();
+    await expect(page.getByTestId('wizard-step-1')).toBeVisible();
+    await expect(page.getByTestId('wizard-msg')).toContainText(
+      'Add a start time and an event type'
+    );
+    await expect(page.getByTestId('wizard-event-time')).toBeFocused();
+    await expect(page.getByTestId('wizard-event-time')).toHaveAttribute('aria-invalid', 'true');
+    expect(sent, 'nothing was saved').toEqual([]);
   });
 });

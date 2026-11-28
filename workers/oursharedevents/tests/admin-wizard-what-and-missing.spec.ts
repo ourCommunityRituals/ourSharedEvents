@@ -5,10 +5,10 @@
  * looks complete when What and a start time are present; when they are missing
  * the organizer is asked, not stopped.
  *
- *   1. Step 2 has an optional one-line "what is it" field. Before this, the
+ *   1. Step 1 has an optional (folded) one-line "what is it" field. Before this, the
  *      "Something Else" card said "describe it your way" and offered no field.
  *      A template card fills the line; the organizer's own words are kept.
- *   2. Step 3, the last screen before Create, says what the page will not say
+ *   2. Step 2, the last screen before Save draft or Publish, says what the page will not say
  *      (what it is, what time it starts) and leaves Create enabled.
  *
  * Runs the wizard's real script from the admin.html Text import in jsdom.
@@ -83,7 +83,7 @@ const flush = async () => {
   for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
 };
 
-describe('OSE-1518: step 2 asks what the event is, optionally', () => {
+describe('OSE-1518: the create flow asks what the event is, optionally', () => {
   test('there is a one-line what field, and it is not required', () => {
     const { $, toStep2 } = mount();
     toStep2();
@@ -119,23 +119,21 @@ describe('OSE-1518: step 2 asks what the event is, optionally', () => {
   });
 });
 
-describe('OSE-1518: step 3 says what the page will be missing, and does not block', () => {
-  test('no start time and no what: the note names both, Create stays enabled', () => {
-    const { $, next, onStep, toStep2 } = mount();
+describe('OSE-1518: step 2 says what the page will be missing, and does not block', () => {
+  test('no start time and no what: the note names both, Save draft stays enabled', () => {
+    const { $, toStep2 } = mount();
     toStep2();
-    next();
-    expect(onStep(3)).toBe(true);
     const note = $('wizard-missing');
     expect(note.hidden).toBe(false);
     expect(note.textContent).toContain('what it is');
     expect(note.textContent).toContain('what time it starts');
-    expect($<HTMLButtonElement>('wizard-next-btn').disabled).toBe(false);
+    expect($<HTMLButtonElement>('wizard-save-draft-btn').disabled).toBe(false);
+    expect($<HTMLButtonElement>('wizard-save-draft-btn').hidden).toBe(false);
   });
 
   test('a start time but no what: the note names only what it is', () => {
-    const { $, next, toStep2 } = mount();
+    const { $, toStep2 } = mount();
     toStep2('18:00');
-    next();
     const note = $('wizard-missing');
     expect(note.hidden).toBe(false);
     expect(note.textContent).toContain('what it is');
@@ -143,21 +141,19 @@ describe('OSE-1518: step 3 says what the page will be missing, and does not bloc
   });
 
   test('both present: no note', () => {
-    const { $, type, next, toStep2 } = mount();
-    toStep2('18:00');
+    const { $, type, toStep2 } = mount();
     type('wizard-event-what', 'Bocce and a potluck');
-    next();
+    toStep2('18:00');
     expect($('wizard-missing').hidden).toBe(true);
   });
 
   test('the note is gone again after going Back and filling the gap', () => {
     const { $, type, next, onStep, toStep2 } = mount();
     toStep2('18:00');
-    next();
     expect($('wizard-missing').hidden).toBe(false);
     $('wizard-back-btn').click();
     // jsdom has no history navigation: Back falls through to the direct step change.
-    if (!onStep(2)) return;
+    if (!onStep(1)) return;
     type('wizard-event-what', 'Bocce and a potluck');
     next();
     expect($('wizard-missing').hidden).toBe(true);
@@ -166,32 +162,29 @@ describe('OSE-1518: step 3 says what the page will be missing, and does not bloc
 
 describe('OSE-1518: what the organizer typed is what is saved', () => {
   test('typed words are sent as what_short, with nothing missing blocking Create', async () => {
-    const { type, next, toStep2, posts } = mount();
+    const { $, type, toStep2, posts } = mount();
     toStep2();
     type('wizard-event-what', '  Bocce and a potluck in the back yard  ');
-    next();
-    next();
+    $('wizard-save-draft-btn').click();
     await flush();
     expect(posts).toHaveLength(1);
     expect(posts[0]!.what_short).toBe('Bocce and a potluck in the back yard');
   });
 
   test('with the line empty, no what_short is sent and the event is still created', async () => {
-    const { next, toStep2, posts } = mount();
+    const { $, toStep2, posts } = mount();
     toStep2();
-    next();
-    next();
+    $('wizard-save-draft-btn').click();
     await flush();
     expect(posts).toHaveLength(1);
     expect('what_short' in posts[0]!).toBe(false);
   });
 
   test('a card line the organizer left alone is sent as before', async () => {
-    const { $, next, toStep2, posts } = mount();
+    const { $, toStep2, posts } = mount();
     toStep2();
     $('wizard-template-trivia').click();
-    next();
-    next();
+    $('wizard-save-draft-btn').click();
     await flush();
     expect(String(posts[0]!.what_short)).toContain('Team trivia night');
     expect(String(posts[0]!.why_purpose)).toContain('friendly competition');

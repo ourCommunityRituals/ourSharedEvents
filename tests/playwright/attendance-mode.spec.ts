@@ -36,7 +36,7 @@ async function openWizard(page: Page, size = PHONE): Promise<void> {
   await expect(page.getByTestId('wizard-step-1')).toBeVisible();
 }
 
-/** Fill step 1, pick a type, create. Returns the new event's id. */
+/** Fill step 1 (with a type), save a draft on step 2. Returns the new event's id. */
 async function createInWizard(
   page: Page,
   o: { title: string; mode: 'in_person' | 'online' | 'both'; venue?: string }
@@ -47,14 +47,13 @@ async function createInWizard(
   const start = new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10);
   await page.getByTestId('wizard-event-date').fill(start);
   await page.getByTestId('wizard-event-time').fill('18:30');
-  await page.getByTestId('wizard-next-btn').click();
   await page.getByTestId('wizard-category').selectOption({ index: 1 });
   await page.getByTestId('wizard-event-type').selectOption({ index: 1 });
   await page.getByTestId('wizard-next-btn').click();
   const created = page.waitForResponse(
     (r) => r.url().endsWith('/api/v2/admin/events') && r.request().method() === 'POST'
   );
-  await page.getByTestId('wizard-next-btn').click();
+  await page.getByTestId('wizard-save-draft-btn').click();
   const res = await created;
   expect(res.status(), await res.text()).toBe(201);
   const sent = res.request().postDataJSON() as Record<string, unknown>;

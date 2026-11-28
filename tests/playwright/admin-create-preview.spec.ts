@@ -45,7 +45,7 @@ async function noSidewaysScroll(page: Page, label: string): Promise<void> {
   expect(o.sw, `${label}: ${o.sw}px wide on a ${o.cw}px screen`).toBeLessThanOrEqual(o.cw + 1);
 }
 
-/** Name, place and date, then to the step with the event type; Create; on to step 5. */
+/** Name, place, date (and time and type when asked) on step 1; Save draft on step 2; the share screen. */
 async function createAndReview(
   page: Page,
   o: { time?: string; type?: boolean; map?: boolean }
@@ -53,32 +53,43 @@ async function createAndReview(
   const title = `Preview night ${Date.now()}`;
   await page.getByTestId('wizard-event-name').fill(title);
   await page.getByTestId('wizard-event-venue').fill('Eagles Hall');
-  // A new event is off the map unless the organizer says yes; this journey wants it reachable.
-  if (o.map) await page.getByTestId('wizard-publish-yes').click();
   const start = new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10);
   await page.getByTestId('wizard-event-date').fill(start);
   if (o.time) await page.getByTestId('wizard-event-time').fill(o.time);
-  await page.getByTestId('wizard-next-btn').click();
   if (o.type) {
     await page.getByTestId('wizard-category').selectOption({ index: 1 });
     await page.getByTestId('wizard-event-type').selectOption({ index: 1 });
   }
   await page.getByTestId('wizard-next-btn').click();
-  await page.getByTestId('wizard-next-btn').click();
+  // A new event is off the map unless the organizer says yes; this journey wants it reachable.
+  if (o.map) await page.getByTestId('wizard-publish-yes').click();
+  await page.getByTestId('wizard-save-draft-btn').click();
+  await expect(page.getByTestId('wizard-step-3')).toBeVisible();
   const preview = page.getByTestId('wizard-preview-public');
   await expect(preview).toBeVisible();
   const href = await preview.getAttribute('href');
   const id = /\/events\/([^/]+)\/preview$/.exec(href ?? '')?.[1];
   expect(id, `preview href ${href}`).toBeTruthy();
-  await page.getByTestId('wizard-next-btn').click();
-  await expect(page.getByTestId('wizard-step-5')).toBeVisible();
+  // The review is folded on the share screen; open it.
+  const review = page.getByTestId('wizard-review-details');
+  if (!(await review.evaluate((d) => (d as HTMLDetailsElement).open))) {
+    await review.locator('summary').click();
+  }
   return { id: id!, title };
 }
 
 test.describe('create flow: live preview and review', () => {
-  test('beside the form from tablet width, below it and foldable on a phone', async ({ page }) => {
+  test('beside the form from tablet width; on a phone it waits for step 2, folded to one line', async ({
+    page,
+  }) => {
     await openWizard(page, PHONE);
-    const form = await box(page, 'wizard-step-1');
+    // Owner 2026-11-27: no scrolling on a phone, so step 1 has no preview under it.
+    await expect(page.getByTestId('wizard-preview')).toBeHidden();
+    await page.getByTestId('wizard-event-name').fill('Thursday Trivia');
+    await page.getByTestId('wizard-event-venue').fill('Eagles Hall');
+    await page.getByTestId('wizard-next-btn').click();
+    await expect(page.getByTestId('wizard-step-2')).toBeVisible();
+    const form = await box(page, 'wizard-step-2');
     const phonePreview = await box(page, 'wizard-preview');
     expect(phonePreview.y, 'phone: the preview is below the form').toBeGreaterThanOrEqual(
       form.y + form.height - 1
@@ -86,16 +97,16 @@ test.describe('create flow: live preview and review', () => {
     const toggle = page.getByTestId('wizard-preview-toggle');
     await expect(toggle).toBeVisible();
     expect((await box(page, 'wizard-preview-toggle')).height).toBeGreaterThanOrEqual(MIN_TOUCH);
-    await expect(page.getByTestId('wizard-preview-card')).toBeVisible();
-    await toggle.click();
     await expect(page.getByTestId('wizard-preview-card')).toBeHidden();
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
     await toggle.click();
     await expect(page.getByTestId('wizard-preview-card')).toBeVisible();
+    await toggle.click();
+    await expect(page.getByTestId('wizard-preview-card')).toBeHidden();
 
     for (const size of [TABLET, DESKTOP]) {
       await page.setViewportSize(size);
-      const f = await box(page, 'wizard-step-1');
+      const f = await box(page, 'wizard-step-2');
       const p = await box(page, 'wizard-preview');
       expect(p.x, `${size.width}px: the preview is beside the form`).toBeGreaterThanOrEqual(
         f.x + f.width - 1
@@ -197,7 +208,7 @@ test.describe('create flow: live preview and review', () => {
     await expect(page.getByTestId('wizard-event-time')).not.toHaveAttribute('aria-invalid', 'true');
     await expect(page.getByTestId('wizard-preview-when')).toContainText('6:30');
     await page.getByTestId('wizard-save-edit-btn').click();
-    await expect(page.getByTestId('wizard-step-5')).toBeVisible();
+    await expect(page.getByTestId('wizard-step-3')).toBeVisible();
     await expect(page.getByTestId('wizard-review-missing')).toHaveText(
       'Add an event type before this event goes further'
     );
@@ -211,7 +222,7 @@ test.describe('create flow: live preview and review', () => {
     await page.getByTestId('wizard-event-type').selectOption({ index: 1 });
     await expect(page.getByTestId('wizard-preview-type')).toContainText('>');
     await page.getByTestId('wizard-save-edit-btn').click();
-    await expect(page.getByTestId('wizard-step-5')).toBeVisible();
+    await expect(page.getByTestId('wizard-step-3')).toBeVisible();
     await expect(page.getByTestId('wizard-review-missing')).toBeHidden();
 
     // Now Publish goes through and the page is live by link.
@@ -235,7 +246,7 @@ test.describe('create flow: live preview and review', () => {
     await page.getByTestId('wizard-event-name').fill('Something else entirely');
     await expect(page.getByTestId('wizard-preview-title')).toHaveText('Something else entirely');
     await page.getByTestId('wizard-cancel-edit-btn').click();
-    await expect(page.getByTestId('wizard-step-5')).toBeVisible();
+    await expect(page.getByTestId('wizard-step-3')).toBeVisible();
     await expect(page.getByTestId('wizard-preview-title')).toContainText('Preview night');
     expect(sent, 'nothing was saved').toEqual([]);
   });
@@ -274,7 +285,7 @@ test.describe('create flow: live preview and review', () => {
       };
       await scan('step 1 with the preview');
       await createAndReview(page, {});
-      await scan('step 5 review');
+      await scan('share screen with the review open');
     });
   }
 });

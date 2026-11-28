@@ -1,7 +1,7 @@
 /**
  * Create & Launch: one look for every step (2026-11-10).
  *
- * The front door and the five wizard steps share one card, one title scale,
+ * The front door and the wizard steps (two, then the share screen) share one card, one title scale,
  * one choice card, one info card, one primary button and one secondary
  * button, and on a phone the action bar is pinned to the bottom of the screen
  * so the next step is always one thumb-tap away (owner report from an
@@ -214,14 +214,14 @@ describe('the step caption names the step in words', () => {
     const caption = doc.querySelector('[data-testid="wizard-step-caption"]');
     expect(caption).not.toBeNull();
     const label = doc.querySelector('[data-testid="wizard-progress-1"] .step-label');
-    expect(caption!.textContent).toBe(`Step 1 of 5: ${label!.textContent}`);
+    expect(caption!.textContent).toBe(`Step 1 of 2: ${label!.textContent}`);
   });
 
   test('step names are sentence case', () => {
     const labels = Array.from(doc.querySelectorAll('.wizard-progress-step .step-label')).map(
       (el) => el.textContent
     );
-    expect(labels).toEqual(['Basic info', 'Template', 'Sign-ups', 'Your links', 'Launch']);
+    expect(labels).toEqual(["What's happening?", 'Who can find it?']);
   });
 
   test('the render pass rewrites it from the active rail step, with textContent', () => {
@@ -233,7 +233,7 @@ describe('the step caption names the step in words', () => {
     const fn = script!.slice(start, script!.indexOf('function validate()', start));
     expect(fn.length).toBeGreaterThan(0);
     expect(fn).toContain("getElementById('wizard-step-caption')");
-    expect(fn).toContain("'Step ' + wiz.step + ' of 5: '");
+    expect(fn).toContain("'Step ' + wiz.step + ' of 2: '");
     expect(fn).not.toMatch(/caption\.innerHTML/);
   });
 });
@@ -248,11 +248,12 @@ describe('every step asks its question as the largest text in the step', () => {
     );
   });
 
-  test('steps 2, 3 and 5 and the publish choice each carry a question', () => {
+  test('step 2 and the share screen each carry a question; step 1 names each field', () => {
     const doc = new JSDOM(ADMIN_HTML).window.document;
-    for (const id of ['wizard-step-1', 'wizard-step-2', 'wizard-step-3', 'wizard-step-5']) {
+    for (const id of ['wizard-step-2', 'wizard-step-3']) {
       expect(doc.querySelectorAll(`#${id} .wizard-question`).length, id).toBeGreaterThan(0);
     }
+    expect(doc.querySelectorAll('#wizard-step-1 .wizard-field-label').length).toBeGreaterThan(1);
   });
 
   test('nothing in the flow is set below the 13px floor', () => {
