@@ -133,7 +133,8 @@ function privacyNotice(formType: NoticeForm, legalTier = 1, lang: Lang = DEFAULT
 
   switch (formType) {
     case 'checkin':
-      purpose = 'We record an <strong>anonymous count only</strong> — no personal data is stored.';
+      purpose =
+        'We record an <strong>anonymous count only</strong>, never your name. A random id in the <strong>ose_anon</strong> cookie counts you once.';
       legalBasis = 'GDPR Art. 6(1)(f) — legitimate interest in knowing attendance numbers.';
       retention = 'Anonymous aggregate counts are kept for event reporting only.';
       break;

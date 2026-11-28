@@ -7,7 +7,9 @@
  * no parental-consent process. Never word them as promises
  * (tests/security-privacy.spec.ts, "ADR-018").
  *
- * Data controller: OurSharedEvents (ourCommunityRituals)
+ * Data controller: OurSharedEvents, a service of OurCommunityRituals LLC.
+ * Keep the retention lines in step with lib/retention-windows.ts and the
+ * cookie lines with lib/anonymous-id.ts.
  */
 
 import { HARDENING_HEADERS } from '../lib/security-headers';
@@ -49,7 +51,7 @@ const PRIVACY_POLICY_HTML = `<!DOCTYPE html>
 
     <h2>1. Who we are (GDPR Art. 13(1)(a))</h2>
     <p>
-      Data controller: <strong>OurSharedEvents</strong>, operated by ourCommunityRituals.<br />
+      Data controller: <strong>OurSharedEvents</strong>, a service of OurCommunityRituals LLC (ourCommunityRituals).<br />
       Contact: <a href="mailto:privacy@oursharedevents.com">privacy@oursharedevents.com</a>
     </p>
 
@@ -57,29 +59,50 @@ const PRIVACY_POLICY_HTML = `<!DOCTYPE html>
     <p>We collect only what is needed for the specific form you submit:</p>
     <ul>
       <li><strong>Registration:</strong> your name (required) and email (optional), to register you for the event and deduplicate repeat submissions.</li>
-      <li><strong>Check-in:</strong> an anonymous attendance count only — no personal data is stored.</li>
+      <li><strong>Check-in:</strong> a count of how many people came. We never store your name for this. We use a random anonymous id (see section 4) so one person is counted once.</li>
+      <li><strong>Poster codes:</strong> we count scans of the code itself. A poster scan sets no cookie and keeps nothing about your phone.</li>
+      <li><strong>Voting in the room:</strong> your vote, counted with the anonymous id (see section 4) so each person votes once. We never know who voted for what.</li>
       <li><strong>Survey:</strong> numerical ratings and optional free-text comments, to improve future events.</li>
       <li><strong>Email sign-up:</strong> your email address, to notify you about future community events.</li>
+      <li><strong>Updates list:</strong> if you join the list on our home page, your email address, to send community updates.</li>
+      <li><strong>Sponsors:</strong> a business name and, if the sponsor adds one, a contact email that is shown on the sponsor's card.</li>
+      <li><strong>Venue staff and admins:</strong> the email used to sign in, and a record of changes made in the admin. IP addresses in that record are shortened so they do not point to one device.</li>
     </ul>
-    <p>Legal basis for all processing: <strong>consent</strong> (GDPR Art. 6(1)(a)), except check-in which uses <strong>legitimate interest</strong> (GDPR Art. 6(1)(f)) — we have a legitimate interest in knowing how many people attend our community events.</p>
+    <p>Legal basis for all processing: <strong>consent</strong> (GDPR Art. 6(1)(a)), except anonymous counting and staff sign-in, which use <strong>legitimate interest</strong> (GDPR Art. 6(1)(f)) — we have a legitimate interest in knowing how many people attend our community events and in keeping the admin secure.</p>
+    <p>Places are stored as a map area (a hexagon cell), never as your own location. We do not store your IP address with anything you submit.</p>
 
     <h2>3. How long we keep your data (GDPR Art. 13(2)(a))</h2>
     <ul>
-      <li><strong>Registration data:</strong> deleted automatically when the event ends.</li>
-      <li><strong>Email addresses:</strong> encrypted at rest and automatically deleted after 30 days.</li>
+      <li><strong>Your name and email on a registration:</strong> removed automatically the day after the event ends. The rest of the registration, with no name or email, is deleted 90 days after you register, or the day after the event if that is later.</li>
+      <li><strong>Email sign-ups for an event:</strong> encrypted at rest and automatically deleted after 30 days.</li>
+      <li><strong>Updates list:</strong> encrypted at rest and automatically deleted after 90 days.</li>
       <li><strong>Survey comments:</strong> scrubbed of any personal information within 24 hours; aggregate ratings are kept indefinitely.</li>
-      <li><strong>Check-in counts:</strong> anonymous aggregate numbers, kept for event reporting.</li>
+      <li><strong>Anonymous visit records:</strong> deleted after one year.</li>
+      <li><strong>Check-in counts:</strong> anonymous aggregate numbers, kept for event reporting. A count below 5 is never shown.</li>
     </ul>
+    <p>Names and emails are encrypted when we store them. Nothing you submit through a form is kept longer than 90 days, except a registration for an event more than 90 days away, which is kept until the day after that event.</p>
 
-    <h2>4. Who we share data with (GDPR Art. 13(1)(e))</h2>
+    <h2>4. Cookies</h2>
+    <ul>
+      <li><strong>ose_anon</strong> — a random anonymous id, set when you open an event form or a room's voting code. It lets us count you once and see that people come back, without knowing who you are. It is not linked to your name or email. It lasts one year. You can delete it at any time in your browser settings.</li>
+      <li><strong>Staff sign-in</strong> — venue staff and admins who sign in get a sign-in cookie from Cloudflare Access. Visitors never get it.</li>
+    </ul>
+    <p>We use no advertising cookies, no analytics or tracking tools, and no third-party scripts that follow you.</p>
+
+    <h2>5. Who we share data with (GDPR Art. 13(1)(e)–(f))</h2>
+    <p>We do not sell, rent, or share your personal data with third parties for marketing purposes. We use these service providers:</p>
+    <ul>
+      <li><strong>Cloudflare, Inc.</strong> — runs the website and stores our data (Cloudflare Workers and D1), signs staff in (Cloudflare Access), and may check that a form is sent by a person (Turnstile). Cloudflare processes data as a sub-processor under their
+      <a href="https://www.cloudflare.com/cloudflare-customer-dpa/" target="_blank" rel="noopener">Data Processing Addendum</a>.</li>
+      <li><strong>Google LLC</strong> — our server fetches a map picture of the event's place and keeps a backup of event details. Neither includes anything about you. Our pages load nothing from Google, unless you choose a link such as "Add to Google Calendar".</li>
+    </ul>
     <p>
-      We do not sell, rent, or share your personal data with third parties for marketing purposes.
-      Data is stored in <strong>Cloudflare D1</strong> (Cloudflare, Inc.), a serverless SQL database.
-      Cloudflare processes data as a sub-processor under their
-      <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">Data Processing Addendum</a>.
+      Cloudflare and Google are based in the United States, so your data may be handled there.
+      Those transfers are covered by the EU-US Data Privacy Framework and by standard contractual
+      clauses approved by the European Commission.
     </p>
 
-    <h2>5. Your rights (GDPR Art. 13(2)(b)–(d))</h2>
+    <h2>6. Your rights (GDPR Art. 13(2)(b)–(d))</h2>
     <p>Under GDPR, you have the right to:</p>
     <ul>
       <li><strong>Access</strong> — request a copy of data we hold about you (Art. 15)</li>
@@ -89,9 +112,13 @@ const PRIVACY_POLICY_HTML = `<!DOCTYPE html>
       <li><strong>Objection</strong> — object to processing based on legitimate interest (Art. 21)</li>
       <li><strong>Withdraw consent</strong> — at any time, without affecting lawfulness of prior processing (Art. 7(3))</li>
     </ul>
-    <p>To exercise any of these rights, email <a href="mailto:privacy@oursharedevents.com">privacy@oursharedevents.com</a>. We will respond within 30 days.</p>
+    <p>To exercise any of these rights, email <a href="mailto:privacy@oursharedevents.com">privacy@oursharedevents.com</a>. Please tell us the email you used, and which event if you know. We will respond within one month.</p>
+    <p>
+      Because anonymous counting never stores who you are, we cannot find those records by your name or email.
+      Deleting the <strong>ose_anon</strong> cookie in your browser breaks the link to them.
+    </p>
 
-    <h2>6. Right to complain (GDPR Art. 13(2)(d))</h2>
+    <h2>7. Right to complain (GDPR Art. 13(2)(d))</h2>
     <p>
       You have the right to lodge a complaint with your local data protection supervisory authority.
       In the EU/EEA, find your authority at
@@ -100,17 +127,17 @@ const PRIVACY_POLICY_HTML = `<!DOCTYPE html>
       <a href="https://ico.org.uk/make-a-complaint/" target="_blank" rel="noopener">ICO</a>.
     </p>
 
-    <h2>7. Automated decision-making (GDPR Art. 13(2)(f))</h2>
+    <h2>8. Automated decision-making (GDPR Art. 13(2)(f))</h2>
     <p>We do not use your data for automated decision-making or profiling.</p>
 
-    <h2 id="phase2" class="phase-anchor">8. Commerce addendum (Phase 2 events)</h2>
+    <h2 id="phase2" class="phase-anchor">9. Commerce addendum (Phase 2 events)</h2>
     <p>
       For events involving paid tickets or commerce, any payment data is processed exclusively by our
       PCI DSS-compliant payment processor and is never stored by OurSharedEvents. Additional financial
       data handling disclosures will be provided at point of payment.
     </p>
 
-    <h2 id="phase4" class="phase-anchor">9. Health information</h2>
+    <h2 id="phase4" class="phase-anchor">10. Health information</h2>
     <p>
       We do not collect health information. We do not sign Business Associate Agreements, and we are
       not set up to hold protected health information. Health-related events can still use
@@ -118,16 +145,17 @@ const PRIVACY_POLICY_HTML = `<!DOCTYPE html>
       Please do not put health details in a form or a comment.
     </p>
 
-    <h2 id="phase5" class="phase-anchor">10. Children's privacy</h2>
+    <h2 id="phase5" class="phase-anchor">11. Children's privacy</h2>
     <p>
       OurSharedEvents is not directed to children under 13, and we do not knowingly collect personal
       data from them. We do not offer a parental-consent process. Family events can still use
-      OurSharedEvents for event details and anonymous counts. If you think a child under 13 has given
+      OurSharedEvents for event details and anonymous counts. You must be 16 or older to register,
+      sign up or fill in a survey. If you think a child under 13 has given
       us personal data, email <a href="mailto:privacy@oursharedevents.com">privacy@oursharedevents.com</a>
       and we will delete it.
     </p>
 
-    <p class="updated" data-testid="privacy-updated">Last updated: 2026-11-08</p>
+    <p class="updated" data-testid="privacy-updated">Last updated: 2026-11-28</p>
   </main>
 </body>
 </html>`;
