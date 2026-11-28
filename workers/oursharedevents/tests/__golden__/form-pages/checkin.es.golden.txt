@@ -50,7 +50,7 @@
   .rating-row button { width: auto; flex: 1; padding: .5rem; min-height: 44px; font-size: 1.1rem; background: var(--surface); color: var(--text); border: 2px solid var(--border-strong); }
   .rating-row button.selected { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
   .checkin-tap { text-align: center; padding: 3rem 1rem; }
-  .checkin-tap button { font-size: 1.5rem; padding: 1.5rem; border-radius: 50%; width: 180px; height: 180px; margin: 1rem auto; display: block; -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: transform 0.1s, opacity 0.1s; user-select: none; }
+  .checkin-tap button { font-size: 1.35rem; line-height: 1.2; padding: 1.25rem; overflow-wrap: break-word; hyphens: auto; border-radius: 50%; width: 200px; height: 200px; margin: 1rem auto; display: block; -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: transform 0.1s, opacity 0.1s; user-select: none; }
   .walk-in-row { color: var(--text-muted); font-size: .9rem; }
   .checkin-tap .walk-in-btn { width: auto; height: auto; min-height: 44px; margin: .5rem auto 0; padding: .6rem 1.1rem; border-radius: 8px; font-size: 1rem; background: var(--surface); color: var(--text); border: 1.5px solid var(--border-strong); }
   .checkin-tap .count { font-size: 2rem; font-weight: 700; color: var(--text); margin-top: 1rem; }
@@ -151,23 +151,33 @@
     <div class="checkin-tap" id="form-area" data-testid="form-checkin">
       <h2>Registrar llegada</h2>
       <p id="error-msg" class="error-msg" data-testid="form-error" role="alert" aria-live="assertive"></p>
-      <button type="button" id="checkin-btn" data-testid="checkin-submit">Toca para<br/>registrar tu llegada</button>
+      <button type="button" id="checkin-btn" data-testid="checkin-submit">Toca aquí:<br/>¡Ya llegué!</button>
       <p class="walk-in-row">¿No te inscribiste?
         <button type="button" id="walk-in-btn" class="walk-in-btn" data-testid="checkin-walk-in-submit">Registrar llegada sin inscripción</button>
       </p>
       <div class="count" id="count" data-testid="checkin-count" role="status" aria-live="polite"></div>
       <div class="privacy-notice" data-testid="privacy-notice">
     <p class="privacy-summary" data-testid="privacy-summary">Te contamos, nunca te nombramos.</p>
-    <p class="privacy-lang-note" data-testid="privacy-english-note">Este aviso de privacidad está en inglés hasta que tengamos una traducción revisada.</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>Detalles de privacidad</summary>
-      <p lang="en">
+      <p>
+        Solo guardamos un <strong>conteo anónimo</strong>; no se guardan datos personales. Base legal: RGPD art. 6(1)(f): interés legítimo en saber cuántas personas asisten. Los conteos anónimos totales se guardan solo para los informes del evento.
+        Tienes derecho a ver, corregir o borrar tus datos, y a presentar una queja ante la
+        <strong>autoridad de protección de datos de tu zona</strong>.
+        
+        <a href="/privacy" data-testid="privacy-policy-link">Política de privacidad completa (en inglés)</a>
+      </p>
+      <p class="privacy-lang-note" data-testid="privacy-english-note">Esto es una traducción. El texto en inglés es el oficial.</p>
+      <details class="privacy-official" data-testid="privacy-official-english">
+        <summary>Texto oficial en inglés</summary>
+        <p lang="en" dir="ltr">
         We record an <strong>anonymous count only</strong> — no personal data is stored. Legal basis: GDPR Art. 6(1)(f) — legitimate interest in knowing attendance numbers. Anonymous aggregate counts are kept for event reporting only.
         You have the right to access, correct, or erase your data, and to lodge a complaint with your local data protection
         <strong>supervisory authority</strong>.
         
         <a href="/privacy" data-testid="privacy-policy-link">Full privacy policy</a>
-      </p>
+        </p>
+      </details>
     </details>
   </div>
     </div>

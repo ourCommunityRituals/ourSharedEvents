@@ -441,9 +441,8 @@ const en = {
   'provenance.degradedText': 'Showing sample content while the live data reconnects.',
   'provenance.degradedLabel': 'Data temporarily unavailable notice',
   // The form pages (handlers/form-pages.ts, OSE-1850). Labels, buttons, help,
-  // confirmations and error copy. The privacy and consent text under each form
-  // is not here: it stays in English until a human translation and a legal
-  // read, and `form.privacy.englishNote` says so in the page's language.
+  // confirmations and error copy. The privacy notice keys (`privacy.*`) follow
+  // below (owner 2026-11-28).
   'form.eventFallback': 'Event',
   'form.sponsorThanks': 'Event supported by',
   'form.register.heading': 'Register for this event',
@@ -492,9 +491,53 @@ const en = {
   'form.next.checkin': 'On the day, check in with one tap.',
   'form.next.browse': 'See what else is coming up',
   'form.privacy.details': 'Privacy details',
-  // Shown only on a page that is not in English, beside the English notice.
-  'form.privacy.englishNote':
-    'This privacy notice is in English until a reviewed translation is ready.',
+  // Shown only on a page that is not in English, above the official English text.
+  'form.privacy.englishNote': 'This is a translation. The English text is the official one.',
+  // The privacy notice under each form (owner 2026-11-28: in the page's
+  // language; the English text stays the official one and shows under it).
+  'privacy.summary.register': 'Your name and email are cleared the day after the event.',
+  'privacy.summary.survey': 'Comments are cleaned of personal details within 24 hours.',
+  'privacy.summary.email': 'Your email is deleted after 30 days.',
+  'privacy.purpose.register':
+    'We collect your name and, if you choose, your email, so the organizer can reach you if this event changes.',
+  'privacy.purpose.checkin':
+    'We record an <strong>anonymous count only</strong> — no personal data is stored.',
+  'privacy.purpose.survey':
+    'We collect your ratings and optional comments to improve future events.',
+  'privacy.purpose.email':
+    'We collect your email address to notify you about future community events.',
+  'privacy.basisLabel': 'Legal basis:',
+  'privacy.basis.register': 'GDPR Art. 6(1)(a) — your <strong>consent</strong>.',
+  'privacy.basis.checkin': 'GDPR Art. 6(1)(f) — legitimate interest in knowing attendance numbers.',
+  'privacy.basis.survey': 'GDPR Art. 6(1)(a) — your <strong>consent</strong>.',
+  'privacy.basis.email':
+    'GDPR Art. 6(1)(a) — your <strong>consent</strong>. You can <strong>withdraw consent</strong> at any time.',
+  'privacy.retention.register':
+    'Your name and email are encrypted, and <strong>cleared the day after the event</strong>. The rest of the registration is deleted 90 days after you register, or the day after the event if that is later.',
+  'privacy.retention.checkin': 'Anonymous aggregate counts are kept for event reporting only.',
+  'privacy.retention.survey':
+    'Comments are scrubbed of personal information within <strong>24</strong> hours. Aggregate ratings are kept indefinitely.',
+  'privacy.retention.email':
+    'Your email is encrypted at rest and automatically deleted after <strong>30</strong> days.',
+  'privacy.rights':
+    'You have the right to access, correct, or erase your data, and to lodge a complaint with your local data protection',
+  'privacy.authority': 'supervisory authority',
+  'privacy.commerce':
+    '<strong>Commerce notice:</strong> Payment data is handled by our PCI DSS-compliant processor and never stored by us.',
+  'privacy.policyLink': 'Full privacy policy',
+  'privacy.officialEnglish': 'Official English text',
+  // The public sponsor card (/sponsors/<id>). The sponsor's own name, address,
+  // phone and email are theirs and show as typed.
+  'sponsorCard.whatsOn': "What's on",
+  'sponsorCard.call': 'Call {phone}',
+  'sponsorCard.email': 'Email {email}',
+  'sponsorCard.website': 'Visit website',
+  'sponsorCard.notFoundTitle': 'Sponsor not found',
+  'sponsorCard.notFoundBody': 'This sponsor is not on show right now.',
+  'sponsorCard.limitTitle': 'Too many requests',
+  'sponsorCard.limitBody': 'Give it a minute and try again.',
+  'sponsorCard.errorTitle': 'Something went wrong',
+  'sponsorCard.errorBody': 'Try again in a moment.',
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -899,9 +942,9 @@ const es: Record<MessageKey, string> = {
   'provenance.degradedText':
     'Mostramos contenido de ejemplo mientras se restablecen los datos reales.',
   'provenance.degradedLabel': 'Aviso de datos no disponibles por el momento',
-  // The form pages (OSE-1850). MACHINE DRAFT, awaiting a native read. No
-  // privacy or consent text here: that waits for a human translation and a
-  // legal read, and shows in English with `form.privacy.englishNote`.
+  // The form pages (OSE-1850). MACHINE DRAFT, awaiting a native read. The
+  // privacy notice is translated too (owner 2026-11-28); the English text under
+  // it stays the official one.
   'form.eventFallback': 'Evento',
   'form.sponsorThanks': 'Evento con el apoyo de',
   'form.register.heading': 'Inscríbete en este evento',
@@ -912,7 +955,7 @@ const es: Record<MessageKey, string> = {
   'form.register.emailPlaceholder': 'ana@ejemplo.com',
   'form.register.done': '¡Ya estás inscrito!',
   'form.checkin.heading': 'Registrar llegada',
-  'form.checkin.tap': 'Toca para<br/>registrar tu llegada',
+  'form.checkin.tap': 'Toca aquí:<br/>¡Ya llegué!',
   'form.checkin.noRegistration': '¿No te inscribiste?',
   'form.checkin.walkIn': 'Registrar llegada sin inscripción',
   'form.checkin.done': 'Tu llegada quedó registrada.',
@@ -950,8 +993,48 @@ const es: Record<MessageKey, string> = {
   'form.next.checkin': 'El día del evento, registra tu llegada con un toque.',
   'form.next.browse': 'Ver qué más se acerca',
   'form.privacy.details': 'Detalles de privacidad',
-  'form.privacy.englishNote':
-    'Este aviso de privacidad está en inglés hasta que tengamos una traducción revisada.',
+  'form.privacy.englishNote': 'Esto es una traducción. El texto en inglés es el oficial.',
+  'privacy.summary.register': 'Tu nombre y tu correo se borran el día después del evento.',
+  'privacy.summary.survey': 'Los comentarios se limpian de datos personales en 24 horas.',
+  'privacy.summary.email': 'Tu correo se borra a los 30 días.',
+  'privacy.purpose.register':
+    'Pedimos tu nombre y, si quieres, tu correo, para que el organizador pueda avisarte si este evento cambia.',
+  'privacy.purpose.checkin':
+    'Solo guardamos un <strong>conteo anónimo</strong>; no se guardan datos personales.',
+  'privacy.purpose.survey':
+    'Pedimos tus calificaciones y comentarios opcionales para mejorar los próximos eventos.',
+  'privacy.purpose.email': 'Pedimos tu correo para avisarte de próximos eventos de la comunidad.',
+  'privacy.basisLabel': 'Base legal:',
+  'privacy.basis.register': 'RGPD art. 6(1)(a): tu <strong>consentimiento</strong>.',
+  'privacy.basis.checkin': 'RGPD art. 6(1)(f): interés legítimo en saber cuántas personas asisten.',
+  'privacy.basis.survey': 'RGPD art. 6(1)(a): tu <strong>consentimiento</strong>.',
+  'privacy.basis.email':
+    'RGPD art. 6(1)(a): tu <strong>consentimiento</strong>. Puedes <strong>retirar tu consentimiento</strong> cuando quieras.',
+  'privacy.retention.register':
+    'Tu nombre y tu correo se cifran y <strong>se borran el día después del evento</strong>. El resto de la inscripción se borra 90 días después de inscribirte, o el día después del evento si eso es más tarde.',
+  'privacy.retention.checkin':
+    'Los conteos anónimos totales se guardan solo para los informes del evento.',
+  'privacy.retention.survey':
+    'Los comentarios se limpian de datos personales en <strong>24</strong> horas. Las calificaciones totales se guardan sin fecha de fin.',
+  'privacy.retention.email':
+    'Tu correo se guarda cifrado y se borra solo a los <strong>30</strong> días.',
+  'privacy.rights':
+    'Tienes derecho a ver, corregir o borrar tus datos, y a presentar una queja ante la',
+  'privacy.authority': 'autoridad de protección de datos de tu zona',
+  'privacy.commerce':
+    '<strong>Aviso de pagos:</strong> los datos de pago los maneja nuestro procesador, que cumple con PCI DSS, y nosotros nunca los guardamos.',
+  'privacy.policyLink': 'Política de privacidad completa (en inglés)',
+  'privacy.officialEnglish': 'Texto oficial en inglés',
+  'sponsorCard.whatsOn': 'Qué hay',
+  'sponsorCard.call': 'Llamar al {phone}',
+  'sponsorCard.email': 'Escribir a {email}',
+  'sponsorCard.website': 'Visitar el sitio web',
+  'sponsorCard.notFoundTitle': 'No encontramos este patrocinador',
+  'sponsorCard.notFoundBody': 'Este patrocinador no se muestra ahora mismo.',
+  'sponsorCard.limitTitle': 'Demasiadas visitas',
+  'sponsorCard.limitBody': 'Espera un minuto e inténtalo de nuevo.',
+  'sponsorCard.errorTitle': 'Algo falló',
+  'sponsorCard.errorBody': 'Inténtalo de nuevo en un momento.',
 };
 
 /** One catalog per language. A language still being written may omit keys. */

@@ -192,7 +192,7 @@ describe('OSE-1761 matchLanguagePage | the pages that exist under a prefix', () 
       '/display',
       '/poster',
       '/privacy',
-      '/sponsors/abc',
+      '/sponsors/abc/more',
       '/forms/abc',
       '/admin',
       '/api/v2/events',
@@ -271,5 +271,16 @@ describe('OSE-1761 renderLanguageSwitch', () => {
     const html = renderLanguageSwitch({ lang: 'en', path: '/events/"><script>x</script>' });
     expect(html).not.toContain('<script>');
     expect(html).toContain('&quot;');
+  });
+});
+
+describe('the sponsor card joins the language layer (owner 2026-11-28)', () => {
+  it('/sponsors/<id> is a page under a prefix, and keeps its id', () => {
+    expect(matchLanguagePage('/sponsors/sp_37274e8d-a2d9')).toEqual({
+      kind: 'sponsor',
+      id: 'sp_37274e8d-a2d9',
+    });
+    expect(matchLanguagePage('/sponsors/')).toBeNull();
+    expect(matchLanguagePage('/sponsors/a.b')).toBeNull();
   });
 });

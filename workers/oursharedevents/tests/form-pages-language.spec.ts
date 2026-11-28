@@ -337,36 +337,48 @@ describe('H3 | the words come from the catalog, per form', () => {
   }
 });
 
-// ── Privacy and consent text: English, marked, with a note ──────────────────
+// ── Privacy and consent text: translated, with the official English under it ─
+//
+// Owner 2026-11-28: the privacy notice shows in the page's language. The
+// English text stays the official one: a note says so in the page's language,
+// and the English sits under it in its own block, marked lang="en".
 
-describe('H4 | privacy and consent text stays English until a human translation and a legal read', () => {
+describe('H4 | privacy text in the page language, the official English under it', () => {
   for (const lang of OTHERS) {
     for (const screen of SCREENS) {
-      test(`${screen}, ${lang}: the details are English, marked lang="en", with a note in ${lang}`, async () => {
+      test(`${screen}, ${lang}: the details are in ${lang}, with the English marked lang="en"`, async () => {
         const d = await doc(screen, { lang });
         const details = d.querySelector('[data-testid="privacy-details"]')!;
         expect(details.querySelector('summary')?.textContent).toBe(
           msg(lang, 'form.privacy.details')
         );
-        const legal = details.querySelector('p')!;
-        expect(legal.getAttribute('lang')).toBe('en');
-        expect(legal.textContent).toContain('Legal basis:');
-        expect(legal.textContent).toContain('supervisory authority');
+        const legal = details.querySelector(':scope > p')!;
+        expect(legal.hasAttribute('lang')).toBe(false);
+        expect(legal.textContent).toContain(msg(lang, 'privacy.basisLabel'));
+        expect(legal.textContent).not.toContain('Legal basis:');
+        const official = d.querySelector('[data-testid="privacy-official-english"]')!;
+        expect(official.querySelector('summary')?.textContent).toBe(
+          msg(lang, 'privacy.officialEnglish')
+        );
+        const english = official.querySelector('p')!;
+        expect(english.getAttribute('lang')).toBe('en');
+        expect(english.textContent).toContain('Legal basis:');
+        expect(english.textContent).toContain('supervisory authority');
         const note = d.querySelector('[data-testid="privacy-english-note"]');
         expect(note?.textContent).toBe(msg(lang, 'form.privacy.englishNote'));
         expect(note?.hasAttribute('lang')).toBe(false);
         const summary = d.querySelector('[data-testid="privacy-summary"]')!;
-        // Check-in's line is the event page's own promise; the others are
-        // retention text and keep their English.
-        expect(summary.getAttribute('lang')).toBe(screen === 'checkin' ? null : 'en');
+        expect(summary.hasAttribute('lang')).toBe(false);
+        expect(summary.textContent).not.toMatch(/\b(Your|Comments)\b/);
       });
     }
   }
 
   for (const screen of SCREENS) {
-    test(`${screen}, en: no note and no lang marks (the page is English)`, async () => {
+    test(`${screen}, en: no note, no second English block, no lang marks`, async () => {
       const d = await doc(screen);
       expect(d.querySelector('[data-testid="privacy-english-note"]')).toBeNull();
+      expect(d.querySelector('[data-testid="privacy-official-english"]')).toBeNull();
       expect(d.querySelector('[data-testid="privacy-details"] p')?.hasAttribute('lang')).toBe(
         false
       );
@@ -374,26 +386,20 @@ describe('H4 | privacy and consent text stays English until a human translation 
     });
   }
 
-  test('no catalog has a form key holding the legal text (no machine translation)', () => {
+  test('a commerce tier adds its notice in the page language and in the English', async () => {
     for (const lang of LANGUAGES) {
-      for (const [key, value] of Object.entries(CATALOG[lang])) {
-        if (!key.startsWith('form.')) continue;
-        expect(value, `${lang} ${key}`).not.toMatch(/\bGDPR\b|\bArt\. ?6|supervisory|\bPCI\b/);
+      const d = await doc('register', { lang, tier: 2 });
+      const legal = d.querySelector('[data-testid="privacy-details"] > p')!;
+      expect(legal.innerHTML, lang).toContain(msg(lang, 'privacy.commerce'));
+      if (lang !== DEFAULT_LANG) {
+        const english = d.querySelector('[data-testid="privacy-official-english"] p')!;
+        expect(english.textContent, lang).toContain('Commerce notice:');
       }
-    }
-  });
-
-  test('a commerce tier adds its notice inside the English block, in every language', async () => {
-    for (const lang of LANGUAGES) {
-      const legal = (await doc('register', { lang, tier: 2 })).querySelector(
-        '[data-testid="privacy-details"] p'
-      )!;
-      expect(legal.textContent, lang).toContain('Commerce notice:');
-      expect(legal.getAttribute('lang'), lang).toBe(lang === DEFAULT_LANG ? null : 'en');
       const plain = (await doc('register', { lang })).querySelector(
-        '[data-testid="privacy-details"] p'
+        '[data-testid="privacy-details"]'
       )!;
       expect(plain.textContent, lang).not.toContain('Commerce notice:');
+      expect(plain.innerHTML, lang).not.toContain(msg(lang, 'privacy.commerce'));
     }
   });
 

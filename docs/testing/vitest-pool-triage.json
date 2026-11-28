@@ -1644,7 +1644,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 52
+      "testCount": 51
     },
     {
       "file": "workers/oursharedevents/tests/form-pages-less-text.spec.ts",
@@ -1850,11 +1850,18 @@
       "testCount": 9
     },
     {
+      "file": "workers/oursharedevents/tests/i18n-no-english-left.spec.ts",
+      "bucket": "node",
+      "needsReview": false,
+      "reason": "no cloudflare:test import — pure logic / pure node",
+      "testCount": 3
+    },
+    {
       "file": "workers/oursharedevents/tests/i18n-path-prefix.spec.ts",
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 27
+      "testCount": 28
     },
     {
       "file": "workers/oursharedevents/tests/i18n-polish-arabic.spec.ts",
@@ -2169,7 +2176,7 @@
       "bucket": "node",
       "needsReview": false,
       "reason": "no cloudflare:test import — pure logic / pure node",
-      "testCount": 7
+      "testCount": 8
     },
     {
       "file": "workers/oursharedevents/tests/migration-smoke.spec.ts",
@@ -3646,7 +3653,7 @@
       "bucket": "workerd",
       "needsReview": false,
       "reason": "runtime marker(s): SELF.fetch, env.DB",
-      "testCount": 7
+      "testCount": 8
     },
     {
       "file": "workers/oursharedevents/tests/sponsor-class-breakdown.spec.ts",

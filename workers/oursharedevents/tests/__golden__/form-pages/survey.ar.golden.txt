@@ -50,7 +50,7 @@
   .rating-row button { width: auto; flex: 1; padding: .5rem; min-height: 44px; font-size: 1.1rem; background: var(--surface); color: var(--text); border: 2px solid var(--border-strong); }
   .rating-row button.selected { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
   .checkin-tap { text-align: center; padding: 3rem 1rem; }
-  .checkin-tap button { font-size: 1.5rem; padding: 1.5rem; border-radius: 50%; width: 180px; height: 180px; margin: 1rem auto; display: block; -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: transform 0.1s, opacity 0.1s; user-select: none; }
+  .checkin-tap button { font-size: 1.35rem; line-height: 1.2; padding: 1.25rem; overflow-wrap: break-word; hyphens: auto; border-radius: 50%; width: 200px; height: 200px; margin: 1rem auto; display: block; -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: transform 0.1s, opacity 0.1s; user-select: none; }
   .walk-in-row { color: var(--text-muted); font-size: .9rem; }
   .checkin-tap .walk-in-btn { width: auto; height: auto; min-height: 44px; margin: .5rem auto 0; padding: .6rem 1.1rem; border-radius: 8px; font-size: 1rem; background: var(--surface); color: var(--text); border: 1.5px solid var(--border-strong); }
   .checkin-tap .count { font-size: 2rem; font-weight: 700; color: var(--text); margin-top: 1rem; }
@@ -165,17 +165,27 @@
         <textarea id="comments" data-testid="survey-comments-input" placeholder="أخبرنا برأيك..." maxlength="1000" aria-describedby="error-msg"></textarea>
         <button type="submit" data-testid="survey-submit">إرسال الرأي</button>
         <div class="privacy-notice" data-testid="privacy-notice">
-    <p class="privacy-summary" data-testid="privacy-summary" lang="en">Comments are cleaned of personal details within 24 hours.</p>
-    <p class="privacy-lang-note" data-testid="privacy-english-note">إشعار الخصوصية هذا باللغة الإنجليزية إلى أن تتوفر ترجمة مُراجَعة.</p>
+    <p class="privacy-summary" data-testid="privacy-summary">تُزال البيانات الشخصية من التعليقات خلال 24 ساعة.</p>
     <details class="privacy-details" data-testid="privacy-details">
       <summary>تفاصيل الخصوصية</summary>
-      <p lang="en">
+      <p>
+        نطلب تقييماتك وتعليقاتك الاختيارية لتحسين الفعاليات القادمة. الأساس القانوني: المادة 6(1)(أ) من اللائحة العامة لحماية البيانات: <strong>موافقتك</strong>. تُزال البيانات الشخصية من التعليقات خلال <strong>24</strong> ساعة. وتُحفظ التقييمات الإجمالية دون موعد انتهاء.
+        يحق لك الاطلاع على بياناتك أو تصحيحها أو حذفها، وتقديم شكوى إلى
+        <strong>هيئة حماية البيانات في منطقتك</strong>.
+        
+        <a href="/privacy" data-testid="privacy-policy-link">سياسة الخصوصية الكاملة (بالإنجليزية)</a>
+      </p>
+      <p class="privacy-lang-note" data-testid="privacy-english-note">هذه ترجمة. النص الإنجليزي هو النص الرسمي.</p>
+      <details class="privacy-official" data-testid="privacy-official-english">
+        <summary>النص الرسمي بالإنجليزية</summary>
+        <p lang="en" dir="ltr">
         We collect your ratings and optional comments to improve future events. Legal basis: GDPR Art. 6(1)(a) — your <strong>consent</strong>. Comments are scrubbed of personal information within <strong>24</strong> hours. Aggregate ratings are kept indefinitely.
         You have the right to access, correct, or erase your data, and to lodge a complaint with your local data protection
         <strong>supervisory authority</strong>.
         
         <a href="/privacy" data-testid="privacy-policy-link">Full privacy policy</a>
-      </p>
+        </p>
+      </details>
     </details>
   </div>
       </form>

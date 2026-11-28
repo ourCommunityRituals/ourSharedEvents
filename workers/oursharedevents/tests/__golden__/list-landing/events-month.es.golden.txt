@@ -393,7 +393,8 @@
                   // the attendee nor which OSE event page they came from.
                   '<a href="' + attr(s.website_url) + '" target="_blank" rel="noopener noreferrer" data-testid="public-sponsor-link"><span data-testid="public-sponsor-name">' + attr(title) + '</span></a>'
                 : s.card_url
-                  ? '<a href="' + attr(s.card_url) + '" data-testid="public-sponsor-card-link"><span data-testid="public-sponsor-name">' + attr(title) + '</span></a>'
+                  ? // The card opens in this page's language (/es/sponsors/<id>).
+                    '<a href="' + attr('/es/' + String(s.card_url).replace(/^\//, '')) + '" data-testid="public-sponsor-card-link"><span data-testid="public-sponsor-name">' + attr(title) + '</span></a>'
                   : '<span data-testid="public-sponsor-name">' + attr(title) + '</span>';
               return '<div class="sponsor-card" data-testid="public-sponsor-card">' + logo + link + place + '</div>';
             })

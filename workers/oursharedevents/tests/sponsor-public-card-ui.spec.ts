@@ -22,6 +22,7 @@ import { describe, test, expect, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
 import ADMIN_HTML from '../src/templates/admin.html';
 import PUBLIC_HTML from '../src/templates/public.html';
+import { fillTemplate } from '../src/lib/i18n/template';
 import DISPLAY_HTML from '../src/templates/display.html';
 import POSTER_HTML from '../src/templates/poster.html';
 import CARD_HTML from '../src/templates/sponsor-card.html';
@@ -353,7 +354,9 @@ describe('admin | Create Sponsor form order and sections (OSE-1434)', () => {
 // ── /events sponsor banner ───────────────────────────────────────────────────
 
 async function mountBanner(sponsors: Record<string, unknown>[]) {
-  const dom = new JSDOM(PUBLIC_HTML, {
+  // Filled as the server fills it (the card link carries the page's language).
+  const page = fillTemplate(PUBLIC_HTML, 'en');
+  const dom = new JSDOM(page, {
     runScripts: 'outside-only',
     url: 'https://ose.test/events?event=evt_a',
   });
@@ -366,7 +369,7 @@ async function mountBanner(sponsors: Record<string, unknown>[]) {
       ? { body: { ok: true, bundle: { surface_sponsors: { mobileBanner: sponsors } } } }
       : { status: 202, body: { ok: true } }
   );
-  w.eval(scriptContaining(PUBLIC_HTML, "sponsor-bundle?surface=public'"));
+  w.eval(scriptContaining(page, "sponsor-bundle?surface=public'"));
   await flush();
   return w.document;
 }

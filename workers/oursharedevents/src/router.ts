@@ -51,6 +51,8 @@
  *   GET /es/events/:id/register|checkin|survey|updates → the form page in that language
  *                                  (OSE-1850); /es stands for any listed language. The form posts
  *                                  to the unprefixed API; no language is stored.
+ *   GET /es/sponsors/:id         → the public sponsor card in that language (owner 2026-11-28);
+ *                                  the same gate and read limit as /sponsors/:id
  *   GET /events                  → the public events list page; limited per caller, its own scope
  *   GET /events/:id              → the public event page (any path under /events/ with one segment)
  *   GET /events/:id/:name        → the same page at its readable address (OSE-1684); a name that
@@ -921,6 +923,11 @@ export async function route(
         (req, e: typeof env) => handlePublicPage(e, ctx, req, langPrefix.lang),
         (req) => pageLimitResponse(req, langPrefix.lang, '/events')
       )(request, env);
+    }
+    if (page?.kind === 'sponsor') {
+      // The same card as /sponsors/<id>, in the path's language. The handler
+      // keeps its own public read limit, so a prefix is no second allowance.
+      return handleSponsorCardPage(request, env, page.id, langPrefix.lang);
     }
     if (page?.kind === 'share') {
       // The same count and per-caller limit as /e/<code>: a share open, what + when.

@@ -149,6 +149,21 @@ describe('OSE-1438 | card_url ⟺ the card renders', () => {
     expect(await cardStatus('sp1438-direct')).toBe(200);
   });
 
+  test('the card opens in the language in its address, and gates the same (owner 2026-11-28)', async () => {
+    const es = await SELF.fetch('https://t.test/es/sponsors/sp1438-direct');
+    expect(es.status).toBe(200);
+    const page = await es.text();
+    expect(page).toContain('<html lang="es" dir="ltr">');
+    expect(page).toContain('href="/es/events"');
+    expect(page).toContain('data-testid="language-menu"');
+    const ar = await SELF.fetch('https://t.test/ar/sponsors/sp1438-direct');
+    expect(await ar.text()).toContain('<html lang="ar" dir="rtl">');
+    // A sponsor not on show is a 404 under a prefix too, in that language.
+    const hidden = await SELF.fetch('https://t.test/es/sponsors/sp1438-draftonly');
+    expect(hidden.status).toBe(404);
+    expect(await hidden.text()).toContain('No encontramos este patrocinador');
+  });
+
   test('a sponsor_request the organizer has not answered: no card_url, and the card is a 404', async () => {
     const row = await resolved('sp1438-request');
     expect(row.card_url).toBeUndefined();
