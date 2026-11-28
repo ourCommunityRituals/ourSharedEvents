@@ -689,6 +689,53 @@ describe('a big league table', () => {
   });
 });
 
+describe('soccer too, not only bocce (owner, 2026-11-28)', () => {
+  test('a soccer league starts on 3 for a win, 1 for a tie; bocce stays win or lose', async () => {
+    const soccer = await league(2, { name: 'Sunday Soccer', sport: 'soccer_league' });
+    const bocce = await league(2);
+    expect((await call('GET', `${P}/${soccer.id}`, A)).json.competition.ruleset).toBe(
+      'three_one_zero'
+    );
+    expect((await call('GET', `${P}/${bocce.id}`, A)).json.competition.ruleset).toBe('win_loss');
+    // The host can still name any ruleset.
+    const picked = await league(2, { sport: 'soccer_league', ruleset: 'win_loss' });
+    expect((await call('GET', `${P}/${picked.id}`, A)).json.competition.ruleset).toBe('win_loss');
+  });
+
+  test('a 1-1 soccer game is a tie: 1 point each, and no "No ties" on the score screen', async () => {
+    const { id } = await league(2, { name: 'Sunday Soccer', sport: 'soccer_league' });
+    await start(id);
+    await call('POST', `${P}/${id}/schedule`, A, {
+      event_ids: NIGHTS,
+      slots: ['Field 1'],
+      start_time: '10:00',
+    });
+    const screen = await call('GET', `${P}/${id}/score-screen`, A);
+    expect(screen.text).not.toContain('No ties');
+    expect(screen.text).toContain('Field 1');
+    const fx = (await all(`SELECT id FROM fixtures WHERE competition_id = ?`, id))[0].id as string;
+    const s = await call('PUT', `${P}/${id}/fixtures/${fx}/result`, A, { score_a: 1, score_b: 1 });
+    expect(s.status, JSON.stringify(s.json)).toBe(200);
+    const d = await call('GET', `${P}/${id}`, A);
+    expect(d.json.standings.map((t: Json) => [t.drawn, t.points])).toEqual([
+      [1, 1],
+      [1, 1],
+    ]);
+    const table = (await call('GET', `/competitions/${id}?tab=table`, {})).text;
+    expect(table).toContain('A tie game is 1.');
+  });
+
+  test('bocce still refuses a tie, and says so on the score screen', async () => {
+    const { id } = await league(2);
+    await start(id);
+    await call('POST', `${P}/${id}/schedule`, A, { event_ids: NIGHTS });
+    expect((await call('GET', `${P}/${id}/score-screen`, A)).text).toContain('No ties');
+    const fx = (await all(`SELECT id FROM fixtures WHERE competition_id = ?`, id))[0].id as string;
+    const s = await call('PUT', `${P}/${id}/fixtures/${fx}/result`, A, { score_a: 9, score_b: 9 });
+    expect(s.json.code).toBe('DRAW_NOT_ALLOWED');
+  });
+});
+
 describe('the host score screen', () => {
   test('lists the next round’s matches with two score boxes each', async () => {
     const { id } = await league(4);

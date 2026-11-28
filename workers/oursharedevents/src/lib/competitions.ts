@@ -279,8 +279,20 @@ function parseSport(raw: unknown): Parsed<string | null> {
   return { ok: true, value: raw };
 }
 
-function parseRuleset(raw: unknown): Parsed<RulesetKey> {
-  if (raw === undefined || raw === null) return { ok: true, value: 'win_loss' };
+/**
+ * Leagues are for every sport, not only bocce (owner, 2026-11-28: "think soccer
+ * too"). Where a tie game is a normal result, a new competition with no ruleset
+ * named starts on 3 for a win, 1 for a tie; every other sport starts on win or
+ * lose. The host can still pick any ruleset.
+ */
+const TIES_ARE_NORMAL = /^(soccer|futsal)(_|$)/;
+
+export function defaultRulesetFor(sport: string | null): RulesetKey {
+  return sport && TIES_ARE_NORMAL.test(sport) ? 'three_one_zero' : 'win_loss';
+}
+
+function parseRuleset(raw: unknown, sport: string | null = null): Parsed<RulesetKey> {
+  if (raw === undefined || raw === null) return { ok: true, value: defaultRulesetFor(sport) };
   if (!RULESET_KEYS.includes(raw as RulesetKey))
     return bad('INVALID_RULESET', `ruleset must be one of: ${RULESET_KEYS.join(', ')}`);
   return { ok: true, value: raw as RulesetKey };
@@ -321,7 +333,7 @@ export function parseCompetitionCreate(body: unknown): Parsed<CompetitionInput> 
   if (!ends.ok) return ends;
   if (starts.value && ends.value && ends.value < starts.value)
     return bad('INVALID_DATE', 'ends_on must not be before starts_on');
-  const ruleset = parseRuleset(b.ruleset);
+  const ruleset = parseRuleset(b.ruleset, sport.value);
   if (!ruleset.ok) return ruleset;
   return {
     ok: true,
