@@ -33,42 +33,198 @@ export const STAGE_KINDS = ['round_robin'] as const;
 export type StageKind = (typeof STAGE_KINDS)[number];
 
 /**
- * How a result turns into standings points. The ONE place the list lives (the
- * column is free TEXT), so a sport's rule pack can join later without a table
- * rebuild. Draws are allowed only where the ruleset gives a draw its points.
+ * How a result turns into standings points, and the rest of a competition's
+ * rules. The ONE place the list lives (the column is free TEXT), so a sport's
+ * rule pack can join later without a table rebuild. Draws are allowed only where
+ * the ruleset gives a draw its points.
+ *
+ * A competition picks one preset (`ruleset`) and may change parts of it
+ * (`rules`, migration 0126; leagues slice 2, owner 2026-11-28, OCR-docs
+ * PROPOSAL_bocce-team-formats-and-rules.md sections 4a and 5). What a visitor
+ * reads (`says`) is written from the rules, so it can never disagree with them.
  */
-export interface Ruleset {
+
+/** What breaks a tie on points, in the order the organizer picks. */
+export const TIEBREAK_KEYS = ['wins', 'diff', 'scored', 'conceded'] as const;
+export type TiebreakKey = (typeof TIEBREAK_KEYS)[number];
+const TIEBREAK_WORDS: Readonly<Record<TiebreakKey, string>> = {
+  wins: 'most wins',
+  diff: 'the biggest score gap',
+  scored: 'most points scored',
+  conceded: 'fewest points let in',
+};
+const DEFAULT_TIEBREAK: readonly TiebreakKey[] = ['wins', 'diff', 'scored'];
+
+export interface Rules {
   win: number;
   draw: number | null;
   loss: number;
+  /** Play to this score (12 in most bocce rule sets). Null: no target, as in soccer. */
+  target: number | null;
+  /** A game also ends after this many minutes (the frame or play in hand is finished). */
+  time_limit_minutes: number | null;
+  tiebreak: readonly TiebreakKey[];
+  /** A ball touching the target ball (a baci) scores 1 extra point. */
+  baci: boolean;
+  /** The usual players a side, 1 to 4 (1v1 to 4v4). Null: not set. */
+  team_size: number | null;
+}
+export interface Ruleset extends Rules {
   /** The words a visitor reads under the table. */
   says: string;
 }
-export const RULESETS = {
-  win_loss: {
-    win: 1,
-    draw: null,
-    loss: 0,
-    says: 'A win is 1 point. If teams tie on points: most wins, then the biggest score gap, then most points scored.',
-  },
-  two_one_zero: {
-    win: 2,
-    draw: 1,
-    loss: 0,
-    says: 'A win is 2 points. A tie game is 1. If teams tie on points: most wins, then the biggest score gap, then most points scored.',
-  },
-  three_one_zero: {
-    win: 3,
-    draw: 1,
-    loss: 0,
-    says: 'A win is 3 points. A tie game is 1. If teams tie on points: most wins, then the biggest score gap, then most points scored.',
-  },
-} as const satisfies Record<string, Ruleset>;
-export type RulesetKey = keyof typeof RULESETS;
-export const RULESET_KEYS = Object.keys(RULESETS) as RulesetKey[];
 
-export function rulesetOf(key: string): Ruleset {
-  return (RULESETS as Record<string, Ruleset>)[key] ?? RULESETS.win_loss;
+const BASE: Omit<Rules, 'win' | 'draw' | 'loss'> = {
+  target: null,
+  time_limit_minutes: null,
+  tiebreak: DEFAULT_TIEBREAK,
+  baci: false,
+  team_size: null,
+};
+const PRESETS = {
+  win_loss: { ...BASE, win: 1, draw: null, loss: 0 },
+  two_one_zero: { ...BASE, win: 2, draw: 1, loss: 0 },
+  three_one_zero: { ...BASE, win: 3, draw: 1, loss: 0 },
+  // USBF Open, CBI and BSA leagues: play to 12, no ties.
+  usbf_open: { ...BASE, win: 1, draw: null, loss: 0, target: 12 },
+  // Special Olympics state manuals: 12 points or 20 minutes, finish the frame.
+  special_olympics: { ...BASE, win: 1, draw: null, loss: 0, target: 12, time_limit_minutes: 20 },
+} as const satisfies Record<string, Rules>;
+export type RulesetKey = keyof typeof PRESETS;
+export const RULESET_KEYS = Object.keys(PRESETS) as RulesetKey[];
+
+const pts = (n: number) => `${n} point${n === 1 ? '' : 's'}`;
+
+/** How a game ends, in plain words: a must-know on the score screen. Null: no limit set. */
+export function limitOf(r: Rules): string | null {
+  if (r.target !== null && r.time_limit_minutes !== null)
+    return `Play to ${r.target}, or ${r.time_limit_minutes} minutes, then finish the frame.`;
+  if (r.target !== null) return `Play to ${r.target}.`;
+  if (r.time_limit_minutes !== null) return `A game lasts ${r.time_limit_minutes} minutes.`;
+  return null;
+}
+
+/** The rules in plain words (5th to 8th grade), said the same way everywhere. */
+export function describeRules(r: Rules): string {
+  const out = [`A win is ${pts(r.win)}.`];
+  if (r.draw !== null) out.push(`A tie game is ${r.draw}.`);
+  if (r.loss > 0) out.push(`A loss is ${r.loss}.`);
+  const limit = limitOf(r);
+  if (limit) out.push(limit);
+  if (r.baci) out.push('A ball touching the target ball (a baci) scores 1 extra point.');
+  out.push(
+    r.tiebreak.length
+      ? `If teams tie on points: ${r.tiebreak.map((k) => TIEBREAK_WORDS[k]).join(', then ')}.`
+      : 'Teams level on points share a place.'
+  );
+  return out.join(' ');
+}
+
+const withWords = (r: Rules): Ruleset => ({ ...r, says: describeRules(r) });
+
+export const RULESETS = Object.fromEntries(
+  RULESET_KEYS.map((k) => [k, withWords(PRESETS[k])])
+) as Readonly<Record<RulesetKey, Ruleset>>;
+
+/** The organizer's changes to a preset (the `rules` column), field by field. */
+export const RULE_KEYS = [
+  'win',
+  'draw',
+  'loss',
+  'target',
+  'time_limit_minutes',
+  'tiebreak',
+  'baci',
+  'team_size',
+] as const;
+export type RuleOverrides = Partial<Rules>;
+
+/**
+ * The rules a competition plays by: its preset, with its own changes on top.
+ * A stored `rules` that cannot be read is ignored (the preset stands), so a bad
+ * row can never break a page.
+ */
+export function rulesetOf(key: string, rules: string | null = null): Ruleset {
+  const preset: Rules = (PRESETS as Record<string, Rules>)[key] ?? PRESETS.win_loss;
+  if (!rules) return withWords(preset);
+  let changes: unknown;
+  try {
+    changes = JSON.parse(rules);
+  } catch {
+    return withWords(preset);
+  }
+  const parsed = parseRules(changes);
+  if (!parsed.ok || parsed.value === null) return withWords(preset);
+  return withWords({ ...preset, ...(JSON.parse(parsed.value) as RuleOverrides) });
+}
+
+/** Points that make sense together: a win beats a tie, a tie beats a loss. */
+export function checkPoints(r: Rules): Parsed<true> {
+  if (r.win <= r.loss) return bad('INVALID_RULES', 'A win must be worth more than a loss');
+  if (r.draw !== null && (r.draw >= r.win || r.draw < r.loss))
+    return bad('INVALID_RULES', 'A tie must be worth less than a win and no less than a loss');
+  return { ok: true, value: true };
+}
+
+const wholeIn = (v: unknown, lo: number, hi: number): v is number =>
+  typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi;
+
+/**
+ * The `rules` body field: null clears the changes, an object sets them. Each
+ * key is checked on its own; whether the points fit together is checked on the
+ * merged rules (checkPoints). Returns the JSON to store, or null.
+ */
+export function parseRules(raw: unknown): Parsed<string | null> {
+  if (raw === null) return { ok: true, value: null };
+  const b = asRecord(raw);
+  if (!b) return bad('INVALID_RULES', 'rules is an object, or null to clear it');
+  const extra = unknownKey(b, RULE_KEYS);
+  if (extra) return bad('INVALID_RULES', `rules does not take the field: ${extra}`);
+  const out: RuleOverrides = {};
+  for (const k of ['win', 'loss'] as const) {
+    if (!(k in b)) continue;
+    if (!wholeIn(b[k], 0, 10)) return bad('INVALID_RULES', `${k} is a whole number from 0 to 10`);
+    out[k] = b[k] as number;
+  }
+  if ('draw' in b) {
+    if (b.draw !== null && !wholeIn(b.draw, 0, 10))
+      return bad('INVALID_RULES', 'draw is a whole number from 0 to 10, or null for no ties');
+    out.draw = b.draw as number | null;
+  }
+  if ('target' in b) {
+    if (b.target !== null && !wholeIn(b.target, 1, 99))
+      return bad('INVALID_RULES', 'target is a whole number from 1 to 99, or null');
+    out.target = b.target as number | null;
+  }
+  if ('time_limit_minutes' in b) {
+    if (b.time_limit_minutes !== null && !wholeIn(b.time_limit_minutes, 1, 180))
+      return bad('INVALID_RULES', 'time_limit_minutes is a whole number from 1 to 180, or null');
+    out.time_limit_minutes = b.time_limit_minutes as number | null;
+  }
+  if ('tiebreak' in b) {
+    const t = b.tiebreak;
+    if (
+      !Array.isArray(t) ||
+      t.length > TIEBREAK_KEYS.length ||
+      new Set(t).size !== t.length ||
+      !t.every((k) => TIEBREAK_KEYS.includes(k as TiebreakKey))
+    )
+      return bad(
+        'INVALID_RULES',
+        `tiebreak is a list, each once, from: ${TIEBREAK_KEYS.join(', ')}`
+      );
+    out.tiebreak = t as TiebreakKey[];
+  }
+  if ('baci' in b) {
+    if (typeof b.baci !== 'boolean') return bad('INVALID_RULES', 'baci is true or false');
+    out.baci = b.baci;
+  }
+  if ('team_size' in b) {
+    if (b.team_size !== null && !wholeIn(b.team_size, 1, 4))
+      return bad('INVALID_RULES', 'team_size is 1 to 4 players a side, or null');
+    out.team_size = b.team_size as number | null;
+  }
+  return { ok: true, value: Object.keys(out).length ? JSON.stringify(out) : null };
 }
 
 export const FORMAT_LABELS: Readonly<Record<CompetitionFormat, string>> = {
@@ -103,6 +259,7 @@ export const COMPETITION_COLUMNS = [
   'source',
   'created_at',
   'updated_at',
+  'rules', // 0126, so it comes last
 ] as const;
 export const STAGE_COLUMNS = ['id', 'competition_id', 'kind', 'sort', 'created_at'] as const;
 export const ENTRY_COLUMNS = [
@@ -113,6 +270,7 @@ export const ENTRY_COLUMNS = [
   'is_active',
   'created_at',
   'updated_at',
+  'team_size', // 0126, so it comes last
 ] as const;
 export const FIXTURE_COLUMNS = [
   'id',
@@ -137,17 +295,35 @@ export const RESULT_COLUMNS = [
   'evidence_key',
   'updated_at',
 ] as const;
+/** One position's part in one frame (migration 0126): positions, never names. */
+export const LINEUP_COLUMNS = [
+  'fixture_id',
+  'frame',
+  'side',
+  'position',
+  'court_end',
+  'balls',
+] as const;
 
 /** The keys each write accepts. A key outside its list is a 400, never ignored. */
 export const WRITE_KEYS = {
-  createCompetition: ['brand_id', 'name', 'sport', 'format', 'starts_on', 'ends_on', 'ruleset'],
-  updateCompetition: ['name', 'sport', 'status', 'starts_on', 'ends_on', 'ruleset'],
-  createEntry: ['label', 'seed'],
-  updateEntry: ['label', 'seed', 'is_active'],
+  createCompetition: [
+    'brand_id',
+    'name',
+    'sport',
+    'format',
+    'starts_on',
+    'ends_on',
+    'ruleset',
+    'rules',
+  ],
+  updateCompetition: ['name', 'sport', 'status', 'starts_on', 'ends_on', 'ruleset', 'rules'],
+  createEntry: ['label', 'seed', 'team_size'],
+  updateEntry: ['label', 'seed', 'is_active', 'team_size'],
   schedule: ['event_ids', 'slots', 'start_time', 'slot_minutes'],
   createFixture: ['round', 'entry_a', 'entry_b', 'event_id', 'slot_label', 'slot_time'],
   updateFixture: ['round', 'entry_a', 'entry_b', 'event_id', 'slot_label', 'slot_time', 'status'],
-  result: ['score_a', 'score_b'],
+  result: ['score_a', 'score_b', 'frames'],
 } as const;
 
 // ─── Rows ─────────────────────────────────────────────────────────────────────
@@ -163,6 +339,8 @@ export interface CompetitionRow {
   starts_on: string | null;
   ends_on: string | null;
   ruleset: string;
+  /** The organizer's changes to the ruleset, as JSON (migration 0126), or null. */
+  rules: string | null;
   /** One source only: the host here ('native'), or a one-way sheet mirror (OSE-2240). */
   source: 'native' | 'mirrored';
   created_at: string;
@@ -175,6 +353,8 @@ export interface EntryRow {
   label: string;
   seed: number;
   is_active: number;
+  /** 1 to 4 players a side, or null for the competition's usual size. */
+  team_size: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -306,6 +486,7 @@ export interface CompetitionInput {
   starts_on: string | null;
   ends_on: string | null;
   ruleset: RulesetKey;
+  rules: string | null;
 }
 
 const BRAND = /^[a-z0-9_-]{1,64}$/;
@@ -335,6 +516,14 @@ export function parseCompetitionCreate(body: unknown): Parsed<CompetitionInput> 
     return bad('INVALID_DATE', 'ends_on must not be before starts_on');
   const ruleset = parseRuleset(b.ruleset, sport.value);
   if (!ruleset.ok) return ruleset;
+  let rules: string | null = null;
+  if (b.rules !== undefined) {
+    const r = parseRules(b.rules);
+    if (!r.ok) return r;
+    rules = r.value;
+  }
+  const fits = checkPoints(rulesetOf(ruleset.value, rules));
+  if (!fits.ok) return fits;
   return {
     ok: true,
     value: {
@@ -345,6 +534,7 @@ export function parseCompetitionCreate(body: unknown): Parsed<CompetitionInput> 
       starts_on: starts.value,
       ends_on: ends.value,
       ruleset: ruleset.value,
+      rules,
     },
   };
 }
@@ -389,6 +579,11 @@ export function parseCompetitionUpdate(body: unknown): Parsed<CompetitionPatch> 
     if (!r.ok) return r;
     patch.ruleset = r.value;
   }
+  if ('rules' in b) {
+    const r = parseRules(b.rules);
+    if (!r.ok) return r;
+    patch.rules = r.value;
+  }
   if (Object.keys(patch).length === 0) return bad('NO_FIELDS', 'Name at least one field to change');
   return { ok: true, value: patch };
 }
@@ -400,9 +595,17 @@ function parseSeed(raw: unknown): Parsed<number> {
   return { ok: true, value: raw };
 }
 
+function parseTeamSize(raw: unknown): Parsed<number | null> {
+  if (raw === undefined || raw === null) return { ok: true, value: null };
+  if (!wholeIn(raw, 1, 4))
+    return bad('INVALID_TEAM_SIZE', 'team_size is 1 to 4 players a side, or null');
+  return { ok: true, value: raw };
+}
+
 export interface EntryInput {
   label: string;
   seed: number;
+  team_size: number | null;
 }
 
 export function parseEntryCreate(body: unknown): Parsed<EntryInput> {
@@ -414,7 +617,9 @@ export function parseEntryCreate(body: unknown): Parsed<EntryInput> {
   if (!label.ok) return label;
   const seed = parseSeed(b.seed);
   if (!seed.ok) return seed;
-  return { ok: true, value: { label: label.value, seed: seed.value } };
+  const size = parseTeamSize(b.team_size);
+  if (!size.ok) return size;
+  return { ok: true, value: { label: label.value, seed: seed.value, team_size: size.value } };
 }
 
 export type EntryPatch = Partial<EntryInput> & { is_active?: boolean };
@@ -439,6 +644,11 @@ export function parseEntryUpdate(body: unknown): Parsed<EntryPatch> {
     if (typeof b.is_active !== 'boolean')
       return bad('INVALID_IS_ACTIVE', 'is_active must be true or false');
     patch.is_active = b.is_active;
+  }
+  if ('team_size' in b) {
+    const size = parseTeamSize(b.team_size);
+    if (!size.ok) return size;
+    patch.team_size = size.value;
   }
   if (Object.keys(patch).length === 0) return bad('NO_FIELDS', 'Name at least one field to change');
   return { ok: true, value: patch };
@@ -637,10 +847,78 @@ export function parseFixtureUpdate(body: unknown): Parsed<FixturePatch> {
   return { ok: true, value: patch };
 }
 
+/** One position's part in one frame of a game: where it threw and how many balls. */
+export interface LineupRow {
+  frame: number;
+  side: 'a' | 'b';
+  position: 'A' | 'B' | 'C' | 'D';
+  court_end: 'near' | 'far';
+  balls: number;
+}
+export const FRAMES_MAX = 40;
+const POSITIONS = ['A', 'B', 'C', 'D'] as const;
+/** A side throws 4, 6 or 8 balls in a frame (design section 2). */
+const SIDE_BALLS = [4, 6, 8];
+
+/**
+ * The optional `frames` of a score: for each frame, which positions of each
+ * side threw, from which end, and how many balls. Positions only, never names.
+ * A position must fit the team's size (a 3-player team has A, B and C). A
+ * three-player rotation is just a different set of positions in the next frame.
+ */
+export function parseFrames(raw: unknown, sizes: { a: number; b: number }): Parsed<LineupRow[]> {
+  const no = (why: string) => bad('INVALID_FRAMES', why);
+  if (!Array.isArray(raw) || raw.length === 0 || raw.length > FRAMES_MAX)
+    return no(`frames is a list of 1 to ${FRAMES_MAX} frames`);
+  const out: LineupRow[] = [];
+  const seen = new Set<number>();
+  for (const f of raw) {
+    const fr = asRecord(f);
+    if (!fr || unknownKey(fr, ['frame', 'a', 'b'])) return no('Each frame is { frame, a, b }');
+    if (!wholeIn(fr.frame, 1, 99) || seen.has(fr.frame))
+      return no('Each frame has its own number, from 1 to 99');
+    seen.add(fr.frame);
+    for (const side of ['a', 'b'] as const) {
+      const list = fr[side];
+      const size = sizes[side];
+      if (!Array.isArray(list) || list.length === 0 || list.length > size)
+        return no(`Frame ${fr.frame}: side ${side} lists 1 to ${size} positions`);
+      const used = new Set<string>();
+      let balls = 0;
+      for (const p of list) {
+        const pr = asRecord(p);
+        if (!pr || unknownKey(pr, ['position', 'end', 'balls']))
+          return no('Each position is { position, end, balls }');
+        const at = POSITIONS.indexOf(pr.position as (typeof POSITIONS)[number]);
+        if (at < 0 || at >= size || used.has(pr.position as string))
+          return no(
+            `Frame ${fr.frame}: side ${side} positions are ${POSITIONS.slice(0, size).join(', ')}, each once`
+          );
+        used.add(pr.position as string);
+        if (pr.end !== 'near' && pr.end !== 'far')
+          return no(`Frame ${fr.frame}: end is near or far`);
+        if (!wholeIn(pr.balls, 1, 8)) return no(`Frame ${fr.frame}: balls is 1 to 8`);
+        balls += pr.balls;
+        out.push({
+          frame: fr.frame,
+          side,
+          position: pr.position as LineupRow['position'],
+          court_end: pr.end,
+          balls: pr.balls,
+        });
+      }
+      if (!SIDE_BALLS.includes(balls))
+        return no(`Frame ${fr.frame}: side ${side} throws 4, 6 or 8 balls in all`);
+    }
+  }
+  return { ok: true, value: out.sort((x, y) => x.frame - y.frame) };
+}
+
 export function parseResult(
   body: unknown,
-  ruleset: Ruleset
-): Parsed<{ score_a: number; score_b: number }> {
+  ruleset: Ruleset,
+  sizes: { a: number; b: number } = { a: 4, b: 4 }
+): Parsed<{ score_a: number; score_b: number; frames?: LineupRow[] }> {
   const b = asRecord(body);
   if (!b) return bad('INVALID_BODY', 'Send a JSON object');
   const extra = unknownKey(b, WRITE_KEYS.result);
@@ -651,7 +929,16 @@ export function parseResult(
     return bad('INVALID_SCORE', `score_a and score_b are whole numbers from 0 to ${SCORE_MAX}`);
   if (b.score_a === b.score_b && ruleset.draw === null)
     return bad('DRAW_NOT_ALLOWED', 'This competition has no draws: one team must win');
-  return { ok: true, value: { score_a: b.score_a as number, score_b: b.score_b as number } };
+  const value: { score_a: number; score_b: number; frames?: LineupRow[] } = {
+    score_a: b.score_a as number,
+    score_b: b.score_b as number,
+  };
+  if (b.frames !== undefined) {
+    const frames = parseFrames(b.frames, sizes);
+    if (!frames.ok) return frames;
+    value.frames = frames.value;
+  }
+  return { ok: true, value };
 }
 
 // ─── Round robin (OSE-526): the circle method, nothing clever ─────────────────
@@ -737,9 +1024,10 @@ export function counts(f: StandingsFixture): boolean {
 }
 
 /**
- * The table. Order: points, then wins, then score difference, then points
- * scored, then the label (so the order is stable). Teams level on all four
- * numbers share a rank. A withdrawn team keeps its played matches.
+ * The table. Order: points, then the ruleset's tie-break list (by default
+ * wins, then score difference, then points scored), then the label (so the
+ * order is stable). Teams level on points and every tie-break share a rank. A
+ * withdrawn team keeps its played matches.
  */
 export function computeStandings(
   entries: readonly { id: string; label: string; is_active: number }[],
@@ -796,7 +1084,14 @@ export function computeStandings(
   const list = [...rows.values()]
     .filter((r) => active.has(r.entry_id) || r.played > 0)
     .map((r) => ({ ...r, diff: r.scored - r.conceded }));
-  const key = (r: StandingsRow) => [r.points, r.won, r.diff, r.scored];
+  // Bigger is better for every key; points let in count the other way.
+  const pick: Record<TiebreakKey, (r: StandingsRow) => number> = {
+    wins: (r) => r.won,
+    diff: (r) => r.diff,
+    scored: (r) => r.scored,
+    conceded: (r) => -r.conceded,
+  };
+  const key = (r: StandingsRow) => [r.points, ...ruleset.tiebreak.map((k) => pick[k](r))];
   list.sort((x, y) => {
     const kx = key(x);
     const ky = key(y);
@@ -812,6 +1107,22 @@ export function computeStandings(
 
 // ─── Views (field by field, never a spread) ───────────────────────────────────
 
+/** The rules the competition plays by, without the words (those are `says`). */
+function rulesOf(row: CompetitionRow) {
+  const r = rulesetOf(row.ruleset, row.rules);
+  return {
+    win: r.win,
+    draw: r.draw,
+    loss: r.loss,
+    target: r.target,
+    time_limit_minutes: r.time_limit_minutes,
+    tiebreak: [...r.tiebreak],
+    baci: r.baci,
+    team_size: r.team_size,
+    says: r.says,
+  };
+}
+
 export function projectCompetition(row: CompetitionRow) {
   return {
     id: row.id,
@@ -823,6 +1134,7 @@ export function projectCompetition(row: CompetitionRow) {
     starts_on: row.starts_on,
     ends_on: row.ends_on,
     ruleset: row.ruleset,
+    rules: rulesOf(row),
     source: row.source,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -835,10 +1147,26 @@ export function projectEntry(row: EntryRow) {
     label: row.label,
     seed: row.seed,
     is_active: row.is_active === 1,
+    team_size: row.team_size,
   };
 }
 
-export function projectFixture(row: FixtureRow, result: ResultRow | null) {
+/** Lineup rows back into the shape the host sent: one entry per frame. */
+function framesOf(rows: readonly LineupRow[]) {
+  const by = new Map<number, { frame: number; a: object[]; b: object[] }>();
+  for (const r of rows) {
+    const f = by.get(r.frame) ?? { frame: r.frame, a: [], b: [] };
+    f[r.side].push({ position: r.position, end: r.court_end, balls: r.balls });
+    by.set(r.frame, f);
+  }
+  return [...by.values()].sort((x, y) => x.frame - y.frame);
+}
+
+export function projectFixture(
+  row: FixtureRow,
+  result: ResultRow | null,
+  frames: readonly LineupRow[] = []
+) {
   return {
     id: row.id,
     round: row.round,
@@ -856,6 +1184,8 @@ export function projectFixture(row: FixtureRow, result: ResultRow | null) {
           score_b: result.score_b,
           state: result.state,
           entered_by: result.entered_by,
+          // Who threw where, by position (A to D) only, when the host gave it.
+          frames: framesOf(frames),
         }
       : null,
   };

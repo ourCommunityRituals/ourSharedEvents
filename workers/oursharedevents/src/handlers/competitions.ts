@@ -68,6 +68,8 @@ import {
   parseFixtureUpdate,
   parseId,
   parseResult,
+  checkPoints,
+  type LineupRow,
   parseSchedule,
   projectCompetition,
   projectEntry,
@@ -231,6 +233,40 @@ function resultOf(f: FixtureWithResult): ResultRow | null {
   };
 }
 
+/** Every game's lineups in a competition, by game. Positions only, never names. */
+async function readLineups(
+  db: D1Database,
+  competitionId: string
+): Promise<Map<string, LineupRow[]>> {
+  const rs = await db
+    .prepare(
+      `SELECT l.fixture_id, l.frame, l.side, l.position, l.court_end, l.balls
+         FROM fixture_lineups l JOIN fixtures f ON f.id = l.fixture_id
+        WHERE f.competition_id = ?
+        ORDER BY l.fixture_id, l.frame, l.side, l.position`
+    )
+    .bind(competitionId)
+    .all<LineupRow & { fixture_id: string }>();
+  const out = new Map<string, LineupRow[]>();
+  for (const { fixture_id, ...row } of rs.results ?? []) {
+    const list = out.get(fixture_id) ?? [];
+    list.push(row);
+    out.set(fixture_id, list);
+  }
+  return out;
+}
+
+async function lineupOf(db: D1Database, fixtureId: string): Promise<LineupRow[]> {
+  const rs = await db
+    .prepare(
+      `SELECT frame, side, position, court_end, balls FROM fixture_lineups
+        WHERE fixture_id = ? ORDER BY frame, side, position`
+    )
+    .bind(fixtureId)
+    .all<LineupRow>();
+  return rs.results ?? [];
+}
+
 async function entryOf(db: D1Database, entryId: string, competitionId: string) {
   return db
     .prepare(`SELECT ${ENTRY_SELECT} FROM competition_entries WHERE id = ? AND competition_id = ?`)
@@ -301,11 +337,16 @@ async function entriesBelong(
 async function detail(db: D1Database, competition: CompetitionRow) {
   const entries = await readEntries(db, competition.id);
   const fixtures = await readFixtures(db, competition.id);
+  const lineups = await readLineups(db, competition.id);
   return {
     competition: projectCompetition(competition),
     entries: entries.map(projectEntry),
-    fixtures: fixtures.map((f) => projectFixture(f, resultOf(f))),
-    standings: computeStandings(entries, fixtures, rulesetOf(competition.ruleset)),
+    fixtures: fixtures.map((f) => projectFixture(f, resultOf(f), lineups.get(f.id))),
+    standings: computeStandings(
+      entries,
+      fixtures,
+      rulesetOf(competition.ruleset, competition.rules)
+    ),
   };
 }
 
@@ -382,8 +423,8 @@ export async function handleCreateCompetition(
       db
         .prepare(
           `INSERT INTO competitions
-             (id, brand_id, created_by, name, sport, format, status, starts_on, ends_on, ruleset, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?)`
+             (id, brand_id, created_by, name, sport, format, status, starts_on, ends_on, ruleset, rules, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?)`
         )
         .bind(
           id,
@@ -395,6 +436,7 @@ export async function handleCreateCompetition(
           v.starts_on,
           v.ends_on,
           v.ruleset,
+          v.rules,
           now,
           now
         ),
@@ -440,7 +482,10 @@ export function handleUpdateCompetition(request: Request, env: CompetitionsEnv, 
       const ends = p.ends_on !== undefined ? p.ends_on : c.ends_on;
       if (starts && ends && ends < starts)
         return fail(request, 400, 'INVALID_DATE', 'ends_on must not be before starts_on');
-      if (p.ruleset !== undefined && rulesetOf(p.ruleset).draw === null) {
+      const next = rulesetOf(p.ruleset ?? c.ruleset, p.rules !== undefined ? p.rules : c.rules);
+      const fits = checkPoints(next);
+      if (!fits.ok) return fail(request, 400, fits.code, fits.error);
+      if ((p.ruleset !== undefined || p.rules !== undefined) && next.draw === null) {
         const draw = await db
           .prepare(
             `SELECT 1 FROM fixture_results r JOIN fixtures f ON f.id = r.fixture_id
@@ -468,6 +513,7 @@ export function handleUpdateCompetition(request: Request, env: CompetitionsEnv, 
       if (p.starts_on !== undefined) set('starts_on', p.starts_on);
       if (p.ends_on !== undefined) set('ends_on', p.ends_on);
       if (p.ruleset !== undefined) set('ruleset', p.ruleset);
+      if (p.rules !== undefined) set('rules', p.rules);
       set('updated_at', new Date().toISOString());
       const statements = [
         db.prepare(`UPDATE competitions SET ${sets.join(', ')} WHERE id = ?`).bind(...values, c.id),
@@ -524,10 +570,10 @@ export function handleCreateEntry(request: Request, env: CompetitionsEnv, id: st
       const now = new Date().toISOString();
       await db
         .prepare(
-          `INSERT INTO competition_entries (id, competition_id, label, seed, is_active, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 1, ?, ?)`
+          `INSERT INTO competition_entries (id, competition_id, label, seed, is_active, team_size, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 1, ?, ?, ?)`
         )
-        .bind(entryId, c.id, input.value.label, input.value.seed, now, now)
+        .bind(entryId, c.id, input.value.label, input.value.seed, input.value.team_size, now, now)
         .run();
       const made = await entryOf(db, entryId, c.id);
       if (!made) return fail(request, 503, 'DB_ERROR', 'The team entry could not be saved');
@@ -568,12 +614,13 @@ export function handleUpdateEntry(
         if (taken) return labelTaken(request);
       }
       const sets: string[] = [];
-      const values: (string | number)[] = [];
-      const set = (column: string, value: string | number) => {
+      const values: (string | number | null)[] = [];
+      const set = (column: string, value: string | number | null) => {
         sets.push(`${column} = ?`);
         values.push(value);
       };
       if (p.label !== undefined) set('label', p.label);
+      if (p.team_size !== undefined) set('team_size', p.team_size);
       if (p.seed !== undefined) set('seed', p.seed);
       if (p.is_active !== undefined) set('is_active', p.is_active ? 1 : 0);
       set('updated_at', new Date().toISOString());
@@ -797,11 +844,30 @@ export async function writeResult(
   db: D1Database,
   competitionId: string,
   fixtureId: string,
-  score: { score_a: number; score_b: number },
+  score: { score_a: number; score_b: number; frames?: LineupRow[] },
   enteredBy: 'host' | 'referee'
 ): Promise<void> {
   const now = new Date().toISOString();
+  const notFinal = `NOT EXISTS (SELECT 1 FROM fixture_results WHERE fixture_id = ? AND state = 'final')`;
+  // The lineup, when sent, replaces the one there. A final game keeps its own.
+  const lineup = score.frames
+    ? [
+        db
+          .prepare(`DELETE FROM fixture_lineups WHERE fixture_id = ? AND ${notFinal}`)
+          .bind(fixtureId, fixtureId),
+        db
+          .prepare(
+            `INSERT INTO fixture_lineups (fixture_id, frame, side, position, court_end, balls)
+             SELECT ?, json_extract(value, '$.frame'), json_extract(value, '$.side'),
+                    json_extract(value, '$.position'), json_extract(value, '$.court_end'),
+                    json_extract(value, '$.balls')
+               FROM json_each(?) WHERE ${notFinal}`
+          )
+          .bind(fixtureId, JSON.stringify(score.frames), fixtureId),
+      ]
+    : [];
   await db.batch([
+    ...lineup,
     db
       .prepare(
         `INSERT INTO fixture_results (fixture_id, score_a, score_b, state, entered_by, updated_at)
@@ -838,11 +904,18 @@ export function handlePutResult(
     async (db, c) => {
       const json = await readJson(request);
       if (!json.ok) return fail(request, 400, 'INVALID_BODY', 'Send a JSON object');
-      const input = parseResult(json.body, rulesetOf(c.ruleset));
-      if (!input.ok) return fail(request, 400, input.code, input.error);
       const fixtureId = parseId(rawFixtureId);
       const fixture = fixtureId ? await fixtureOf(db, fixtureId, c.id) : null;
       if (!fixture) return noFixture(request);
+      // A lineup's positions must fit each team's size (1v1 to 4v4).
+      const rules = rulesetOf(c.ruleset, c.rules);
+      const sizeOf = async (entryId: string) =>
+        (await entryOf(db, entryId, c.id))?.team_size ?? rules.team_size ?? 4;
+      const input = parseResult(json.body, rules, {
+        a: await sizeOf(fixture.entry_a),
+        b: await sizeOf(fixture.entry_b),
+      });
+      if (!input.ok) return fail(request, 400, input.code, input.error);
       const shut = closedToHost(request, c);
       if (shut) return shut;
       if (c.status === 'draft')
@@ -855,7 +928,11 @@ export function handlePutResult(
       await writeResult(db, c.id, fixture.id, input.value, 'host');
       const saved = await fixtureOf(db, fixture.id, c.id);
       return reply(request, 200, {
-        fixture: projectFixture(saved ?? fixture, await resultRow(db, fixture.id)),
+        fixture: projectFixture(
+          saved ?? fixture,
+          await resultRow(db, fixture.id),
+          await lineupOf(db, fixture.id)
+        ),
       });
     },
     'handlePutResult'
@@ -880,6 +957,13 @@ export function handleDeleteResult(
       if (shut) return shut;
       const now = new Date().toISOString();
       await db.batch([
+        // The lineup goes with its score; a final game keeps both.
+        db
+          .prepare(
+            `DELETE FROM fixture_lineups WHERE fixture_id = ? AND NOT EXISTS
+               (SELECT 1 FROM fixture_results WHERE fixture_id = ? AND state = 'final')`
+          )
+          .bind(fixture.id, fixture.id),
         db
           .prepare(`DELETE FROM fixture_results WHERE fixture_id = ? AND state <> 'final'`)
           .bind(fixture.id),

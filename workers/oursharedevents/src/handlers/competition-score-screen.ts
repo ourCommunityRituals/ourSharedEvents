@@ -24,7 +24,7 @@
 import { html, renderErrorPage } from './pages';
 import { escapeHtml as esc } from '../lib/html-escape';
 import { readCompetition, readEntries, readFixtures } from './competitions';
-import { rulesetOf } from '../lib/competitions';
+import { limitOf, rulesetOf } from '../lib/competitions';
 import { shortTime } from '../lib/competition-page-render';
 
 export interface ScoreScreenEnv {
@@ -76,6 +76,8 @@ export function renderScoreScreen(input: {
   rounds: number[];
   matches: ScreenMatch[];
   allowsDraw: boolean;
+  /** The game's must-know limit, e.g. "Play to 12, or 20 minutes." Null: none. */
+  limit: string | null;
 }): string {
   const api = `/api/v2/admin/competitions/${encodeURIComponent(input.competitionId)}`;
   const nav = input.rounds
@@ -124,7 +126,7 @@ export function renderScoreScreen(input: {
   <body data-api="${esc(api)}">
     <main id="main-content" data-testid="score-screen">
       <h1>${esc(input.name)}</h1>
-      <nav class="ss-n" aria-label="Rounds"><span>Round</span>${nav}</nav>${input.round ? '' : '<p class="detail-card-sub">No match left to score</p>'}${input.allowsDraw ? '' : '<p class="detail-card-sub"><strong>No ties.</strong> One team must win.</p>'}${courts}
+      <nav class="ss-n" aria-label="Rounds"><span>Round</span>${nav}</nav>${input.round ? '' : '<p class="detail-card-sub">No match left to score</p>'}${input.allowsDraw ? '' : '<p class="detail-card-sub"><strong>No ties.</strong> One team must win.</p>'}${input.limit ? `<p class="detail-card-sub"><strong>${esc(input.limit)}</strong></p>` : ''}${courts}
       ${cards || '<p class="detail-card-sub ss-m">Every match of this round has a score, or none is set yet.</p>'}
     </main>
     <script>${SCORE_SCREEN_JS}</script>
@@ -181,6 +183,7 @@ export async function handleScoreScreen(
       score_b: f.score_b,
       final: f.state === 'final' || c.status === 'finished',
     }));
+  const rules = rulesetOf(c.ruleset, c.rules);
   const res = html(
     renderScoreScreen({
       competitionId: c.id,
@@ -188,7 +191,8 @@ export async function handleScoreScreen(
       round,
       rounds,
       matches,
-      allowsDraw: rulesetOf(c.ruleset).draw !== null,
+      allowsDraw: rules.draw !== null,
+      limit: limitOf(rules),
     })
   );
   for (const [k, v] of Object.entries(NO_STORE)) res.headers.set(k, v);
