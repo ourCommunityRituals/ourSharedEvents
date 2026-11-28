@@ -40,6 +40,12 @@ runtime:
 
         \    });
 
+        \    test('Same answer for a new or repeat address (only ok and id)', function() {
+
+        \        expect(Object.keys(json).sort()).to.eql(['id', 'ok']);
+
+        \    });
+
         } else if (res.getStatus() === 403) {
 
         \    test('403 means form disabled', function() {

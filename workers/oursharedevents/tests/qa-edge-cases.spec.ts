@@ -145,7 +145,7 @@ describe('QA-1 Edge-1: Double-submit registration — no server-side dedup', () 
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('QA-1 Edge-2: Email-signup — server-side dedup by email hash', () => {
-  test('submitting same email twice returns duplicate:true on second call', async () => {
+  test('submitting same email twice gives the same answer as a new sign-up', async () => {
     const EVENT = 'qa1-email-dedup';
     await applyTier('mid');
 
@@ -155,7 +155,7 @@ describe('QA-1 Edge-2: Email-signup — server-side dedup by email hash', () => 
     expect(r1.status).toBe(200);
     const b1 = await j(r1);
     expect(b1.ok).toBe(true);
-    expect(b1.duplicate).toBeUndefined();
+    expect(b1).not.toHaveProperty('duplicate');
     const id1 = b1.id as string;
 
     const r2 = await postJson(`/api/v2/events/${EVENT}/forms/email-signup`, {
@@ -164,7 +164,8 @@ describe('QA-1 Edge-2: Email-signup — server-side dedup by email hash', () => 
     expect(r2.status).toBe(200);
     const b2 = await j(r2);
     expect(b2.ok).toBe(true);
-    expect(b2.duplicate).toBe(true);
+    expect(Object.keys(b2).sort()).toEqual(Object.keys(b1).sort());
+    expect(b2).not.toHaveProperty('duplicate');
     // Returns the original ID
     expect(b2.id).toBe(id1);
 
@@ -188,8 +189,8 @@ describe('QA-1 Edge-2: Email-signup — server-side dedup by email hash', () => 
     const b1 = await j(r1);
     const b2 = await j(r2);
     expect(b1.id as string).not.toBe(b2.id as string);
-    expect(b1.duplicate).toBeUndefined();
-    expect(b2.duplicate).toBeUndefined();
+    expect(b1).not.toHaveProperty('duplicate');
+    expect(b2).not.toHaveProperty('duplicate');
 
     await applyTier('free');
   });

@@ -143,13 +143,15 @@ describe('S-5.3.2 the email-signup confirmation shows next at this venue at once
     expect(success.textContent).not.toContain('a@example.com');
   });
 
-  test('an address already on the list gets the same payoff', async () => {
+  test('an address already on the list gets the same message and payoff', async () => {
+    // Even a stray duplicate flag from the server changes nothing on the page.
     const { doc, settle } = await mount('email-signup', { ok: true, duplicate: true });
     (doc.getElementById('email') as HTMLInputElement).value = 'a@example.com';
     submit(doc, 'email-form');
     await settle();
     const success = doc.querySelector('[data-testid="form-success"]')!;
-    expect(success.textContent).toContain("You're already signed up!");
+    expect(success.textContent).toContain("You're on the list!");
+    expect(success.textContent).not.toContain('already');
     expect(success.querySelector('[data-testid="email-next-venue"]')).not.toBeNull();
   });
 });
