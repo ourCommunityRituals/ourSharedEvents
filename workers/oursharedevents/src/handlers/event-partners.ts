@@ -158,12 +158,25 @@ export async function handleInviteEventPartner(
     const v = check.value;
     const id = `epl_${crypto.randomUUID().replace(/-/g, '')}`;
     // A second invite to the same brand re-offers the link (the organizer's side
-    // goes back to 1) and keeps the partner's own answer as it stands.
+    // goes back to 1). The partner's answer stands only for the offer it was
+    // given: when the link had been withdrawn, or the name, kind or public-body
+    // mark changes, the answer goes back to NULL and the partner must answer
+    // again before the page names them (consent is to one offer, not to any
+    // later one). In SQLite every right-hand side reads the row before the
+    // update, so the CASE compares the old offer with the new one.
     await db
       .prepare(
         `INSERT INTO event_partners (id, event_id, partner_brand_id, partner_name, kind, is_public_body, organizer_accepted)
          VALUES (?, ?, ?, ?, ?, ?, 1)
          ON CONFLICT (event_id, partner_brand_id) DO UPDATE SET
+           partner_accepted = CASE
+             WHEN event_partners.organizer_accepted = 1
+              AND event_partners.partner_name = excluded.partner_name
+              AND event_partners.kind = excluded.kind
+              AND event_partners.is_public_body = excluded.is_public_body
+             THEN event_partners.partner_accepted
+             ELSE NULL
+           END,
            partner_name = excluded.partner_name, kind = excluded.kind,
            is_public_body = excluded.is_public_body, organizer_accepted = 1,
            updated_at = datetime('now')`
