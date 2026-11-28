@@ -445,7 +445,6 @@ export const ar: Record<MessageKey, string> = {
   'form.email.label': 'بريدك الإلكتروني',
   'form.email.placeholder': 'name@example.com',
   'form.email.submit': 'اشترك',
-  'form.email.already': 'أنت مشترك بالفعل!',
   'form.email.done': 'أنت الآن في القائمة!',
   'form.error.invalidEventId':
     'يبدو أن رابط هذه الفعالية غير صحيح. جرّب الرابط الأصلي أو تواصل مع المنظِّم.',

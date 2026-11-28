@@ -38,6 +38,7 @@ import {
   ENTRY_COLUMNS,
   FIXTURE_COLUMNS,
   RESULT_COLUMNS,
+  LINEUP_COLUMNS,
   RULESETS,
   WRITE_KEYS,
   byesOf,
@@ -185,6 +186,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   const db = tenv.DB;
+  await db.prepare(`DELETE FROM fixture_lineups`).run();
   await db.prepare(`DELETE FROM fixture_results`).run();
   await db.prepare(`DELETE FROM fixtures`).run();
   await db.prepare(`DELETE FROM competition_entries`).run();
@@ -324,6 +326,7 @@ describe('a competition holds no person', () => {
     expect(await columns('competition_entries')).toEqual([...ENTRY_COLUMNS]);
     expect(await columns('fixtures')).toEqual([...FIXTURE_COLUMNS]);
     expect(await columns('fixture_results')).toEqual([...RESULT_COLUMNS]);
+    expect(await columns('fixture_lineups')).toEqual([...LINEUP_COLUMNS]);
   });
 
   test('no column or write key suggests a person (created_by is the admin actor, as on campaigns)', async () => {
@@ -335,6 +338,7 @@ describe('a competition holds no person', () => {
       'competition_entries',
       'fixtures',
       'fixture_results',
+      'fixture_lineups',
     ])
       for (const name of await columns(t)) expect(`${t}.${name}`).not.toMatch(PERSON);
     for (const key of new Set(Object.values(WRITE_KEYS).flat())) expect(key).not.toMatch(PERSON);
@@ -686,6 +690,295 @@ describe('a big league table', () => {
     expect(second).not.toContain('data-testid="competition-more"');
     // A page out of range falls back to the first screen.
     expect(renderCompetitionPage({ ...base, page: '99' })).toContain('Team 1<');
+  });
+});
+
+describe('soccer too, not only bocce (owner, 2026-11-28)', () => {
+  test('a soccer league starts on 3 for a win, 1 for a tie; bocce stays win or lose', async () => {
+    const soccer = await league(2, { name: 'Sunday Soccer', sport: 'soccer_league' });
+    const bocce = await league(2);
+    expect((await call('GET', `${P}/${soccer.id}`, A)).json.competition.ruleset).toBe(
+      'three_one_zero'
+    );
+    expect((await call('GET', `${P}/${bocce.id}`, A)).json.competition.ruleset).toBe('win_loss');
+    // The host can still name any ruleset.
+    const picked = await league(2, { sport: 'soccer_league', ruleset: 'win_loss' });
+    expect((await call('GET', `${P}/${picked.id}`, A)).json.competition.ruleset).toBe('win_loss');
+  });
+
+  test('a 1-1 soccer game is a tie: 1 point each, and no "No ties" on the score screen', async () => {
+    const { id } = await league(2, { name: 'Sunday Soccer', sport: 'soccer_league' });
+    await start(id);
+    await call('POST', `${P}/${id}/schedule`, A, {
+      event_ids: NIGHTS,
+      slots: ['Field 1'],
+      start_time: '10:00',
+    });
+    const screen = await call('GET', `${P}/${id}/score-screen`, A);
+    expect(screen.text).not.toContain('No ties');
+    expect(screen.text).toContain('Field 1');
+    const fx = (await all(`SELECT id FROM fixtures WHERE competition_id = ?`, id))[0].id as string;
+    const s = await call('PUT', `${P}/${id}/fixtures/${fx}/result`, A, { score_a: 1, score_b: 1 });
+    expect(s.status, JSON.stringify(s.json)).toBe(200);
+    const d = await call('GET', `${P}/${id}`, A);
+    expect(d.json.standings.map((t: Json) => [t.drawn, t.points])).toEqual([
+      [1, 1],
+      [1, 1],
+    ]);
+    const table = (await call('GET', `/competitions/${id}?tab=table`, {})).text;
+    expect(table).toContain('A tie game is 1.');
+  });
+
+  test('bocce still refuses a tie, and says so on the score screen', async () => {
+    const { id } = await league(2);
+    await start(id);
+    await call('POST', `${P}/${id}/schedule`, A, { event_ids: NIGHTS });
+    expect((await call('GET', `${P}/${id}/score-screen`, A)).text).toContain('No ties');
+    const fx = (await all(`SELECT id FROM fixtures WHERE competition_id = ?`, id))[0].id as string;
+    const s = await call('PUT', `${P}/${id}/fixtures/${fx}/result`, A, { score_a: 9, score_b: 9 });
+    expect(s.json.code).toBe('DRAW_NOT_ALLOWED');
+  });
+});
+
+describe('team sizes and fuller rules (owner, 2026-11-28)', () => {
+  const entries = ['x', 'y', 'z', 'w', 'v'].map((id) => ({
+    id,
+    label: id.toUpperCase(),
+    is_active: 1,
+  }));
+  const played = (a: string, b: string, sa: number, sb: number) => ({
+    entry_a: a,
+    entry_b: b,
+    status: 'played',
+    score_a: sa,
+    score_b: sb,
+    state: 'confirmed',
+  });
+  // X: one win, one loss, 1 scored. Z: three ties, 27 scored. Both on 3 points.
+  const games = [
+    played('x', 'y', 1, 0),
+    played('w', 'x', 1, 0),
+    played('z', 'y', 9, 9),
+    played('z', 'w', 9, 9),
+    played('z', 'v', 9, 9),
+  ];
+  const rank = (t: { entry_id: string; rank: number }[], id: string) =>
+    t.find((r) => r.entry_id === id)!.rank;
+
+  test('the presets keep their words, and the new ones say the target and time', () => {
+    expect(RULESETS.win_loss.says).toBe(
+      'A win is 1 point. If teams tie on points: most wins, then the biggest score gap, then most points scored.'
+    );
+    expect(RULESETS.usbf_open.says).toContain('Play to 12.');
+    expect(RULESETS.special_olympics.says).toContain(
+      'Play to 12, or 20 minutes, then finish the frame.'
+    );
+  });
+
+  test('the tie-break order comes from the rules, not from the code', () => {
+    const byDefault = computeStandings(entries, games, RULESETS.three_one_zero);
+    expect(rank(byDefault, 'x')).toBeLessThan(rank(byDefault, 'z'));
+    const scoredFirst = computeStandings(
+      entries,
+      games,
+      rulesetOf('three_one_zero', JSON.stringify({ tiebreak: ['scored', 'wins'] }))
+    );
+    expect(rank(scoredFirst, 'z')).toBeLessThan(rank(scoredFirst, 'x'));
+    // Fewest let in: X let in 1, Z let in 27.
+    const conceded = computeStandings(
+      entries,
+      games,
+      rulesetOf('three_one_zero', JSON.stringify({ tiebreak: ['conceded'] }))
+    );
+    expect(rank(conceded, 'x')).toBeLessThan(rank(conceded, 'z'));
+    // No tie-break at all: level on points share a place.
+    const none = rulesetOf('three_one_zero', JSON.stringify({ tiebreak: [] }));
+    const t = computeStandings(entries, games, none);
+    expect(rank(t, 'x')).toBe(rank(t, 'z'));
+    expect(none.says).toContain('Teams level on points share a place.');
+  });
+
+  test('a league can set its target, time limit, baci bonus and team size', async () => {
+    const { id } = await league(2, {
+      ruleset: 'usbf_open',
+      rules: { time_limit_minutes: 20, baci: true, team_size: 3 },
+    });
+    const c = (await call('GET', `${P}/${id}`, A)).json.competition;
+    expect(c.rules).toMatchObject({
+      win: 1,
+      draw: null,
+      target: 12,
+      time_limit_minutes: 20,
+      baci: true,
+      team_size: 3,
+      tiebreak: ['wins', 'diff', 'scored'],
+    });
+    expect(c.rules.says).toContain('Play to 12, or 20 minutes, then finish the frame.');
+    expect(c.rules.says).toContain('(a baci) scores 1 extra point');
+    await start(id);
+    await call('POST', `${P}/${id}/schedule`, A, { event_ids: NIGHTS });
+    // The game's limit is a must-know: on the score screen, not behind a tap.
+    expect((await call('GET', `${P}/${id}/score-screen`, A)).text).toContain(
+      'Play to 12, or 20 minutes, then finish the frame.'
+    );
+    const table = (await call('GET', `/competitions/${id}?tab=table`, {})).text;
+    expect(table).toContain('(a baci) scores 1 extra point');
+  });
+
+  test('a soccer league can set its game length', async () => {
+    const { id } = await league(2, { sport: 'soccer_league', rules: { time_limit_minutes: 90 } });
+    const c = (await call('GET', `${P}/${id}`, A)).json.competition;
+    expect(c.ruleset).toBe('three_one_zero');
+    expect(c.rules.says).toContain('A game lasts 90 minutes.');
+    expect(c.rules.says).not.toContain('frame');
+  });
+
+  test('ties can be turned on for bocce, and not off again while a tie stands', async () => {
+    const { id } = await league(2);
+    await start(id);
+    await call('POST', `${P}/${id}/schedule`, A, { event_ids: NIGHTS });
+    const fx = (await all(`SELECT id FROM fixtures WHERE competition_id = ?`, id))[0].id as string;
+    const on = await call('PUT', `${P}/${id}`, A, { rules: { win: 2, draw: 1 } });
+    expect(on.status, JSON.stringify(on.json)).toBe(200);
+    expect(
+      (await call('PUT', `${P}/${id}/fixtures/${fx}/result`, A, { score_a: 9, score_b: 9 })).status
+    ).toBe(200);
+    const d = await call('GET', `${P}/${id}`, A);
+    expect(d.json.standings.map((t: Json) => t.points)).toEqual([1, 1]);
+    const off = await call('PUT', `${P}/${id}`, A, { rules: null });
+    expect(off.status).toBe(409);
+    expect(off.json.code).toBe('DRAW_NOT_ALLOWED');
+  });
+
+  test('rules that do not fit together, or are not on the list, are refused', async () => {
+    for (const rules of [
+      { win: 1, draw: 1 },
+      { win: 0, loss: 0 },
+      { tiebreak: ['wins', 'wins'] },
+      { tiebreak: ['coin_toss'] },
+      { team_size: 5 },
+      { target: 0 },
+      { players: 3 },
+      'win',
+    ]) {
+      const r = await call('POST', P, A, { name: 'Bad', format: 'league', rules });
+      expect(r.status, JSON.stringify(rules)).toBe(400);
+      expect(r.json.code, JSON.stringify(rules)).toBe('INVALID_RULES');
+    }
+    const { id } = await league(0);
+    const r = await call('PUT', `${P}/${id}`, A, { rules: { draw: 5, win: 3 } });
+    expect(r.json.code).toBe('INVALID_RULES');
+  });
+
+  test('a team can be 1 to 4 players a side', async () => {
+    const { id } = await league(0);
+    const made = await call('POST', `${P}/${id}/entries`, A, { label: 'Trio', team_size: 3 });
+    expect(made.json.entry.team_size).toBe(3);
+    const solo = await call('POST', `${P}/${id}/entries`, A, { label: 'Solo' });
+    expect(solo.json.entry.team_size).toBeNull();
+    for (const team_size of [0, 5, 2.5, '3']) {
+      const r = await call('POST', `${P}/${id}/entries`, A, { label: 'Five', team_size });
+      expect(r.json.code).toBe('INVALID_TEAM_SIZE');
+    }
+    const back = await call('PUT', `${P}/${id}/entries/${made.json.id}`, A, { team_size: null });
+    expect(back.json.entry.team_size).toBeNull();
+  });
+
+  describe('a game’s lineup: positions per frame, never names', () => {
+    // A 3v3 split: two at the near end throw 2 each, then the third throws 4
+    // from the far end. The next frame another pair goes near (a rotation).
+    const frames = [
+      {
+        frame: 1,
+        a: [
+          { position: 'A', end: 'near', balls: 2 },
+          { position: 'B', end: 'near', balls: 2 },
+        ],
+        b: [
+          { position: 'A', end: 'near', balls: 2 },
+          { position: 'B', end: 'near', balls: 2 },
+        ],
+      },
+      {
+        frame: 2,
+        a: [{ position: 'C', end: 'far', balls: 4 }],
+        b: [{ position: 'C', end: 'far', balls: 4 }],
+      },
+      {
+        frame: 3,
+        a: [
+          { position: 'B', end: 'near', balls: 2 },
+          { position: 'C', end: 'near', balls: 2 },
+        ],
+        b: [
+          { position: 'B', end: 'near', balls: 2 },
+          { position: 'C', end: 'near', balls: 2 },
+        ],
+      },
+    ];
+    async function game() {
+      const { id } = await league(2, { rules: { team_size: 3 } });
+      await start(id);
+      await call('POST', `${P}/${id}/schedule`, A, { event_ids: NIGHTS });
+      const fx = (await all(`SELECT id FROM fixtures WHERE competition_id = ?`, id))[0]
+        .id as string;
+      return { id, url: `${P}/${id}/fixtures/${fx}/result`, fx };
+    }
+
+    test('saved with the score, read back in the same shape', async () => {
+      const { id, url, fx } = await game();
+      const s = await call('PUT', url, A, { score_a: 12, score_b: 7, frames });
+      expect(s.status, JSON.stringify(s.json)).toBe(200);
+      expect(s.json.fixture.result.frames).toEqual(frames);
+      expect(await all(`SELECT * FROM fixture_lineups WHERE fixture_id = ?`, fx)).toHaveLength(10);
+      const d = await call('GET', `${P}/${id}`, A);
+      expect(d.json.fixtures.find((f: Json) => f.id === fx).result.frames).toEqual(frames);
+      // A score fix without frames keeps the lineup; new frames replace it.
+      await call('PUT', url, A, { score_a: 12, score_b: 8 });
+      expect(await all(`SELECT 1 FROM fixture_lineups WHERE fixture_id = ?`, fx)).toHaveLength(10);
+      await call('PUT', url, A, { score_a: 12, score_b: 8, frames: [frames[1]] });
+      expect(await all(`SELECT 1 FROM fixture_lineups WHERE fixture_id = ?`, fx)).toHaveLength(2);
+      // Taking the score back takes its lineup with it.
+      expect((await call('DELETE', url, A)).status).toBe(200);
+      expect(await all(`SELECT 1 FROM fixture_lineups WHERE fixture_id = ?`, fx)).toEqual([]);
+    });
+
+    test('a position outside the team, a repeat, or a wrong ball count is refused', async () => {
+      const { url, fx } = await game();
+      const one = (a: unknown[]) => [{ frame: 1, a, b: frames[1].b }];
+      for (const bad of [
+        one([{ position: 'D', end: 'near', balls: 4 }]),
+        one([
+          { position: 'A', end: 'near', balls: 2 },
+          { position: 'A', end: 'far', balls: 2 },
+        ]),
+        one([{ position: 'A', end: 'near', balls: 5 }]),
+        one([{ position: 'A', end: 'middle', balls: 4 }]),
+        one([{ position: 'A', end: 'near', balls: 4, name: 'Jo' }]),
+        [frames[0], frames[0]],
+        [],
+      ]) {
+        const r = await call('PUT', url, A, { score_a: 12, score_b: 7, frames: bad });
+        expect(r.status, JSON.stringify(bad)).toBe(400);
+        expect(r.json.code, JSON.stringify(bad)).toBe('INVALID_FRAMES');
+      }
+      expect(await all(`SELECT 1 FROM fixture_results WHERE fixture_id = ?`, fx)).toEqual([]);
+    });
+
+    test('a 4-player team may use position D', async () => {
+      const { id } = await league(2);
+      await start(id);
+      await call('POST', `${P}/${id}/schedule`, A, { event_ids: NIGHTS });
+      const fx = (await all(`SELECT id FROM fixtures WHERE competition_id = ?`, id))[0]
+        .id as string;
+      const four = [{ position: 'D', end: 'far', balls: 4 }];
+      const r = await call('PUT', `${P}/${id}/fixtures/${fx}/result`, A, {
+        score_a: 12,
+        score_b: 7,
+        frames: [{ frame: 1, a: four, b: four }],
+      });
+      expect(r.status, JSON.stringify(r.json)).toBe(200);
+    });
   });
 });
 

@@ -103,7 +103,8 @@ describe('QA-1: Migration idempotency', () => {
     //      vote_crowd_participants — migration 0124, ADR-040 decision 13) = 57.
     // + 5 (competitions, competition_stages, competition_entries, fixtures,
     //      fixture_results — migration 0125, leagues phase 1) = 62.
-    expect(names).toHaveLength(62);
+    // + 1 (fixture_lineups — migration 0126, leagues slice 2; no index) = 63.
+    expect(names).toHaveLength(63);
   });
 
   test('indexes remain at exactly 90 after idempotent re-run', async () => {

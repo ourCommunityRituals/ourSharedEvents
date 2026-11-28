@@ -379,9 +379,9 @@ describe('Scenario 4: Email signup lifecycle', () => {
     );
     const b1 = await json(r1);
     expect(b1.ok).toBe(true);
-    expect(b1.duplicate).toBeUndefined();
+    expect(b1).not.toHaveProperty('duplicate');
 
-    // ── Step 2: Same email → dedup ────────────────────────────────────────
+    // ── Step 2: Same email → dedup, same answer shape as a new sign-up ─────
     const r2 = await handleFormEmailSignup(
       postReq({ email: 'carol@example.com' }),
       formsEnv(),
@@ -389,7 +389,9 @@ describe('Scenario 4: Email signup lifecycle', () => {
     );
     const b2 = await json(r2);
     expect(b2.ok).toBe(true);
-    expect(b2.duplicate).toBe(true);
+    expect(r2.status).toBe(r1.status);
+    expect(Object.keys(b2).sort()).toEqual(Object.keys(b1).sort());
+    expect(b2).not.toHaveProperty('duplicate');
 
     // ── Step 3: Case-insensitive dedup ────────────────────────────────────
     const r3 = await handleFormEmailSignup(
@@ -397,7 +399,7 @@ describe('Scenario 4: Email signup lifecycle', () => {
       formsEnv(),
       EVENT
     );
-    expect((await json(r3)).duplicate).toBe(true);
+    expect(Object.keys(await json(r3)).sort()).toEqual(Object.keys(b1).sort());
 
     // ── Step 4: Different email → new signup ──────────────────────────────
     const r4 = await handleFormEmailSignup(
@@ -405,10 +407,10 @@ describe('Scenario 4: Email signup lifecycle', () => {
       formsEnv(),
       EVENT
     );
-    expect((await json(r4)).duplicate).toBeUndefined();
+    expect(Object.keys(await json(r4)).sort()).toEqual(Object.keys(b1).sort());
 
     // ── Step 5: Admin count floored (2 unique < 5) ────────────────────────
-    // Dedup is verified by r4.duplicate above + the DB rows below; the aggregate
+    // Dedup is verified by the DB rows below (2 rows for 4 submissions); the aggregate
     // count is suppressed uniformly (K=5).
     const adminRes = await handleAdminEmailSignupCount(getReq(), formsEnv(), EVENT);
     const emailCountBody = await json(adminRes);

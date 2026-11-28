@@ -714,16 +714,15 @@ function emailSignupForm(
       ${formJsSubmit(lang)}
       async function handleEmail(e) {
         e.preventDefault();
-        let body;
         try {
-          body = await submitForm(${jsonForScript(eventId)}, 'email-signup', {
+          await submitForm(${jsonForScript(eventId)}, 'email-signup', {
             email: document.getElementById('email').value,
             sourcePlacementId: ${jsonForScript(deploymentId ?? null)},
           });
         } catch (_) {
           return; // the friendly error is already on screen
         }
-        showSuccess(body.duplicate ? ${js(lang, 'form.email.already')} : ${js(lang, 'form.email.done')});
+        showSuccess(${js(lang, 'form.email.done')});
       }
       document.querySelector('[data-testid="email-form"]').addEventListener('submit', handleEmail);
     </script>`;
