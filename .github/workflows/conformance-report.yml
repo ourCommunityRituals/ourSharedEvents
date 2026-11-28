@@ -29,6 +29,12 @@ on:
         type: boolean
         default: false
 
+# One refresh at a time. Two merges seconds apart used to start two runs that
+# raced on the one refresh branch; queue the second instead of cancelling it.
+concurrency:
+  group: conformance-report-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   generate:
     timeout-minutes: 10 # [Claude] ceiling: ~3x the slowest of the last 25 runs (0.6 min)
@@ -166,9 +172,23 @@ jobs:
           BRANCH=chore/conformance-refresh
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Create-or-update: reset the stable branch to this main commit + the fresh report,
+          # Create-or-update: reset the stable branch to the NEWEST main + the fresh report,
           # so scheduled runs update ONE PR instead of spawning a new one every week.
-          git checkout -B "$BRANCH"
+          # Base on the newest main, not this run's commit: if the previous refresh PR
+          # merged while this run was going, a branch cut from the older commit conflicts
+          # on these same two files, and GitHub runs no pull_request checks on a PR with
+          # conflicts (PR #1617 showed only CodeQL). The report is fully generated, so
+          # laying it over the newest main can never conflict. The repo is public: the
+          # fetch needs no token.
+          mkdir -p "$RUNNER_TEMP/conformance"
+          cp "$RPT/CONFORMANCE.md" "$RPT/conformance.json" "$RUNNER_TEMP/conformance/"
+          git fetch --no-tags --depth=1 origin refs/heads/main
+          git checkout -f -B "$BRANCH" FETCH_HEAD
+          cp "$RUNNER_TEMP/conformance/CONFORMANCE.md" "$RUNNER_TEMP/conformance/conformance.json" "$RPT/"
+          if git diff --quiet -- "$RPT/CONFORMANCE.md" "$RPT/conformance.json"; then
+            echo "Newest main already carries this report — no refresh PR needed."
+            exit 0
+          fi
           git add "$RPT/CONFORMANCE.md" "$RPT/conformance.json"
           git commit -m "chore: regenerate conformance report"
           if ! git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$BRANCH" 2>push_err.log; then
